@@ -1,5 +1,9 @@
 [workspace]
-members = ["crates/core", "apps/desktop-host"]
+members = [
+    "crates/protocol",
+    "crates/core",
+    "apps/desktop-host",
+]
 resolver = "2"
 
 [workspace.package]
