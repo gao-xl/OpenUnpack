@@ -1,0 +1,5 @@
+node_modules/
+dist/
+*.dpapi
+*.local.json
+.gemini-subagent-backups/

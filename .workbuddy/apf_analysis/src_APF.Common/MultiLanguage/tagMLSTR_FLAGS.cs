@@ -1,0 +1,7 @@
+namespace MultiLanguage;
+
+public enum tagMLSTR_FLAGS
+{
+	MLSTR_READ = 1,
+	MLSTR_WRITE
+}

@@ -1,0 +1,1 @@
+{"main":{"identifier":"main","description":"仅本机主窗口的事件、拖放与获准用户操作","local":true,"windows":["main"],"permissions":["core:default","main-commands"]}}

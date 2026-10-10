@@ -1,0 +1,344 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/adamhathcock/sharpcompress",
+  "commit": "2cba09eba4ae400756933807ee5b0aae56bd4fa7",
+  "license": "MIT",
+  "scope": "Synthetic upstream regression archives; embedded executable bytes are data only and never executed. Fixtures are excluded from runtime portable/installer packages.",
+  "files": [
+    {
+      "file": "Infozip.nocomp.multi.z01",
+      "size": 66560,
+      "sha256": "96fb0ed91d3e7f90f05b80ca86e8665579431f5bf54027a0449f7834499da78e",
+      "gitBlob": "2f01189a83da2aaa81a3b93afa74db57b8540c15",
+      "sourcePath": "tests/TestArchives/Archives/Infozip.nocomp.multi.z01",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/2f01189a83da2aaa81a3b93afa74db57b8540c15"
+    },
+    {
+      "file": "Infozip.nocomp.multi.zip",
+      "size": 35608,
+      "sha256": "7c4820ba3e5c9be70aa46a37ab3b5306dbb414bb9f1543b8c00c6229681510b4",
+      "gitBlob": "de46994467d5e18606a638ee47078fa4c2e57801",
+      "sourcePath": "tests/TestArchives/Archives/Infozip.nocomp.multi.zip",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/de46994467d5e18606a638ee47078fa4c2e57801"
+    },
+    {
+      "file": "LICENSE.txt",
+      "size": 1081,
+      "sha256": "b7ca2b6174cee11afe41d78b48527e3d7659a4435c25019a4a5e072299a2f8ed",
+      "gitBlob": "94e2f5bc83ac404584fd92c25cfcc305ea2f8942",
+      "sourcePath": "LICENSE.txt",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/94e2f5bc83ac404584fd92c25cfcc305ea2f8942"
+    },
+    {
+      "file": "Rar.EncryptedParts.part01.rar",
+      "size": 10240,
+      "sha256": "d753717b1210d70b2835c6e2929f2a2d70170fed7bbb7430082a45d293149857",
+      "gitBlob": "f6608e36847c5e642abee59ba3cf8c0f198b57ed",
+      "sourcePath": "tests/TestArchives/Archives/Rar.EncryptedParts.part01.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/f6608e36847c5e642abee59ba3cf8c0f198b57ed"
+    },
+    {
+      "file": "Rar.EncryptedParts.part02.rar",
+      "size": 10240,
+      "sha256": "56f164a11108a25c0c353825bce5169e160d3c2d2265ed2522c8596f9a8f6c48",
+      "gitBlob": "1020dd0f908ec335946707a0a95c7aedba2cf384",
+      "sourcePath": "tests/TestArchives/Archives/Rar.EncryptedParts.part02.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/1020dd0f908ec335946707a0a95c7aedba2cf384"
+    },
+    {
+      "file": "Rar.EncryptedParts.part03.rar",
+      "size": 10240,
+      "sha256": "fcf69b2c8775a3ca8d9b1c88f0e3d4fe5ce2c730ea83984e008b7c3f9e3cde5b",
+      "gitBlob": "b8fd5df8d7fe78f52104c511edd500f7b35815b9",
+      "sourcePath": "tests/TestArchives/Archives/Rar.EncryptedParts.part03.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/b8fd5df8d7fe78f52104c511edd500f7b35815b9"
+    },
+    {
+      "file": "Rar.EncryptedParts.part04.rar",
+      "size": 10240,
+      "sha256": "3d8569689c726f9d3a8f6a0016bf135316f220f629c4e289f50cabca1ceb5402",
+      "gitBlob": "af28c7ecd2f6fe17fb1898b0b4397ee9de4bfa77",
+      "sourcePath": "tests/TestArchives/Archives/Rar.EncryptedParts.part04.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/af28c7ecd2f6fe17fb1898b0b4397ee9de4bfa77"
+    },
+    {
+      "file": "Rar.EncryptedParts.part05.rar",
+      "size": 10240,
+      "sha256": "39c072812755922fae70e62027f9878eaaaf61fa93f0d9fa103042891445503f",
+      "gitBlob": "fb371b432d85aaaf0d8bedf9a842fc0ce75a2f50",
+      "sourcePath": "tests/TestArchives/Archives/Rar.EncryptedParts.part05.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/fb371b432d85aaaf0d8bedf9a842fc0ce75a2f50"
+    },
+    {
+      "file": "Rar.EncryptedParts.part06.rar",
+      "size": 9576,
+      "sha256": "a383f45967078ba441a99b90fc98f54d8130d34d856cd7b2922da51b53dc46d4",
+      "gitBlob": "9aa12437ead6f3d154a778a131aec19180cfb745",
+      "sourcePath": "tests/TestArchives/Archives/Rar.EncryptedParts.part06.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/9aa12437ead6f3d154a778a131aec19180cfb745"
+    },
+    {
+      "file": "Rar.encrypted_filesAndHeader.rar",
+      "size": 60172,
+      "sha256": "3944a0cf36758d042c238dacae56a4fa494b6f790c4f0dd719d9a47b7c845202",
+      "gitBlob": "d055dc77a315b84b9bf707a80f1bf985cc0cab1b",
+      "sourcePath": "tests/TestArchives/Archives/Rar.encrypted_filesAndHeader.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/d055dc77a315b84b9bf707a80f1bf985cc0cab1b"
+    },
+    {
+      "file": "Rar.encrypted_filesOnly.rar",
+      "size": 60069,
+      "sha256": "52c0d575e01750ae643c65866b5e06e67773a0aed5edea6b2b04e7de14a784a2",
+      "gitBlob": "d4ff767b6e463943374f66b659546639ea780eff",
+      "sourcePath": "tests/TestArchives/Archives/Rar.encrypted_filesOnly.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/d4ff767b6e463943374f66b659546639ea780eff"
+    },
+    {
+      "file": "Rar.rar",
+      "size": 60029,
+      "sha256": "60db161de57dc59aa12e0c45b1b70d78904da3d104e74748972ac38643f12802",
+      "gitBlob": "050509c347d6911db98f13db8aa33c8f914ba9de",
+      "sourcePath": "tests/TestArchives/Archives/Rar.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/050509c347d6911db98f13db8aa33c8f914ba9de"
+    },
+    {
+      "file": "Rar2.multi.r00",
+      "size": 10000,
+      "sha256": "1f506b6e5518dda165de63a9c9fea4432ee1a6442fbdffeb24be5522ea21c4a6",
+      "gitBlob": "22bce2e1ee3cee1f05210ad54a4e872136e24fd7",
+      "sourcePath": "tests/TestArchives/Archives/Rar2.multi.r00",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/22bce2e1ee3cee1f05210ad54a4e872136e24fd7"
+    },
+    {
+      "file": "Rar2.multi.r01",
+      "size": 10000,
+      "sha256": "270d317f092b0e7b8513ecc0a055d8cb703d91e86e927f91917e9b75c760942d",
+      "gitBlob": "878b6d8affa30074f68110d7d71a75751f921211",
+      "sourcePath": "tests/TestArchives/Archives/Rar2.multi.r01",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/878b6d8affa30074f68110d7d71a75751f921211"
+    },
+    {
+      "file": "Rar2.multi.r02",
+      "size": 10000,
+      "sha256": "e010f1008bf415d3c31ce81fa859f979740d0b92e2086d524884bbc2c4104589",
+      "gitBlob": "cc5fbc57ba649071647cc0674c16f9b9db0a6ad6",
+      "sourcePath": "tests/TestArchives/Archives/Rar2.multi.r02",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/cc5fbc57ba649071647cc0674c16f9b9db0a6ad6"
+    },
+    {
+      "file": "Rar2.multi.r03",
+      "size": 10000,
+      "sha256": "08f1927004b333789a4da356012eddc7e33bede968a9a3207af03990470f03fc",
+      "gitBlob": "259cafdd2584da8edfb5c64b4acb297bcfa3fb02",
+      "sourcePath": "tests/TestArchives/Archives/Rar2.multi.r03",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/259cafdd2584da8edfb5c64b4acb297bcfa3fb02"
+    },
+    {
+      "file": "Rar2.multi.r04",
+      "size": 10000,
+      "sha256": "b6d0f9ecca5f96c0cc72e7cb94b8e806083eb08616bbab3c5d42f1c36e70f9bf",
+      "gitBlob": "d46e4c7a8bfdeb518aebda18704db6a9e2644bc9",
+      "sourcePath": "tests/TestArchives/Archives/Rar2.multi.r04",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/d46e4c7a8bfdeb518aebda18704db6a9e2644bc9"
+    },
+    {
+      "file": "Rar2.multi.r05",
+      "size": 623,
+      "sha256": "e8a358cfb78115f4ff56e88d0959f46e01e6680eb5d14b805b92fc54b8c3a30d",
+      "gitBlob": "48ff0c66c52c0466710140ca469432f3e15775b3",
+      "sourcePath": "tests/TestArchives/Archives/Rar2.multi.r05",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/48ff0c66c52c0466710140ca469432f3e15775b3"
+    },
+    {
+      "file": "Rar2.multi.rar",
+      "size": 10000,
+      "sha256": "bc8dc02828e7552e4a0689e9476a13391f9896b872659d846de902fd51e5790b",
+      "gitBlob": "3621383f1776ed6a328de55c219d96b5390d2482",
+      "sourcePath": "tests/TestArchives/Archives/Rar2.multi.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/3621383f1776ed6a328de55c219d96b5390d2482"
+    },
+    {
+      "file": "Rar4.multi.part01.rar",
+      "size": 10000,
+      "sha256": "9401bceb34a5267df2c2c69466d899c1d754f63749d00f5313b717123dfc9c45",
+      "gitBlob": "8c1b78c848a850eb8d82a6cc9d92997e1557507c",
+      "sourcePath": "tests/TestArchives/Archives/Rar4.multi.part01.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/8c1b78c848a850eb8d82a6cc9d92997e1557507c"
+    },
+    {
+      "file": "Rar4.multi.part02.rar",
+      "size": 10000,
+      "sha256": "56792b5e5bfcf3b5331665b8928fcebe7cbc88b4cc189024d1da73edcd8d85af",
+      "gitBlob": "0a6aae3b2651ab782cc27fea6983d72c50f130c3",
+      "sourcePath": "tests/TestArchives/Archives/Rar4.multi.part02.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/0a6aae3b2651ab782cc27fea6983d72c50f130c3"
+    },
+    {
+      "file": "Rar4.multi.part03.rar",
+      "size": 10000,
+      "sha256": "d2d8c9d31b27ea43b5f92f3b1bf24176c72eaeeada6f304b5e3bef581fbde36f",
+      "gitBlob": "2498c64d6dd36b32d532846453a0c0c3555b7415",
+      "sourcePath": "tests/TestArchives/Archives/Rar4.multi.part03.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/2498c64d6dd36b32d532846453a0c0c3555b7415"
+    },
+    {
+      "file": "Rar4.multi.part04.rar",
+      "size": 10000,
+      "sha256": "06a2411d79ed81fb12f3c5301defb1d09908c11e86f41d3624c1c6ed57796e9b",
+      "gitBlob": "199ea20e1305c5be3eeabbe01a9c9a9c26aaf782",
+      "sourcePath": "tests/TestArchives/Archives/Rar4.multi.part04.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/199ea20e1305c5be3eeabbe01a9c9a9c26aaf782"
+    },
+    {
+      "file": "Rar4.multi.part05.rar",
+      "size": 10000,
+      "sha256": "151ec363ec047865ff6ac9317f4cda339704f16e4bcf6ceeaab86bb3e4dfe07a",
+      "gitBlob": "bac3a8b8a39d5d488f3bce47bfbff3b804754f6d",
+      "sourcePath": "tests/TestArchives/Archives/Rar4.multi.part05.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/bac3a8b8a39d5d488f3bce47bfbff3b804754f6d"
+    },
+    {
+      "file": "Rar4.multi.part06.rar",
+      "size": 10000,
+      "sha256": "fd9d6eb0f59bce054306d2c7091534cb5aefddb94e41e151654c7b3d656b7734",
+      "gitBlob": "7f8aa76874abb8b84637ff73c24d833d1ed43b00",
+      "sourcePath": "tests/TestArchives/Archives/Rar4.multi.part06.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/7f8aa76874abb8b84637ff73c24d833d1ed43b00"
+    },
+    {
+      "file": "Rar4.multi.part07.rar",
+      "size": 550,
+      "sha256": "c3f1c6cf220c03ca081a3731bedf6490ed7ef2a3e13cf23a16d27573343993d9",
+      "gitBlob": "5abf4db121f0596043ac95135700905d02c7bbb2",
+      "sourcePath": "tests/TestArchives/Archives/Rar4.multi.part07.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/5abf4db121f0596043ac95135700905d02c7bbb2"
+    },
+    {
+      "file": "Rar5.encrypted_filesAndHeader.rar",
+      "size": 60686,
+      "sha256": "63fc4b5576f7482311e950155607e171696588881bdd277c8c099efd2f98b6e2",
+      "gitBlob": "d0bad6d438e329028acc65b2f16ae8aba513da0f",
+      "sourcePath": "tests/TestArchives/Archives/Rar5.encrypted_filesAndHeader.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/d0bad6d438e329028acc65b2f16ae8aba513da0f"
+    },
+    {
+      "file": "Rar5.encrypted_filesOnly.rar",
+      "size": 60336,
+      "sha256": "e5fb06af812633b246430f029a051cc462d00180a0df455a798644deccdc7d07",
+      "gitBlob": "cb18a2860dfcdb61931a04ea4a5bcdc2e7871705",
+      "sourcePath": "tests/TestArchives/Archives/Rar5.encrypted_filesOnly.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/cb18a2860dfcdb61931a04ea4a5bcdc2e7871705"
+    },
+    {
+      "file": "Rar5.multi.part01.rar",
+      "size": 10240,
+      "sha256": "ad9b6ac157e77ba2cc6b8be7eeba52a2c047a0ef2d06fa6ffa0c1d1ccce3a651",
+      "gitBlob": "897318755dcf067c628382a8b025fad1836431ca",
+      "sourcePath": "tests/TestArchives/Archives/Rar5.multi.part01.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/897318755dcf067c628382a8b025fad1836431ca"
+    },
+    {
+      "file": "Rar5.multi.part02.rar",
+      "size": 10240,
+      "sha256": "3e139020f6894255675c384fea78348cfa561bf4cce763190ab8e490fb67de1c",
+      "gitBlob": "d23d82e4c45c79ea7d1086517504a819c66f66e5",
+      "sourcePath": "tests/TestArchives/Archives/Rar5.multi.part02.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/d23d82e4c45c79ea7d1086517504a819c66f66e5"
+    },
+    {
+      "file": "Rar5.multi.part03.rar",
+      "size": 10240,
+      "sha256": "8145344bae1043aa894375926b17f0363868970e92e69732761570f7c467f1f6",
+      "gitBlob": "159c55d807a09ae035cb67e1eedc5aaf236c8313",
+      "sourcePath": "tests/TestArchives/Archives/Rar5.multi.part03.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/159c55d807a09ae035cb67e1eedc5aaf236c8313"
+    },
+    {
+      "file": "Rar5.multi.part04.rar",
+      "size": 10240,
+      "sha256": "d4c3ed4fb217a3f4825d7cf4d831017c05c823b46c31a80e9bbe2eb13fa876d4",
+      "gitBlob": "cb0ed618847510fb77e571abebf29a13c899b6c5",
+      "sourcePath": "tests/TestArchives/Archives/Rar5.multi.part04.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/cb0ed618847510fb77e571abebf29a13c899b6c5"
+    },
+    {
+      "file": "Rar5.multi.part05.rar",
+      "size": 10240,
+      "sha256": "825a861fbc93180461a254ca5b723404f6c2984cff988eac103702fa2087f250",
+      "gitBlob": "ec132ab8e5a1f3bcb11484de8e6523c224141867",
+      "sourcePath": "tests/TestArchives/Archives/Rar5.multi.part05.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/ec132ab8e5a1f3bcb11484de8e6523c224141867"
+    },
+    {
+      "file": "Rar5.multi.part06.rar",
+      "size": 9696,
+      "sha256": "d5426c1ce37b19b468b68c33d2ecf7bff8b269c3c5029ffbbca9cc632930c237",
+      "gitBlob": "8b90861086cd1e39d0f0b3a1932ecb6d5d7a044b",
+      "sourcePath": "tests/TestArchives/Archives/Rar5.multi.part06.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/8b90861086cd1e39d0f0b3a1932ecb6d5d7a044b"
+    },
+    {
+      "file": "Rar5.rar",
+      "size": 60066,
+      "sha256": "3319de3e8a91a58d08d8a83f48ebae7e6b022c542b4a58775bab64f4063988a9",
+      "gitBlob": "0a05d520923cc46f1daebdddcf6faa89fbafee12",
+      "sourcePath": "tests/TestArchives/Archives/Rar5.rar",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/0a05d520923cc46f1daebdddcf6faa89fbafee12"
+    },
+    {
+      "file": "WinZip26.nocomp.multi.z01",
+      "size": 73400,
+      "sha256": "f65e5f4a2864a700875bed11b74021e72383489bbf2e35f5d02e780455583e34",
+      "gitBlob": "0e75014eb0cb5995451eec4e4ba20176c7a520ef",
+      "sourcePath": "tests/TestArchives/Archives/WinZip26.nocomp.multi.z01",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/0e75014eb0cb5995451eec4e4ba20176c7a520ef"
+    },
+    {
+      "file": "WinZip26.nocomp.multi.zip",
+      "size": 28200,
+      "sha256": "1ff704bb47daafaf492588f541815a024d54b211d3e1e5418228036a1cf1c2dc",
+      "gitBlob": "130cfff054907978f43d98367d9edc3a4ff5f2a8",
+      "sourcePath": "tests/TestArchives/Archives/WinZip26.nocomp.multi.zip",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/130cfff054907978f43d98367d9edc3a4ff5f2a8"
+    }
+  ],
+  "expectedFiles": [
+    {
+      "relativePath": "exe/test.exe",
+      "size": 45056,
+      "sha256": "8557928804f57ecc340b3bb38b095a3607474ec8deb0076f316fcfe02b562106",
+      "sourcePath": "tests/TestArchives/Original/exe/test.exe",
+      "gitBlob": "be62f03a66484cc567c5e2b383bd88a2d14746e1",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/be62f03a66484cc567c5e2b383bd88a2d14746e1"
+    },
+    {
+      "relativePath": "jpg/test.jpg",
+      "size": 40372,
+      "sha256": "b251c7501fb0f55dd4a92feabe0a6f5733bc40a02679498155fae9b30138fc53",
+      "sourcePath": "tests/TestArchives/Original/jpg/test.jpg",
+      "gitBlob": "0ade1c90c57ac8b21b7566a1c2b8d87373a6a431",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/0ade1c90c57ac8b21b7566a1c2b8d87373a6a431"
+    },
+    {
+      "relativePath": "тест.txt",
+      "size": 15044,
+      "sha256": "1a3de4e51eb2f58672e42443b0e8ea618ba464931166539498ff2ab77eec3838",
+      "sourcePath": "tests/TestArchives/Original/тест.txt",
+      "gitBlob": "f9927df2084cab00e7b6e0810b5dde1a1f570d2b",
+      "url": "https://api.github.com/repos/adamhathcock/sharpcompress/git/blobs/f9927df2084cab00e7b6e0810b5dde1a1f570d2b",
+      "variants": [
+        {
+          "name": "upstream-git-bytes",
+          "size": 15044,
+          "sha256": "1a3de4e51eb2f58672e42443b0e8ea618ba464931166539498ff2ab77eec3838"
+        },
+        {
+          "name": "Windows-CRLF",
+          "size": 15498,
+          "sha256": "4d581d93d369f6e1c9b295ff38d82dabd577f927dfaf0c35818c015c85e322d9",
+          "transform": "Normalize CRLF to LF then replace LF with CRLF; all non-newline bytes preserved."
+        }
+      ]
+    }
+  ]
+}

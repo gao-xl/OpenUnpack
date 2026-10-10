@@ -1,0 +1,73 @@
+name: Windows verification and local release artifacts
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      offline_installer:
+        description: Include Microsoft WebView2 offline installer (larger artifact)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.15.0
+          cache: npm
+          cache-dependency-path: apps/desktop-ui/package-lock.json
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: global.json
+      - name: Pin Rust MSVC toolchain
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup override set 1.96.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Prepare self-contained Worker and UI
+        run: ./scripts/prepare-desktop.ps1
+      - name: Fetch locked Rust dependencies and collect notices/source
+        run: |
+          cargo fetch --locked --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./scripts/collect-release-materials.ps1
+      - name: Verify native and synthetic regression suites
+        run: ./scripts/verify.ps1 -SkipPrepare -WorkerProtocol
+      - name: Build portable, source and NSIS installer artifacts
+        run: |
+          $offline = '${{ inputs.offline_installer }}' -eq 'true'
+          ./scripts/build-desktop.ps1 -SkipPrepare -Installer -OfflineInstaller:$offline
+      - name: Retain verification output
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-verification
+          path: |
+            artifacts/verification/
+            artifacts/worker-verification-*/results.json
+          if-no-files-found: ignore
+      - name: Retain release candidates (no external publishing)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: OpenUnpack-windows-x64-release-candidates
+          path: |
+            artifacts/release/*.zip
+            artifacts/release/*-setup.exe
+            artifacts/release/SHA256SUMS.txt
+          if-no-files-found: error

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-start-jobs"
+description = "Enables the start_jobs command without any pre-configured scope."
+commands.allow = ["start_jobs"]
+
+[[permission]]
+identifier = "deny-start-jobs"
+description = "Denies the start_jobs command without any pre-configured scope."
+commands.deny = ["start_jobs"]

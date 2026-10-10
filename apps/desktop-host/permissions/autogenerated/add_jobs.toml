@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-add-jobs"
+description = "Enables the add_jobs command without any pre-configured scope."
+commands.allow = ["add_jobs"]
+
+[[permission]]
+identifier = "deny-add-jobs"
+description = "Denies the add_jobs command without any pre-configured scope."
+commands.deny = ["add_jobs"]

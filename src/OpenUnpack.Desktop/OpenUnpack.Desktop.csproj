@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>OpenUnpack</AssemblyName>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../OpenUnpack.Core/OpenUnpack.Core.csproj" />
+    <Content Include="../../tools/7zip/7z.dll" Link="7z.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('../../tools/7zip/7z.dll')" />
+    <Content Include="../../THIRD_PARTY_NOTICES.md" Link="THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../tools/7zip/License.txt" Link="7zip-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" Condition="Exists('../../tools/7zip/License.txt')" />
+    <Content Include="../../tools/7zip/7z.dll.sha256" Link="7z.dll.sha256" CopyToOutputDirectory="PreserveNewest" Condition="Exists('../../tools/7zip/7z.dll.sha256')" />
+  </ItemGroup>
+</Project>

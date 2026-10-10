@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-recover-job"
+description = "Enables the recover_job command without any pre-configured scope."
+commands.allow = ["recover_job"]
+
+[[permission]]
+identifier = "deny-recover-job"
+description = "Denies the recover_job command without any pre-configured scope."
+commands.deny = ["recover_job"]

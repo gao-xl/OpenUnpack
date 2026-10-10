@@ -1,0 +1,21 @@
+{
+  "name": "gemini-subagent",
+  "version": "1.0.2",
+  "description": "Delegate basic file and coding tasks to Gemini through your OpenAI-compatible gateway.",
+  "author": { "name": "Personal tools" },
+  "keywords": ["gemini", "subagent", "delegation", "coding"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Gemini Subagent",
+    "shortDescription": "把基础任务交给 Gemini 3.8 Flash High",
+    "longDescription": "让主 agent 将文件查找、代码阅读、搜索和摘要委派给 Gemini。每个任务独立上下文，主 agent 复核结果。使用个人网关与 Windows 加密凭据，默认只读。",
+    "developerName": "Personal tools",
+    "category": "Developer Tools",
+    "capabilities": ["Read"],
+    "defaultPrompt": ["把当前项目中的基础阅读和搜索任务交给 Gemini，再复核结果"],
+    "brandColor": "#427AF4",
+    "composerIcon": "./assets/icon.svg",
+    "logo": "./assets/icon.svg"
+  }
+}

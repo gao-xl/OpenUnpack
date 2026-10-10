@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-preview-exclusions"
+description = "Enables the preview_exclusions command without any pre-configured scope."
+commands.allow = ["preview_exclusions"]
+
+[[permission]]
+identifier = "deny-preview-exclusions"
+description = "Denies the preview_exclusions command without any pre-configured scope."
+commands.deny = ["preview_exclusions"]

@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OpenUnpack · 现代架构与 UI 讨论稿</title>
+<style>
+:root{--ink:#172235;--muted:#526277;--line:#d9e1eb;--bg:#f4f7fb;--blue:#255ed6;--soft:#eaf0ff;--green:#13735c;--orange:#9a5205}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.75 "Segoe UI","Microsoft YaHei",sans-serif}a{color:var(--blue);text-underline-offset:3px}
+header{background:#14243b;color:#fff;padding:42px max(24px,calc((100vw - 1160px)/2)) 34px}header p{max-width:930px;color:#d4dfef}h1{font-size:34px;line-height:1.3;margin:10px 0 18px}h2{font-size:23px;margin:0 0 16px}h3{font-size:17px;margin:0 0 10px}
+.eyebrow{color:#94bcff;font-weight:600;letter-spacing:1px}.status{display:inline-block;padding:4px 12px;border:1px solid #526a88;border-radius:20px;font-size:13px}
+nav.toc{position:sticky;top:0;z-index:2;background:#fff;border-bottom:1px solid var(--line);padding:10px 24px;display:flex;gap:22px;overflow:auto}nav a{white-space:nowrap;text-decoration:none}
+main{max-width:1160px;margin:28px auto;padding:0 22px 50px}section{background:#fff;border:1px solid var(--line);border-radius:14px;padding:26px;margin:0 0 22px;scroll-margin-top:70px}
+p{margin:10px 0}.muted{color:var(--muted)}.note{border-left:4px solid var(--blue);background:var(--soft);padding:12px 16px;margin:14px 0}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.card{border:1px solid var(--line);border-radius:10px;padding:17px}.card p{font-size:14px}.tag{display:inline-block;background:var(--soft);color:var(--blue);border-radius:6px;padding:2px 8px;font-size:12px}.tag.green{background:#e3f3ec;color:var(--green)}.tag.orange{background:#fff0db;color:var(--orange)}
+.table-wrap{overflow:auto}table{border-collapse:collapse;width:100%;font-size:14px;margin:14px 0}th,td{border-bottom:1px solid var(--line);padding:11px 12px;text-align:left;vertical-align:top}th{background:#eef3fa;white-space:nowrap}tbody tr:last-child td{border-bottom:0}
+.flow{display:grid;grid-template-columns:1fr 30px 1.4fr 30px 1fr;align-items:center;gap:8px;margin:20px 0}.flow-box{border:1px solid #c6d5ef;background:#f7f9ff;border-radius:12px;padding:18px;min-height:160px}.flow-box.core{background:#eaf0ff;border-color:#9ab8f2}.arrow{text-align:center;font-size:26px;color:var(--blue)}.flow-box p{font-size:13px}.pipeline{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.step{background:#eef3fa;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px}
+ul{padding-left:22px}li{margin:7px 0}code{font:13px Consolas,monospace;background:#eef2f7;border-radius:4px;padding:2px 4px}
+.mock{border:1px solid #b7c6d9;border-radius:10px;overflow:hidden;background:#f5f7fb;margin-top:20px;font-size:13px}.mock-title{background:#eef2f8;border-bottom:1px solid var(--line);padding:10px 16px;display:flex;justify-content:space-between}.mock-body{display:grid;grid-template-columns:156px 1fr}.sidebar{background:#f4f6fa;padding:18px 10px;border-right:1px solid var(--line)}.sidebar div{padding:9px 11px;border-radius:6px;margin-bottom:7px}.sidebar .active{background:#e0eaff;color:#255ed6;font-weight:600}.work{padding:18px;min-width:0}.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.btn{display:inline-block;border:1px solid #bbc9dc;background:#fff;padding:6px 11px;border-radius:6px}.btn.primary{background:#255ed6;color:#fff;border-color:#255ed6}.config{padding:10px;background:#fff;border:1px solid var(--line);border-radius:7px}.task-area{display:grid;grid-template-columns:1.7fr 1fr;gap:13px;margin-top:14px}.task-table{background:#fff;border:1px solid var(--line);border-radius:8px;overflow:auto}.task-table table{min-width:480px;margin:0}.details{background:#fff;border:1px solid var(--line);border-radius:8px;padding:14px}.bar{height:7px;background:#e4eaf4;border-radius:6px;margin:7px 0}.bar span{display:block;height:100%;background:#255ed6;border-radius:6px;width:45%}.mock-footer{background:#eef2f8;padding:9px 16px;border-top:1px solid var(--line);color:var(--muted)}
+.refs{columns:2;column-gap:24px}.refs li{break-inside:avoid}.handoff{background:#eaf0ff;border-color:#bdd0f4}footer{text-align:center;color:var(--muted);font-size:13px;margin:30px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.flow{grid-template-columns:1fr}.flow-box{min-height:0}.arrow{transform:rotate(90deg)}.mock-body{grid-template-columns:1fr}.sidebar{display:flex;overflow:auto;border-right:0;border-bottom:1px solid var(--line)}.sidebar div{white-space:nowrap}.task-area{grid-template-columns:1fr}.refs{columns:1}header{padding:28px 22px}h1{font-size:28px}}
+@media print{body{background:#fff;font-size:11px}.toc{display:none!important}header{background:#fff;color:#172235;padding:0 0 18px}header p,.eyebrow{color:#526277}main{max-width:none;padding:0;margin:0}section{border:0;border-top:1px solid #ccc;padding:16px 0;margin:0;border-radius:0}.grid,.flow{break-inside:avoid}.mock{break-inside:avoid}a{color:#172235}}
+</style>
+</head>
+<body>
+<header>
+<div class="eyebrow">OPENUNPACK · 架构与交互设计</div>
+<h1>现代界面、本地核心、可恢复的解压管线</h1>
+<p>统一管理密码与批量任务；让机械硬盘上的多层压缩包在 SSD 工作区连续展开，把最终结果经过所选验证后发布到目标目录。</p>
+<span class="status">2026-10-08 · 新主方案讨论稿 · 仅设计</span>
+<p>推荐：<strong>Tauri 2 + React / TypeScript + Ant Design + Rust 核心 + 独立解压 / 传输作业进程</strong>。UI 库与功能分类由 Gemini 提案，主 agent 已复核。当前为 0.3 讨论稿，增加错误处理与防死锁规则；框架尚未逐项确认，应用代码编辑继续停止。</p>
+</header>
+<nav class="toc" aria-label="文档目录">
+<a href="#scope">范围</a><a href="#decisions">决定与待定项</a><a href="#current">当前状态</a><a href="#architecture">系统结构</a><a href="#ui">UI 分类与线框</a><a href="#reference-settings">截图功能对照</a><a href="#pipeline">SSD 与验证</a><a href="#reliability">错误与死锁</a><a href="#data">数据与恢复</a><a href="#qa">验收</a><a href="#phases">实施交接</a><a href="#sources">来源</a>
+</nav>
+<main>
+<section id="scope">
+<h2>范围与目标</h2>
+<p>首版覆盖密码分组、搜索、导入与备份，有限候选轮试与成功关联，递归扫描与分卷，批量队列，可选内包展开，SSD 缓存，标准验证与目标回读，输出冲突处理、历史及异常恢复。</p>
+<p class="muted">Windows 优先、文件与密码默认留在本机。云账户、收费查询、穷举、跨平台验收和后续工具箱不进入首版。此次只写设计文档，既有源码和早期 C# 骨架保留。</p>
+<div class="note">完整技术规范：<a href="../architecture-modern.md">architecture-modern.md</a>。此页面的界面是静态线框示例，没有加载真实 UI 库，不是已实现的软件。</div>
+</section>
+<section id="decisions">
+<h2>推荐决定与实施前待定项</h2>
+<div class="grid">
+<div class="card"><span class="tag">推荐路线</span><h3>Tauri 2 + React + Rust</h3><p>现代 Web 组件负责界面；本地核心负责任务、文件与密码；独立 Worker 承担原生解压。</p><p>代价：WebView2 部署、双语言维护、原生引擎桥接。<a href="#architecture">查看边界</a></p></div>
+<div class="card"><span class="tag green">Gemini 提案</span><h3>Ant Design 主 UI 库</h3><p>统一 Table、Form、Drawer、Modal、导航和主题，完整分类功能。大列表和无障碍需实测。</p><p>不把 Input.Password 遮盖当作数据库加密。<a href="#ui">查看页面</a></p></div>
+<div class="card"><span class="tag orange">实施前锁定</span><h3>环境与预算</h3><p>最低 Windows/WebView2、依赖版本、引擎 ABI、超时、缓存阈值、记录期限和安装策略。</p><p>20 GiB、双层深度等仍是建议值。技术验证由实现阶段负责。<a href="#qa">查看 PoC</a></p></div>
+</div>
+<p>Windows 原生备选为 WinUI 3 + .NET；增量备选为 WPF + WPF UI。WPF 仍在更新。主方案选择依据是界面设计与产品路线匹配，不以换框架承诺固定倍速。</p>
+</section>
+<section id="current">
+<h2>现状与需要补齐的规则</h2>
+<p>已有 <a href="../software-spec.md">软件规范 0.2</a>、<a href="../architecture.md">WPF 架构草案 0.1</a>，以及未完成的早期骨架。它们没有完整运行验收。</p>
+<div class="table-wrap"><table><thead><tr><th>旧草案问题</th><th>本稿的新建议</th></tr></thead><tbody>
+<tr><td>运行时冻结整个密码库</td><td>任务配置冻结，敏感租约按版本使用；允许原子编辑，等待节点受控补密码。</td></tr>
+<tr><td>CacheManifest 随阶段变更</td><td>清单不可变，描述文件与验证证据；SQLite 是任务可变状态唯一权威。</td></tr>
+<tr><td>独立 Worker 与调度列为后续增强</td><td>Worker 与按盘预算接口进入首版架构建议；实际多盘并行仍需后续验收。</td></tr>
+</tbody></table></div>
+<p class="muted">旧稿完整保留；正式定稿时统一上述表述。当前新增建议不冒充用户已确认的所有技术决定。</p>
+</section>
+<section id="architecture">
+<h2>三类进程角色，明确数据所有权</h2>
+<div class="flow" aria-label="界面、核心与解压进程的关系">
+<div class="flow-box"><h3>界面</h3><strong>React · Ant Design</strong><p>分类导航、虚拟化任务表、详情、对话框、筛选和用户命令。任务状态来自核心快照。</p><span class="tag">类型化命令 / 脱敏事件</span></div>
+<div class="arrow" aria-hidden="true">↔</div>
+<div class="flow-box core"><h3>本地核心</h3><strong>Rust · 模块化单体</strong><p>扫描与分卷、任务状态机、物理盘预算、密码保险库、SSD 工作区、结果规划、验证、发布与恢复。</p><span class="tag">独占 SQLite 与保险库写入</span></div>
+<div class="arrow" aria-hidden="true">↔</div>
+<div class="flow-box"><h3>独立作业进程</h3><strong>解压 Worker / 传输 Worker</strong><p>解压写尝试目录；长时复制与回读由传输进程执行，只写批准工作区/目标临时目录。无最终改名发布权。</p><span class="tag">独立控制 / 有界数据</span></div>
+</div>
+<p class="muted">WebView2 可能创建多个系统进程，图中是职责角色。Worker 是故障隔离边界，未加额外限制时仍有当前用户权限。</p>
+<div class="table-wrap"><table><thead><tr><th>契约</th><th>规则</th></tr></thead><tbody>
+<tr><td>界面 → 核心</td><td>版本化命令与错误码；分页列表、阶段事件、快照重连。前端不读写数据库、不传文件内容、不任意启动程序。</td></tr>
+<tr><td>命令权限</td><td>显式配置应用自定义命令权限；核心检查授权来源/目标、窗口和任务归属。不能只靠插件 capabilities。</td></tr>
+<tr><td>核心 → Worker</td><td>检查协议、子进程身份、requestId、attemptId 和运行代次；消息有界，迟到结果无效。</td></tr>
+<tr><td>口令通道</td><td>只传当前候选，通过原生回调使用；不进参数、环境变量、日志、任务数据库或清单。</td></tr>
+<tr><td>取消与退出</td><td>先协作取消，超时终止 Worker/子进程，确认句柄关闭后清理；主进程退出约束子进程退出。</td></tr>
+</tbody></table></div>
+</section>
+<section id="ui">
+<h2>完整功能分类与现代组件布局</h2>
+<p>Gemini 推荐 Ant Design 的表格、树形结构、表单和弹层体系。主 agent 修正了网站上传、可关闭脱敏、部分完成、恢复入口和误触取消等细节；具体组合效果仍需桌面 PoC。</p>
+<div class="table-wrap"><table><thead><tr><th>主分类</th><th>子功能</th><th>入口与层级</th></tr></thead><tbody>
+<tr><td>批量解压</td><td>文件/文件夹添加、递归扫描结果、分卷、根队列与内包树、开始/暂停/取消、重试/移除、打开源/输出。</td><td>常用命令栏 + 虚拟化 Table + 选中详情；本机拖放入口。</td></tr>
+<tr><td>当前任务配置</td><td>输出、冲突新建/跳过、密码范围、缓存模式、内包展开、保留内包、验证范围。</td><td>输出/范围直接可见；缓存·展开·验证摘要始终可见，具体参数进入抽屉。</td></tr>
+<tr><td>密码库</td><td>分组、多组关联、名称/备注搜索、新增/编辑、启停/删除、成功统计、显式查看/复制。</td><td>分组侧栏 + Table + Form/Modal；默认遮盖。</td></tr>
+<tr><td>密码数据管理</td><td>TXT/TSV 与编码预览、重复/错误/覆盖确认、加密备份导出、恢复预览与合并。</td><td>分步 Drawer/对话框；与设置页共用备份用例。</td></tr>
+<tr><td>处理记录</td><td>时间/结果筛选、来源/输出、分阶段耗时、验证范围、重试/清空；异常退出恢复与缓存清理。</td><td>Table + 恢复 Alert；按实际状态提供重试节点、重写目标、继续发布或清理。</td></tr>
+<tr><td>设置与备份</td><td>全局默认项、缓存路径/配额/保留空间、记录保留量、数据路径、引擎状态、备份、主题/语言/键盘、诊断。</td><td>分组 Form；密码脱敏固定启用，技术信息放诊断。</td></tr>
+<tr><td>工具箱 · 后续候选</td><td>批量压缩、复制移动、重命名、类型修复；其他解密格式另行评估。</td><td>记录设计候选，首版不摆放无功能入口。</td></tr>
+</tbody></table></div>
+<div class="mock" aria-label="批量解压静态线框示例">
+<div class="mock-title"><strong>OpenUnpack · 批量解压</strong><span class="muted">设计示例 / 非运行数据</span></div>
+<div class="mock-body">
+<div class="sidebar"><div class="active">批量解压</div><div>密码库</div><div>处理记录</div><div>设置与备份</div></div>
+<div class="work">
+<div class="toolbar"><span class="btn primary">＋ 添加文件</span><span class="btn">＋ 添加文件夹</span><span class="muted">支持本机拖入文件或文件夹</span></div>
+<div class="config">输出：指定目录　｜　密码范围：常用分组<br><span class="muted">SSD：按需缓存　·　内包：展开两层　·　标准验证　</span><span class="btn">配置任务…</span></div>
+<div class="toolbar"><span class="btn primary">开始</span><span class="btn">暂停</span><span class="btn">取消选中</span><span class="btn">更多操作 ▾</span></div>
+<div class="task-area">
+<div class="task-table"><table><thead><tr><th>归档 / 节点</th><th>当前阶段</th><th>结果 / 操作</th></tr></thead><tbody>
+<tr><td>▾ 资料归档.7z</td><td><span class="tag">内层处理中</span></td><td>查看详情</td></tr>
+<tr><td>　外层节点</td><td>已提取</td><td>结果在工作区</td></tr>
+<tr><td>　└ 内包.zip</td><td>内层提取 45%<div class="bar"><span></span></div></td><td>候选 2 / 8</td></tr>
+<tr><td>▸ 备份.part1.rar</td><td><span class="tag orange">需要密码</span></td><td>补密码 / 重试</td></tr>
+</tbody></table></div>
+<aside class="details"><strong>资料归档.7z</strong><p>机械盘源 → SSD 工作区 → 输出目录</p><p>外层提取 ✓<br>内层提取 · 进行中<br>写回 / 验证 / 发布 · 待开始</p><p class="muted">标准模式：写回时比对源流，未完整回读目标。</p><span class="btn">查看任务树</span></aside>
+</div>
+</div></div>
+<div class="mock-footer">2 个根任务 · 1 处理中 · 1 需要密码　｜　工作缓存占用 / 剩余空间　｜　未发布结果不显示为成品</div>
+</div>
+<p>明/暗/系统主题使用统一 Token；中文输入、125%/150%/200% DPI、焦点保留、键盘和屏幕阅读器分别验收。Escape 关闭对话框，不直接取消任务。新增/编辑/显式查看是口令短时进入前端的受限例外，明文不进入 localStorage 或日志。</p>
+</section>
+<section id="reference-settings">
+<h2>用户截图：六组设置功能对照</h2>
+<p>主 agent 已核对原软件的常规、处理和排除页，并把可见功能清单转给 Gemini。下面是复核后的分类；原截图勾选状态不作为新软件默认值。</p>
+<div class="table-wrap"><table><thead><tr><th>分组</th><th>原软件可见功能</th><th>我们的归属与策略</th></tr></thead><tbody>
+<tr><td>输出管理</td><td>源目录/指定目录；单子目录采用为输出目录。</td><td>任务配置与全局默认；独立输出、默认保留结构，目录整理可选。</td></tr>
+<tr><td>处理策略</td><td>内包展开、后缀修正、CRC异常继续、去密码空格。</td><td>内包/验证摘要可见；识别与物理改名分开，不改原密码，CRC失败不能正常成功发布；危险候选默认关闭。</td></tr>
+<tr><td>性能与调度</td><td>执行数、小文件优先、CPU平衡。</td><td>性能页；首版顺序执行，受物理盘/CPU/内存预算控制，小包优先须防大包饥饿。</td></tr>
+<tr><td>筛选与排除</td><td>特定格式（如 *.url）、特定文件名。</td><td>分别标“扫描输入”和“归档输出”，预览命中；无默认隐藏规则，过滤结果说明排除范围。</td></tr>
+<tr><td>完成后动作</td><td>删除源包/回收站、空目录整理、提示音、关机。</td><td>首版保留源包；通知属偏好，删除/整理/关机列后续候选，默认关闭。</td></tr>
+<tr><td>界面维护</td><td>托盘、置顶、更新检查。</td><td>偏好页；置顶默认关闭、自动联网需显式启用，保留手动检查入口。</td></tr>
+</tbody></table></div>
+<p>截图还显示云查询、云获取/破解和暴力引擎，当前产品不纳入。输出排除后须显示“所选内容完成（排除 N 项）”；损坏抢救、派生密码、物理改名和删除源包需要独立策略，不能继承含糊默认。</p>
+<details><summary>查看用户提供的原软件截图（只作功能参考）</summary>
+<figure><img src="../reference/original-settings-general.png" alt="原软件常规设置：输出路径、任务数、优先级、云设置和窗口偏好" style="max-width:100%;height:auto"><figcaption>常规页</figcaption></figure>
+<figure><img src="../reference/original-settings-processing.png" alt="原软件处理设置：目录、源包删除、CRC、嵌套、密码空格与提示音" style="max-width:100%;height:auto"><figcaption>处理页</figcaption></figure>
+<figure><img src="../reference/original-settings-exclusions.png" alt="原软件排除设置：特定格式与特定文件名" style="max-width:100%;height:auto"><figcaption>排除页</figcaption></figure>
+</details>
+<p class="muted">参考图已原样复制到 docs/reference/；没有修改原程序设置。Gemini 基于提取清单作分类，未直接读取图片。</p>
+</section>
+<section id="pipeline">
+<h2>SSD 处理与验证范围</h2>
+<div class="pipeline">
+<span class="step">来源 / 分卷确认</span><span>→</span><span class="step">存储预留</span><span>→</span><span class="step">按需缓存源包</span><span>→</span><span class="step">外层 → 内层展开</span><span>→</span><span class="step">封存最终清单</span><span>→</span><span class="step">顺序写回</span><span>→</span><span class="step">所选验证 / 发布</span>
+</div>
+<ul>
+<li>最终清单直接引用节点文件，正常路径不额外复制一份 SSD 合并结果；中间层留在工作区。</li>
+<li>同一物理 HDD 默认一个活跃 I/O 阶段；涉及多盘时一次取得整组许可。盘符不同不等于物理盘不同。</li>
+<li>实时占用、未消耗预留和保留空间分别计算；失败尝试/等待工作区也占配额，预留转实占不重复计数。</li>
+<li>每个内包独立候选与结果；部分交付需显式选择，保留未展开内包及原因，不计全部成功。</li>
+</ul>
+<div class="table-wrap"><table><thead><tr><th>模式</th><th>实际验证</th><th>界面如何说明</th></tr></thead><tbody>
+<tr><td>标准</td><td>提取时摘要 + 引擎结果；写回时从源流计算摘要并比较，检查读写错误与数量/大小。</td><td>标准验证完成；未完整回读目标。源流摘要不证明目标物理存储。</td></tr>
+<tr><td>完整目标回读</td><td>写回后刷新并读取目标，按期望摘要比对；记录真实读取方式。</td><td>完整回读结果与范围。未实测时不声称绕过系统缓存或保证断电持久性。</td></tr>
+</tbody></table></div>
+<p class="muted">完整来源指纹、采样指纹和元数据指纹分开；强密码关联只用完整内容指纹。哈希、解码、创建小文件和 HDD 最后写入仍需时间。</p>
+</section>
+<section id="reliability">
+<h2>错误处理、防死锁与无进展处置</h2>
+<p>先区分普通错误、资源等待、无进展和循环死锁。心跳与超时用于发现和处置异常，不是无死锁证明；没有等待循环证据时，界面显示“未响应”或“暂无新进度”。</p>
+<div class="table-wrap"><table><thead><tr><th>情况</th><th>处理与恢复</th></tr></thead><tbody>
+<tr><td>密码耗尽 / 缺卷 / 坏包 / 校验失败</td><td>影响当前节点，等待补密码/卷/新源后再试；含歧义的引擎错误不强判成密码错误。</td></tr>
+<tr><td>空间不足 / 设备不可用</td><td>暂停依赖该资源的任务，确认停止后释放临时许可；保留文件继续占配额，给出换位置/清理/调配额入口。</td></tr>
+<tr><td>短暂占用 / 数据库繁忙</td><td>有限次数与总期限的退避；旧快照需释放并重新校验。不可写/损坏不当作普通繁忙，更不创建空库覆盖。</td></tr>
+<tr><td>作业崩溃 / 未响应</td><td>独立探测、协作取消、必要时终止进程树；确认真实退出后新进程/新操作重试，未确认不清理或复用目录。</td></tr>
+<tr><td>发布提交结果不明</td><td>进入发布待核对，依据意图与归属恢复；不盲目重复发布或删除可能已交付的结果。</td></tr>
+<tr><td>清理 / 密码记录保存失败</td><td>保留文件完成状态，显示独立提醒，幂等处理后续动作，不重新解压成品。</td></tr>
+</tbody></table></div>
+<div class="note"><strong>典型死锁：</strong>只有一个 Worker 槽位，父任务占着它等待内包，内包又等这个槽位。规定外层封存后先释放执行许可，再调度内包；结果文件引用不等于执行许可。</div>
+<ul>
+<li>状态锁只做短内存操作，不跨 await、不持锁等待 I/O 或其他组件；数据库事务不等待用户、Worker、保险库或发布。</li>
+<li>阶段所需物理盘、执行槽位、CPU/内存由统一准入一次授予整组，拿不全就排队，不持部分许可等待。</li>
+<li>额度增长被拒后停到可确认边界，进入空间不足；不能占着执行名额等待只能由自身完成后释放的空间。</li>
+<li>取消/探测使用独立控制接收路径，数据接收器持续排空；普通进度可合并，终止/错误/结果不静默丢弃。</li>
+<li>长时解压、复制与回读隔离到作业进程。异步超时或 abort 不能可靠强停已开始的阻塞线程。</li>
+<li>监视阶段、最后控制/引擎/读写回应、等待对象和许可持有者；真实退出与句柄关闭前不回收资源。睡眠恢复后重新探测。</li>
+</ul>
+<div class="pipeline"><span class="step">等待超期 / 失联</span><span>→</span><span class="step">探测与诊断</span><span>→</span><span class="step">协作停止</span><span>→</span><span class="step">必要时终止 / 确认退出</span><span>→</span><span class="step">核对提交点</span><span>→</span><span class="step">重试 / 保留成品 / 待处理</span></div>
+<p>界面区分等待资源、无新进度、作业未响应、正在停止、停止待确认、发布待核对与完成后处理待办，提供实际可用动作。系统设备卡死时不能承诺固定秒数停止；无退出确认就保留归属和工作区。</p>
+<p class="muted">新增验收：单 Worker 嵌套、反向盘资源申请、额度拒绝、持续数据库繁忙、进度洪泛/接收器停读、原生或传输作业失联，以及这些状态下取消；发布改名后退出仍须保留成品。记录等待图与资源最终释放，不以“没超时”证明无死锁。</p>
+<p>技术依据：<a href="https://tokio.rs/tokio/tutorial/shared-state">Tokio 状态与锁</a>、<a href="https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html">阻塞作业限制</a>、<a href="https://www.sqlite.org/isolation.html">SQLite 隔离</a>、<a href="https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects">Windows 进程树</a>。本节是设计约束，尚未实现或演练。</p>
+</section>
+<section id="data">
+<h2>唯一状态权威与恢复提交点</h2>
+<div class="table-wrap"><table><thead><tr><th>存储</th><th>所有者与内容</th></tr></thead><tbody>
+<tr><td>SQLite</td><td>核心单写入者；任务/节点/尝试、工作区、发布意图、成功 outbox、格式版本；不存口令。</td></tr>
+<tr><td>账户保护密码库</td><td>当前用户 DPAPI 全库保护，原子替换；加密/读取失败禁止明文降级或空库覆盖。迁移备份另设口令。</td></tr>
+<tr><td>不可变清单</td><td>文件版本、路径映射、大小、摘要与能力证据；不与数据库争夺可变阶段。</td></tr>
+<tr><td>配置</td><td>无口令的全局默认值；根任务开始时冻结配置快照。</td></tr>
+</tbody></table></div>
+<p>发布意图先落库 → 目标卷临时目录复制验证 → 归属和准备状态 → 同卷非覆盖改名 → 数据库提交发布与成功事件 → 独立清理。名称冲突变更先更新意图。</p>
+<p><strong>改名成功后保留成品。</strong>改名后数据库未提交，核对意图、归属和必要内容证据后补记；无法确认则等待处理。成功 outbox 携带密码 ID 与口令版本，只有仍存在且版本匹配的记录才按 eventId 幂等更新；改口令或删除后跳过关联并确认事件，不重复计数，不把旧成果关联到新口令。</p>
+<p class="muted">多个存储没有共同原子事务。清理前核对工作区归属、引用与活跃句柄，不能仅凭目录存在推断成功。</p>
+</section>
+<section id="qa">
+<h2>验收矩阵与完成标准</h2>
+<div class="table-wrap"><table><thead><tr><th>验收面</th><th>必须观察的结果</th></tr></thead><tbody>
+<tr><td>路线 PoC</td><td>建议一万任务样本，列表虚拟化/高频更新；中文输入、真实文件夹拖放、键盘/DPI；干净机器完全离线安装。</td></tr>
+<tr><td>原生引擎</td><td>真实加密 ZIP/7z/RAR、固实与各分卷；密码回调、增量摘要、取消、Worker 崩溃后界面可操作。</td></tr>
+<tr><td>嵌套与部分完成</td><td>普通文件保留，内外不同密码、缺密码/坏内包、仅重试失败节点、最终映射和根结果准确。</td></tr>
+<tr><td>发布与恢复</td><td>每个发布窗口强制退出；未发布不算成品，已发布保留，不覆盖无关目录、不重复成功计数。</td></tr>
+<tr><td>资源与验证</td><td>缓存/目标满、拔盘、未知展开大小、同物理盘多卷；标准无额外完整目标回读，严格回读确实验证目标。</td></tr>
+<tr><td>数据与性能</td><td>错口令/账户保护失败不覆盖现库；参数/日志/数据库/清单无口令；相同源和目标比较全部耗时与峰值占用。</td></tr>
+</tbody></table></div>
+<p>当前完成标准是设计边界、契约、状态、数据、UI 分类和验收规则可供评审；尚无构建、真实解压、性能或原生桌面验收。性能阈值与依赖版本由后续 PoC 锁定。</p>
+</section>
+<section id="phases">
+<h2>后续实施、迁移与交付</h2>
+<ol>
+<li><strong>路线 PoC：</strong>UI/桌面交互与引擎桥可并行，先对齐协议。</li>
+<li><strong>契约与核心：</strong>状态机/任务树先行，保险库、SQLite、Worker 按契约并行。</li>
+<li><strong>处理管线：</strong>单层真实回归后接双层、SSD预算与可恢复发布。</li>
+<li><strong>验收与交付：</strong>故障窗口通过后做性能、UI和安装检查，再锁定依赖与发行材料。</li>
+</ol>
+<p>未来代码组织建议：desktop-ui / desktop-host / domain / application / infrastructure / protocol / archive-worker / 必要的薄原生桥。当前不创建工程，不删除或迁移旧骨架。</p>
+<p>各数据格式版本化，迁移前备份；失败回到旧程序与迁移前状态，源包和成品不作为回滚删除对象。Tauri Windows 交付须处理 WebView2，离线安装组件会增加包体；提供常规与离线安装路径。</p>
+</section>
+<section id="risks">
+<h2>风险与应对</h2>
+<ul>
+<li>原生 ABI、输出摘要回调和取消：作为 P0 硬门槛，不能用不安全的 CLI 密码参数规避。</li>
+<li>WebView2、中文输入和无障碍：以真实桌面和离线机器验收，不用网页样例替代。</li>
+<li>任务规模、SSD 空间和恢复窗口：有界队列、预算、版本化协议、故障注入与单一状态权威。</li>
+<li>开源依赖：锁版本、保留通知与所需源码材料，单独核对引擎分发要求；应用许可不覆盖第三方许可。</li>
+</ul>
+</section>
+<section id="sources">
+<h2>来源与证据</h2>
+<p>已读软件规范、旧架构及 Gemini 只读 UI 提案。以下使用官方资料核对框架和组件；文中的系统设计规则是提案，不是上游承诺或实现证据。</p>
+<ul class="refs">
+<li><a href="../software-spec.md">现有软件规范 0.2</a></li>
+<li><a href="../architecture.md">旧 WPF 架构草案 0.1</a></li>
+<li><a href="https://v2.tauri.app/concept/process-model/">Tauri 进程模型</a></li>
+<li><a href="https://v2.tauri.app/develop/calling-rust/">Tauri Rust 命令与通道</a></li>
+<li><a href="https://v2.tauri.app/security/capabilities/">Tauri 权限与边界</a></li>
+<li><a href="https://v2.tauri.app/distribute/windows-installer/">Tauri Windows 安装</a></li>
+<li><a href="https://ant.design/components/table/">Ant Design Table</a></li>
+<li><a href="https://ant.design/docs/react/customize-theme/">Ant Design 主题</a></li>
+<li><a href="https://learn.microsoft.com/en-us/windows/apps/get-started/choose-framework">Windows UI 框架选择</a></li>
+<li><a href="https://learn.microsoft.com/en-us/dotnet/desktop/wpf/whats-new/net100">WPF .NET 10 更新</a></li>
+<li><a href="https://learn.microsoft.com/en-us/windows/win32/api/dpapi/nf-dpapi-cryptprotectdata">当前用户 DPAPI</a></li>
+<li><a href="https://www.sqlite.org/atomiccommit.html">SQLite 原子提交边界</a></li>
+<li><a href="https://www.7-zip.org/license.txt">7-Zip 许可</a></li>
+</ul>
+</section>
+<section id="handoff" class="handoff">
+<h2>本次交接</h2>
+<p>只更新此 HTML 与 <a href="../architecture-modern.md">完整技术稿</a>，并保存用户提供的参考图；应用源码、旧稿和个人数据保持原样。可继续讨论主方案；用户明确恢复代码开发后，先做路线 PoC，再进入完整实现。</p>
+</section>
+</main>
+<footer>OpenUnpack · 2026-10-08 · 推荐方案与静态线框，尚未实现</footer>
+</body>
+</html>

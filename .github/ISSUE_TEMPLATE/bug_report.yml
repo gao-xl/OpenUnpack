@@ -1,0 +1,31 @@
+name: Bug report
+description: Report an error using synthetic, nonsecret reproduction data
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please read SECURITY.md first. Do not upload your real passwords, vault, database, backup passphrase, private archive contents or personal paths. Use a minimal synthetic sample. Security issues should use a private reporting channel.
+  - type: input
+    id: version
+    attributes:
+      label: OpenUnpack / Windows version
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction with synthetic sample
+      description: Include archive type, settings and the exact task stage.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized error code and evidence
+      description: Remove secrets and personal filenames/paths before sharing.

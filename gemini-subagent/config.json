@@ -1,0 +1,9 @@
+{
+  "baseUrl": "https://gateway.yarrn.eu.org/v1",
+  "model": "gemini-3.8-flash-high",
+  "maxTurns": 8,
+  "maxToolCalls": 24,
+  "requestTimeoutMs": 90000,
+  "taskTimeoutMs": 240000,
+  "maxOutputTokens": 4096
+}

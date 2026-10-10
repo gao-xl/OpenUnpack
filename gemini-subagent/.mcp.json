@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "gemini_delegate": {
+      "command": "powershell.exe",
+      "cwd": ".",
+      "args": ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "./run.ps1", "-Mode", "mcp", "--dynamic-workspace"],
+      "env_vars": ["CODEX_MCP_NODE_PATH", "USERPROFILE", "PATH", "SYSTEMROOT", "APPDATA", "LOCALAPPDATA"],
+      "startup_timeout_sec": 20,
+      "tool_timeout_sec": 300
+    }
+  }
+}

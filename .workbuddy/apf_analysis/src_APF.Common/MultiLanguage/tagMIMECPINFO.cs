@@ -1,0 +1,33 @@
+using System.Runtime.InteropServices;
+
+namespace MultiLanguage;
+
+[StructLayout(LayoutKind.Sequential, Pack = 4)]
+public struct tagMIMECPINFO
+{
+	public uint dwFlags;
+
+	public uint uiCodePage;
+
+	public uint uiFamilyCodePage;
+
+	[MarshalAs(UnmanagedType.ByValArray, SizeConst = 64)]
+	public ushort[] wszDescription;
+
+	[MarshalAs(UnmanagedType.ByValArray, SizeConst = 50)]
+	public ushort[] wszWebCharset;
+
+	[MarshalAs(UnmanagedType.ByValArray, SizeConst = 50)]
+	public ushort[] wszHeaderCharset;
+
+	[MarshalAs(UnmanagedType.ByValArray, SizeConst = 50)]
+	public ushort[] wszBodyCharset;
+
+	[MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)]
+	public ushort[] wszFixedWidthFont;
+
+	[MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)]
+	public ushort[] wszProportionalFont;
+
+	public byte bGDICharset;
+}
