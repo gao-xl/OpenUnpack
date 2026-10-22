@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenUnpack 全维度代码审计与安全评估报告</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --primary: #0284c7;
+      --primary-dark: #0369a1;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --info: #6366f1;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 24px;
+    }
+    .header {
+      margin-bottom: 32px;
+    }
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0 0 8px 0;
+      color: #0f172a;
+    }
+    .meta {
+      font-size: 14px;
+      color: var(--muted);
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .verdict-banner {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-left: 6px solid var(--primary);
+      padding: 20px 24px;
+      border-radius: 8px;
+      margin-bottom: 32px;
+    }
+    .verdict-banner h2 {
+      margin: 0 0 8px 0;
+      font-size: 18px;
+      color: var(--primary-dark);
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 36px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    }
+    .stat-label {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .stat-value {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .stat-desc {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 28px;
+      margin-bottom: 32px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    }
+    .section h2 {
+      font-size: 20px;
+      margin: 0 0 20px 0;
+      border-bottom: 2px solid #f1f5f9;
+      padding-bottom: 12px;
+      color: #1e293b;
+    }
+    .table-container {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+    th {
+      background: #f8fafc;
+      color: #475569;
+      font-weight: 600;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .badge-medium { background: #fef3c7; color: #92400e; }
+    .badge-low { background: #e0f2fe; color: #0369a1; }
+    .badge-nit { background: #f1f5f9; color: #475569; }
+    .badge-warning { background: #ffedd5; color: #9a3412; }
+    .badge-pass { background: #dcfce7; color: #166534; }
+    pre {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 16px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 13px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      line-height: 1.5;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      background: #f1f5f9;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #0f172a;
+    }
+    ul, ol {
+      padding-left: 20px;
+      margin: 10px 0;
+    }
+    li {
+      margin-bottom: 8px;
+    }
+    .diagram {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 20px;
+      font-family: monospace;
+      white-space: pre;
+      line-height: 1.4;
+      font-size: 13px;
+      color: #334155;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>OpenUnpack (解压工坊) 全维度代码审计与安全评估报告</h1>
+      <div class="meta">
+        <span>📅 审计日期: 2026-10-20</span>
+        <span>🏷️ 版本: v1.0.0 (Release Candidate)</span>
+        <span>🛡️ 规范: STRIDE 威胁模型 & 代码工程质量规范</span>
+      </div>
+    </div>
+
+    <div class="verdict-banner">
+      <h2>总体审计裁决：安全判定 PASS（通过） / 交付门禁 CHANGES REQUESTED（需整改收尾）</h2>
+      <p style="margin: 0; color: #334155;">
+        代码库构建了极其严密的“<strong>Windows Job Object 进程隔离 + PathIdentityLease 防 TOCTOU 竞争 + DPAPI 与 Zeroize 凭据擦除 + SQLite WAL 事务单真源</strong>”防御体系。未发现任何高危远程代码执行或非受控数据泄漏漏洞。存在 3 项工程构建与网络时序层面的收尾门禁（FT-001, FT-002, FT-004）需在正式发行前完成核销。
+      </p>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Rust 自动化测试</div>
+        <div class="stat-value" style="color: #10b981;">398 / 398</div>
+        <div class="stat-desc">核心调度、协议契约、全链回归全绿</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">C# 原生沙盒测试</div>
+        <div class="stat-value" style="color: #10b981;">100 / 100</div>
+        <div class="stat-desc">路径租约、LZ4 纯解码、Zone.Identifier</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">UI 组件与审计测试</div>
+        <div class="stat-value" style="color: #10b981;">172 / 172</div>
+        <div class="stat-desc">React 19 / Vitest 零 XSS 隐患</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">跨语言契约字段</div>
+        <div class="stat-value" style="color: #0284c7;">289 字段</div>
+        <div class="stat-desc">TS ↔ Rust ↔ C# 契约 100% 匹配</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>一、系统威胁模型与纵深防御架构</h2>
+      <div class="diagram">
+[ 外部非受信数据域 (Untrusted Input) ]
+  ├── 恶意压缩包 (ZIP / 7z / RAR: 路径遍历、压缩炸弹、符号链接劫持、Zone.Identifier 逃逸)
+  ├── 批量密码文件 (TXT / TSV / CSV: 畸形格式、超长字段缓冲区溢出)
+  └── 本机 HTTP 请求 / MCP 智能体输入 (未授权调用、NTFS ADS 逃逸、暴力枚举、DoS)
+        │
+        ▼ (第一道边界：Host 鉴权与前置校验)
+[ 宿主进程 (Desktop Host & Local API) ]
+  ├── 独立 API Token 认证 + 滑动退避限流 + RFC 7807 统一错误响应
+  ├── 细粒度 Scope 鉴权 (11 项权限) + NTFS ADS 冒号逃逸拦截 + 路径大小写规范化
+  └── 统一状态推进 (SQLite WAL 事务 + 进程独占锁租约)
+        │
+        ▼ (第二道边界：双向命名管道 + Windows Job Object)
+[ 独立沙盒执行进程 (OpenUnpack.Worker) ]
+  ├── 令牌特权显式剥离 (AdjustTokenPrivileges)
+  ├── 进程加固策略 (禁止网络镜像加载 + 禁用扩展点)
+  ├── 运行时写范围守卫 (WriteScopeGuard 强制仅限 Workspace 写入)
+  └── 目录句柄固定防竞争 (PathIdentityLease 阻止中途目录替换)
+        │
+        ▼ (第三道边界：COM / P-Invoke 互操作)
+[ 底层解码引擎 (官方未修改 7z.dll 26.04) ]
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>二、重点缺陷机理深入剖析</h2>
+
+      <h3 style="font-size: 16px; color: #0f172a; margin-top: 16px;">
+        1. FT-004：未认证请求连接间歇性中止 (Winsock WSAECONNABORTED 10053)
+      </h3>
+      <p>
+        <strong>影响位置</strong>：<code>crates/local-api/src/server.rs:486-531</code> (<code>reject_request</code>)<br>
+        <strong>机理深度定位</strong>：在 Local API 处理未通过鉴权的请求体时，<code>state.rejected_bodies</code> 仅配置了 16 个并发许可，且超时等待仅为 250ms。在高并发或请求体较大的测试中，若数据未读尽服务端便直接关闭底层 TCP Socket。根据 Windows Winsock 规范，当套接字接收缓冲区中仍有未读数据时执行 Close，TCP 驱动会直接向客户端发送 <code>RST</code> 报文。客户端在读取 <code>HTTP 401</code> 响应报文头前触发 10053 异常。<br>
+        <strong>整改方案</strong>：放宽未认证请求体的丢弃缓冲并保证标准优雅挥手（FIN）。
+      </p>
+
+      <h3 style="font-size: 16px; color: #0f172a; margin-top: 16px;">
+        2. FT-002：代码格式规范差异 (cargo fmt)
+      </h3>
+      <p>
+        <strong>影响位置</strong>：<code>apps/desktop-host/src/lib.rs</code><br>
+        <strong>机理分析</strong>：新增的休眠/关机命令及上下文菜单注册逻辑换行与 Rustfmt 规范存在微小出入。<br>
+        <strong>整改方案</strong>：运行 <code>cargo fmt --all</code> 即可一键恢复合规。
+      </p>
+
+      <h3 style="font-size: 16px; color: #0f172a; margin-top: 16px;">
+        3. ARCH-01：协调器单体职责膨胀 (God Class)
+      </h3>
+      <p>
+        <strong>影响位置</strong>：<code>crates/core/src/coordinator.rs</code> (8,728 行)<br>
+        <strong>机理分析</strong>：单文件融合了调度、SQLite 锁租约、Win32 磁盘 IOCTL 拓扑、文件监控（watcher）、垃圾桶回收（SafeRecycle）等众多逻辑。<br>
+        <strong>整改方案</strong>：按规划下沉至 <code>crates/domain</code> 与 <code>crates/application</code>。
+      </p>
+    </div>
+
+    <div class="section">
+      <h2>三、审计缺陷台账与处置清单</h2>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>编号</th>
+              <th>类别</th>
+              <th>严重度</th>
+              <th>置信度</th>
+              <th>涉及模块</th>
+              <th>问题描述</th>
+              <th>状态 / 处置</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>FT-004</strong></td>
+              <td>网络时序</td>
+              <td><span class="badge badge-medium">Medium</span></td>
+              <td>95%</td>
+              <td><code>crates/local-api</code></td>
+              <td>丢弃未认证 Body 过急导致 Winsock 10053 连接中止</td>
+              <td>建议平滑读取并优雅挥手</td>
+            </tr>
+            <tr>
+              <td><strong>FT-001</strong></td>
+              <td>构建物料</td>
+              <td><span class="badge badge-low">Low</span></td>
+              <td>100%</td>
+              <td><code>artifacts/worker</code></td>
+              <td>暂存载荷为 .NET 10.0.12，需升级至 10.0.13</td>
+              <td>重新执行 <code>prepare-desktop.ps1</code></td>
+            </tr>
+            <tr>
+              <td><strong>FT-002</strong></td>
+              <td>静态规范</td>
+              <td><span class="badge badge-nit">Nit</span></td>
+              <td>100%</td>
+              <td><code>desktop-host</code></td>
+              <td><code>apps/desktop-host/src/lib.rs</code> 代码格式差异</td>
+              <td>执行 <code>cargo fmt --all</code></td>
+            </tr>
+            <tr>
+              <td><strong>FT-003</strong></td>
+              <td>供应链</td>
+              <td><span class="badge badge-low">Low</span></td>
+              <td>100%</td>
+              <td><code>Cargo.lock</code></td>
+              <td>Linux D-Bus 依赖 <code>zbus_names</code> 等 3 项维护告警</td>
+              <td>Windows 平台证明不可达</td>
+            </tr>
+            <tr>
+              <td><strong>ARCH-01</strong></td>
+              <td>可维护性</td>
+              <td><span class="badge badge-warning">Warning</span></td>
+              <td>90%</td>
+              <td><code>crates/core</code></td>
+              <td><code>coordinator.rs</code> 超过 8700 行单体代码膨胀</td>
+              <td>规划迁移至分层架构</td>
+            </tr>
+            <tr>
+              <td><strong>ARCH-02</strong></td>
+              <td>可维护性</td>
+              <td><span class="badge badge-warning">Warning</span></td>
+              <td>95%</td>
+              <td><code>infrastructure</code></td>
+              <td>5 组双轨镜像依赖脚本硬性核验</td>
+              <td>架构收敛后统一退役</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>四、整改实施演进路线</h2>
+      <ol>
+        <li><strong>立即行动（发布前闭环）</strong>：
+          <ul>
+            <li>运行 <code>cargo fmt --all</code> 消除代码格式差异；</li>
+            <li>运行 <code>./scripts/prepare-desktop.ps1</code> 同步最新的 .NET 10.0.13 自包含包；</li>
+            <li>优化 <code>server.rs</code> 中的 <code>reject_request</code> 缓冲机制，关闭 10053 异常。</li>
+          </ul>
+        </li>
+        <li><strong>中期重构（v0.2.0 迭代）</strong>：
+          <ul>
+            <li>推进 <code>crates/core</code> 向 <code>crates/application</code> + <code>crates/domain</code> 分层架构的生产入口迁移；</li>
+            <li>消除 <code>scripts/check-mirrors.mjs</code> 双轨镜像代码。</li>
+          </ul>
+        </li>
+      </ol>
+    </div>
+  </div>
+</body>
+</html>

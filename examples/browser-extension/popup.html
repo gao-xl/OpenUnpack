@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OpenUnpack</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; width: 300px; padding: 12px; margin: 0; background: #0f172a; color: #f8fafc; }
+    h2 { font-size: 14px; margin-top: 0; color: #38bdf8; display: flex; justify-content: space-between; }
+    .status-box { background: #1e293b; padding: 10px; border-radius: 6px; font-size: 12px; margin-bottom: 10px; }
+    .btn { background: #38bdf8; color: #0f172a; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 6px; }
+    .input { width: 100%; box-sizing: border-box; background: #0b0f19; border: 1px solid #334155; color: #fff; padding: 6px; border-radius: 4px; font-size: 11px; margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+  <h2><span>OpenUnpack 助手</span><span id="daemon-badge">检查中...</span></h2>
+  <div class="status-box">
+    <div>端口: <input class="input" type="number" id="portInput" value="18420"></div>
+    <div>Token: <input class="input" type="text" id="tokenInput" placeholder="输入 API 密钥"></div>
+    <button class="btn" id="saveBtn">保存配置</button>
+  </div>
+  <button class="btn" id="openWebUiBtn" style="background:#0284c7; color:#fff;">打开 WebUI 控制台</button>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -11,6 +11,13 @@ SHA-256 values. Collection includes build/test dependencies conservatively;
 their inclusion does not mean every component executes in the installed app.
 Do not redistribute a release if collection failed or materials are missing.
 
+The customized `apps/desktop-host/installer.nsi` derives from the Tauri CLI
+2.12.1 NSIS template, licensed under Apache-2.0 OR MIT by Tauri Programme within
+The Commons Conservancy. Its upstream source and SHA-256 are recorded in the
+file header; its MIT license is supplied in `installer-LICENSE-MIT.txt`.
+OpenUnpack changes the default program directory and protects the
+persistent data directory. Source: https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.12.1/crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi
+
 ## 7-Zip 26.04
 
 Copyright (C) 1999–2026 Igor Pavlov. The separately replaceable x64 `7z.dll` is
@@ -33,7 +40,7 @@ the applicable license/source materials. The source tree does not commit
 downloaded engine binaries. The official MSI and source archive are checked
 against pinned SHA-256 values by the setup/release scripts.
 
-## .NET Runtime 10.0.9
+## .NET Runtime 10.0.13
 
 Copyright .NET Foundation and Contributors. The self-contained Worker includes
 Microsoft .NET Runtime, primarily MIT licensed with component-specific notices.
@@ -42,7 +49,13 @@ the release collector supplies matching versioned upstream texts:
 
 - `release-materials/dotnet/LICENSE.TXT`
 - `release-materials/dotnet/THIRD-PARTY-NOTICES.TXT`
-- https://github.com/dotnet/runtime/tree/v10.0.9
+- https://github.com/dotnet/runtime/tree/v10.0.13
+
+Reviewed runtime versions and matching notice checksums are maintained together
+in `scripts/runtime-policy.json`. Preparation, collection and the security audit
+check the published runtime identity; online security auditing also checks for
+later official security releases. A clean NuGet report does not cover the
+self-contained runtime.
 
 The modern application does not package WPF. The preserved early WPF prototype
 is source only and uses Microsoft framework components under their own terms:
@@ -72,6 +85,19 @@ licenses. Original notice texts and per-package versions are collected under
 - https://github.com/facebook/react/blob/main/LICENSE
 - https://github.com/ant-design/ant-design/blob/master/LICENSE
 - https://github.com/ant-design/ant-design-icons/blob/master/LICENSE
+
+## Axum, Utoipa and Swagger UI
+
+The local API uses Axum and Utoipa under their upstream MIT and/or Apache-2.0
+terms. Official Swagger UI 5.32.6 static assets are embedded directly and retain
+their Apache-2.0 license and NOTICE.
+The original texts and exact archive provenance are kept in
+`assets/legal/swagger-ui/` in source and `release-materials/swagger-ui/` in
+binary distributions. Cargo component licenses remain under `release-materials/rust/`.
+
+- https://github.com/tokio-rs/axum
+- https://github.com/juhaku/utoipa
+- https://github.com/swagger-api/swagger-ui
 
 ## Microsoft Edge WebView2 and installer tools
 

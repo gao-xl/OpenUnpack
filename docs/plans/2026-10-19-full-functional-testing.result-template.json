@@ -1,0 +1,5093 @@
+{
+  "schemaVersion": 1,
+  "planId": "2026-10-19-full-functional-testing",
+  "planCasesSha256": "4b09e33fb43e12388b3aae1a59db666cacd03c5eb6680e174c43a3095acac409",
+  "runId": null,
+  "candidateManifest": null,
+  "sourceManifest": null,
+  "environmentManifest": null,
+  "startedAt": null,
+  "finishedAt": null,
+  "overall": "not_run",
+  "releaseVerdict": "not_evaluated",
+  "counts": {
+    "not_run": 294,
+    "running": 0,
+    "passed": 0,
+    "failed": 0,
+    "blocked": 0,
+    "not_applicable": 0,
+    "invalid": 0
+  },
+  "historicalEvidence": [
+    {
+      "path": "_workspace/api-real-test-20261019/run-ebc42aaa/report.md",
+      "result": "36/36",
+      "includedInThisRun": false
+    }
+  ],
+  "results": [
+    {
+      "caseId": "BASE-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BASE-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BASE-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BASE-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BASE-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BASE-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BASE-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BASE-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "UI-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "UI-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "UI-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "UI-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "UI-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "UI-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "UI-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "UI-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "UI-009",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "UI-010",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "UI-011",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "UI-012",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "UI-013",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "UI-014",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "UI-015",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "UI-016",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SCAN-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SCAN-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SCAN-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SCAN-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SCAN-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SCAN-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SCAN-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SCAN-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SCAN-009",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SCAN-010",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SCAN-011",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SCAN-012",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "FMT-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "FMT-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "FMT-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "FMT-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "FMT-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "FMT-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "FMT-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "FMT-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "FMT-009",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "FMT-010",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "FMT-011",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "FMT-012",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "FMT-013",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "FMT-014",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "FMT-015",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "FMT-016",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "NEST-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "NEST-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "NEST-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "NEST-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "NEST-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "NEST-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "NEST-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "NEST-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "NEST-009",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "QUEUE-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "QUEUE-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "QUEUE-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "QUEUE-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "QUEUE-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "QUEUE-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "QUEUE-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "QUEUE-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "QUEUE-009",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "QUEUE-010",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "QUEUE-011",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "QUEUE-012",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "QUEUE-013",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "QUEUE-014",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "QUEUE-015",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "QUEUE-016",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "QUEUE-017",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "QUEUE-018",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "CACHE-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "CACHE-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "CACHE-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "CACHE-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "CACHE-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "CACHE-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "CACHE-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "CACHE-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "CACHE-009",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "CACHE-010",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "CACHE-011",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "CACHE-012",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "OUT-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "OUT-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "OUT-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "OUT-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "OUT-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "OUT-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "OUT-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "OUT-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "OUT-009",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "OUT-010",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "OUT-011",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "OUT-012",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "VAULT-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "VAULT-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "VAULT-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "VAULT-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "VAULT-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "VAULT-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "VAULT-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "VAULT-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "VAULT-009",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "VAULT-010",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "VAULT-011",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "VAULT-012",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "VAULT-013",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "VAULT-014",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "IMPORT-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "IMPORT-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "IMPORT-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "IMPORT-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "IMPORT-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "IMPORT-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "IMPORT-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "IMPORT-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "IMPORT-009",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "IMPORT-010",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "IMPORT-011",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "IMPORT-012",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BACKUP-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BACKUP-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BACKUP-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BACKUP-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BACKUP-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BACKUP-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BACKUP-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BACKUP-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BROWSE-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BROWSE-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BROWSE-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BROWSE-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BROWSE-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BROWSE-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BROWSE-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "BROWSE-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "TOOLS-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "TOOLS-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "TOOLS-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "TOOLS-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "TOOLS-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "TOOLS-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "TOOLS-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "TOOLS-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "TOOLS-009",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "TOOLS-010",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SET-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SET-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SET-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SET-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SET-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SET-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SET-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SET-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SET-009",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SET-010",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "LANG-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "LANG-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "LANG-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "LANG-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "LANG-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "LANG-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "LANG-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "LANG-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "LANG-009",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-001-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-001-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-001-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-001-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-001-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-001-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-001-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-002-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-002-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-002-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-002-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-002-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-002-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-002-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-003-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-003-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-003-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-003-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-003-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-003-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-003-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-004-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-004-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-004-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-004-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-004-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-004-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-004-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-005-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-005-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-005-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-005-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-005-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-005-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-005-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-006-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-006-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-006-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-006-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-006-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-006-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-006-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-007-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-007-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-007-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-007-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-007-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-007-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-007-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-008-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-008-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-008-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-008-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-008-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-008-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-008-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-009",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-009-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-009-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-009-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-009-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-009-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-009-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-009-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-010",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-010-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-010-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-010-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-010-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-010-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-010-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-010-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-011",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-011-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-011-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-011-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-011-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-011-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-011-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-011-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-012",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-012-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-012-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-012-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-012-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-012-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-012-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-012-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-013",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-013-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-013-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-013-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-013-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-013-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-013-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-013-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-014",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-014-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-014-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-014-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-014-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-014-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-014-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-014-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-015",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-015-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-015-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-015-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-015-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-015-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-015-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-015-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-016",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-016-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-016-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-016-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-016-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-016-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-016-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-016-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-017",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-017-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-017-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-017-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-017-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-017-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-017-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-017-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-018",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-018-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-018-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-018-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-018-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-018-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-018-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-018-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-019",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-019-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-019-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-019-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-019-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-019-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-019-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-019-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-020",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-020-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-020-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-020-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-020-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-020-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-020-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-020-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-021",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-021-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-021-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-021-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-021-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-021-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-021-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-021-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-022",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-022-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-022-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-022-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-022-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-022-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-022-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-022-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-023",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-023-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-023-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-023-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-023-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-023-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-023-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-023-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-024",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-024-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-024-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-024-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-024-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-024-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-024-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-024-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-025",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-025-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-025-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-025-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-025-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-025-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-025-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-025-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-026",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-026-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-026-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-026-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-026-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-026-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-026-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-026-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-027",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-027-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-027-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-027-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-027-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-027-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-027-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-027-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-028",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-028-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-028-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-028-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-028-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-028-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-028-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-028-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-029",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-029-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-029-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-029-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-029-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-029-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-029-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-029-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-030",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-030-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-030-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-030-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-030-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-030-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-030-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-030-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-031",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-031-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-031-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-031-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-031-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-031-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-031-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-031-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-032",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-032-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-032-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-032-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-032-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-032-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-032-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-032-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-033",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-033-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-033-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-033-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-033-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-033-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-033-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-033-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-034",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-034-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-034-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-034-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-034-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-034-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-034-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-034-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-035",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-035-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-035-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-035-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-035-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-035-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-035-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-035-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-036",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-036-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-036-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-036-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-036-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-036-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-036-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-036-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-037",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-037-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-037-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-037-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-037-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-037-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-037-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-037-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-038",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-038-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-038-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-038-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-038-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-038-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-038-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-038-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-039",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-039-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-039-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-039-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-039-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-039-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-039-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-039-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-040",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-040-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-040-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-040-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-040-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-040-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-040-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-040-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-041",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-041-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-041-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-041-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-041-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-041-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-041-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-041-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "API-042",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [
+        {
+          "variantId": "API-042-V1",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-042-V2",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-042-V3",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-042-V4",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-042-V5",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-042-V6",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        },
+        {
+          "variantId": "API-042-V7",
+          "status": "not_run",
+          "parameterization": null,
+          "evidence": [],
+          "reason": null
+        }
+      ],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "APIS-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "APIS-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "APIS-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "APIS-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "APIS-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "APIS-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "APIS-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "APIS-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "APIS-009",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "APIS-010",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "APIS-011",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "APIS-012",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "APIS-013",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "APIS-014",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "APIS-015",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "APIS-016",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "APIS-017",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "APIS-018",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REC-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REC-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REC-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REC-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REC-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REC-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REC-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REC-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REC-009",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REC-010",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REC-011",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REC-012",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REC-013",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REC-014",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SEC-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SEC-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SEC-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SEC-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SEC-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SEC-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SEC-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SEC-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SEC-009",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SEC-010",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SEC-011",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SEC-012",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SEC-013",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "SEC-014",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "PERF-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "PERF-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "PERF-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "PERF-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "PERF-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "PERF-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "PERF-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "PERF-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "PERF-009",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "PERF-010",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REL-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REL-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REL-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REL-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REL-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REL-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REL-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REL-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REL-009",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REL-010",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REL-011",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REL-012",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REL-013",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REL-014",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REG-001",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REG-002",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REG-003",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REG-004",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REG-005",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REG-006",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REG-007",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    },
+    {
+      "caseId": "REG-008",
+      "status": "not_run",
+      "attempts": [],
+      "variants": [],
+      "evidence": [],
+      "defectIds": [],
+      "blockedReason": null,
+      "notApplicableReason": null
+    }
+  ],
+  "attemptRecordTemplate": {
+    "attemptId": null,
+    "caseId": null,
+    "variantId": null,
+    "environmentId": null,
+    "parameterization": {},
+    "sourceManifestSha256": null,
+    "candidateManifestSha256": null,
+    "fixtureManifestSha256": null,
+    "status": "not_run",
+    "startedAt": null,
+    "finishedAt": null,
+    "actualSteps": [],
+    "expected": null,
+    "actual": null,
+    "command": null,
+    "exitCode": null,
+    "evidence": [],
+    "defectIds": [],
+    "reason": null,
+    "rerunOf": null
+  }
+}

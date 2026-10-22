@@ -1,0 +1,2340 @@
+{
+  "schemaVersion": 1,
+  "planId": "openunpack-detection-20261017",
+  "title": "OpenUnpack 全系统检测任务计划",
+  "date": "2026-10-17",
+  "branch": "codex/open-unpack",
+  "head": "cf6e34411c809d092c48ed2f4bdd4ab6160222c1",
+  "executionStatus": "planned",
+  "scope": "Windows x64 原生桌面：React/Tauri → Core Coordinator → WorkerClient → .NET Worker → Engine；覆盖数据、密码、协议、恢复、资源、GUI、性能和发行。",
+  "notice": "本轮只生成检测计划并只读核对代码及既有证据，未执行系统测试、修复、依赖升级、安装或发布。所有任务本轮状态均为 planned；既有通过记录不能视为本轮通过。",
+  "streams": [
+    {
+      "id": "A",
+      "name": "基线、真实问题与证据",
+      "range": "DET-001–006",
+      "owner": "scout / qa-inspector"
+    },
+    {
+      "id": "B",
+      "name": "格式、分卷、嵌套与引擎",
+      "range": "DET-007–014",
+      "owner": "worker-dev / rust-dev"
+    },
+    {
+      "id": "C",
+      "name": "文件安全、发布与源清理",
+      "range": "DET-015–021",
+      "owner": "rust-dev / worker-dev"
+    },
+    {
+      "id": "D",
+      "name": "状态机、持久化与恢复",
+      "range": "DET-022–028",
+      "owner": "rust-dev / qa-inspector"
+    },
+    {
+      "id": "E",
+      "name": "密码、IPC 与操作授权",
+      "range": "DET-029–035",
+      "owner": "rust-dev / worker-dev / ui-dev"
+    },
+    {
+      "id": "F",
+      "name": "真实桌面用户流程",
+      "range": "DET-036–042",
+      "owner": "ui-dev / qa-inspector"
+    },
+    {
+      "id": "G",
+      "name": "性能、资源与故障环境",
+      "range": "DET-043–048",
+      "owner": "qa-inspector / rust-dev"
+    },
+    {
+      "id": "H",
+      "name": "依赖、候选包、安装与结案",
+      "range": "DET-049–056",
+      "owner": "qa-inspector / worker-dev"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "DET-001",
+      "stream": "A",
+      "title": "冻结真实被测版本与脏工作区",
+      "priority": "P0",
+      "owner": "scout → qa-inspector",
+      "environment": "本机",
+      "mode": "只读 / 自动",
+      "dependsOn": [],
+      "commands": [
+        "CMD-01",
+        "CMD-02"
+      ],
+      "basis": "当前工作区已有大量未提交变更；10/16 报告的全量与最后定向回归属于不同时间点。",
+      "inputs": "当前完整源码（含未提交和未跟踪的必要源码）、锁文件、Host、全部 Worker/runtime/Engine/7z、候选包和工具链。",
+      "steps": [
+        "记录 HEAD、分支、git status、OS/工具版本、配置与盘拓扑；不重置、不批量暂存。",
+        "建立唯一 runId；按相对路径记录源码与样本 SHA-256；复制被测 Worker 全目录并记录实际运行路径，不只固定 EXE。",
+        "结束时重算输入摘要；记录源码、载荷或配置漂移及受影响任务。"
+      ],
+      "acceptance": [
+        "每份结果可以追溯到同一 sourceManifest、binaryManifest 与 fixtureManifest。",
+        "输入发生变化的任务标为需重跑；历史包、历史证据和用户脏改动全部保留。"
+      ],
+      "evidence": [
+        "git-status.txt",
+        "source-manifest.json",
+        "binary-manifest.json",
+        "tools.json",
+        "input-integrity.json"
+      ],
+      "targets": [
+        "scripts/common.ps1",
+        "apps/desktop-host/src/lib.rs",
+        "_workspace/release-readiness-2026-10-15/code-freeze-final.json"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-002",
+      "stream": "A",
+      "title": "收集真实异常并形成可复现样本",
+      "priority": "P0",
+      "owner": "qa-inspector",
+      "environment": "本机",
+      "mode": "人工 / 问题复现",
+      "dependsOn": [
+        "DET-001"
+      ],
+      "commands": [],
+      "basis": "当前用户尚未给出具体失败操作；仅重复已有套件可能漏掉实际问题。",
+      "inputs": "用户后续补充的现象、软件版本、操作顺序和去敏样本；同时自建正常/损坏/加密/缺卷样本。",
+      "steps": [
+        "为每个真实问题记录触发入口、实际/期望、频率、输入位置、当时设置与重启影响；无用户样本也继续执行其余任务。",
+        "使用合成或去敏副本最小化复现；有秘密的原包留在本机授权范围，报告只用样本 ID。",
+        "归入明确缺陷、环境原因、操作歧义或待复现，保存失败种子和原始日志。"
+      ],
+      "acceptance": [
+        "真实问题有复现状态和下一步，不能用现有套件通过覆盖它。",
+        "无法复现时保留信息缺口，不编造根因；本项的缺信息不阻塞其他检测。"
+      ],
+      "evidence": [
+        "user-issues.md",
+        "reproduction.json",
+        "fixture-manifest.json"
+      ],
+      "targets": [
+        "docs/acceptance-checklist.md",
+        "docs/status-ledger-2026-10-11.md"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-003",
+      "stream": "A",
+      "title": "核对生产链、命令权限与写入责任",
+      "priority": "P1",
+      "owner": "scout / rust-dev / ui-dev",
+      "environment": "本机",
+      "mode": "只读 / 结构检查",
+      "dependsOn": [
+        "DET-001"
+      ],
+      "commands": [
+        "CMD-06"
+      ],
+      "basis": "生产仍由 Core Coordinator 执行，新分层模块与生产路径并存；README 等历史描述需按源码校准。",
+      "inputs": "UI invoke、Host command/registration/permissions/capabilities、Coordinator、Worker、迁移适配器。",
+      "steps": [
+        "逐入口追踪导入、开始、取消、删除、重试、恢复、密码、浏览、工具箱；将 handler/invoke/权限四方对应。",
+        "标记任务、publication、vault 的唯一写入者；检查不可见命令、缺失权限、重名 DTO 和未使用生产分支。",
+        "对照 Core 与新层的镜像门禁及故障语义，明确切换前欠缺；不在检测中切换架构。"
+      ],
+      "acceptance": [
+        "每个 UI 动作有可达且受权限约束的生产实现和测试入口。",
+        "迁移完成度依据运行装配与行为对等，目录存在不算接管；差异形成单独问题。"
+      ],
+      "evidence": [
+        "production-callgraph.md",
+        "command-permission-matrix.json",
+        "ownership-map.md"
+      ],
+      "targets": [
+        "apps/desktop-ui/src/api.ts",
+        "apps/desktop-host/src/lib.rs",
+        "apps/desktop-host/capabilities/main.json",
+        "crates/core/src/coordinator.rs",
+        "crates/application",
+        "crates/infrastructure"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-004",
+      "stream": "A",
+      "title": "统一跑最终源码的工程与原生基线",
+      "priority": "P0",
+      "owner": "qa-inspector",
+      "environment": "本机",
+      "mode": "自动",
+      "dependsOn": [
+        "DET-001"
+      ],
+      "commands": [
+        "CMD-03",
+        "CMD-04",
+        "CMD-13",
+        "CMD-05"
+      ],
+      "basis": "已有 351 项 Rust 全量和最终定向回归证据，但缺同一最终冻结输入上的新一轮统一结果。",
+      "inputs": "DET-001 的冻结输入；已准备的 Windows MSVC/SDK、.NET、Node、Rust 和锁定依赖。",
+      "steps": [
+        "串行完成 .NET build+harness、UI lint/build/test、Rust fmt/all-targets Clippy/workspace tests；原生测试绑定冻结 Worker。",
+        "用CMD-13从同一源码构建检测专用Worker及Host Release，固定UI摘要、完整runtime/7z与实际启动路径。不能证明旧EXE对应当前输入时不复用；OPENUNPACK_TEST_WORKER不能代替实际Host子进程路径核验。",
+        "保存每个命令退出码、通过/失败/ignored/skipped 数量和完整 target 清单；排查运行 0 用例的过滤器。",
+        "列举 audit/*.test.tsx、ignored 负载/物理盘/跨卷用例和未纳入 solution 的 ProtocolChecks，分别分派。"
+      ],
+      "acceptance": [
+        "所有必需基线通过；失败真实分类，缺工具/依赖/网络标环境阻塞。",
+        "没有默默漏掉 target、把 dotnet test 当自定义 harness、把 ignored 或零用例算通过。",
+        "用于GUI的Host、内嵌UI、Worker/Engine和实际加载路径能追溯到本轮源码；已知旧runtime仅作隔离检测，安全缺口保持失败，不能当最终候选。"
+      ],
+      "evidence": [
+        "command-results.json",
+        "dotnet.log",
+        "ui.log",
+        "rust-workspace.log",
+        "test-inventory.json",
+        "skips.json",
+        "native-host-build-manifest.json"
+      ],
+      "targets": [
+        "scripts/verify.ps1",
+        ".github/workflows/windows.yml",
+        "apps/desktop-ui/vitest.config.ts",
+        "apps/desktop-ui/audit/vitest.config.ts",
+        "tests/OpenUnpack.Tests/OpenUnpack.Tests.csproj"
+      ],
+      "status": "planned",
+      "requiresPassed": [
+        "DET-001"
+      ]
+    },
+    {
+      "id": "DET-005",
+      "stream": "A",
+      "title": "协议、默认值与镜像负向检查",
+      "priority": "P0",
+      "owner": "qa-inspector / rust-dev / worker-dev",
+      "environment": "本机",
+      "mode": "自动",
+      "dependsOn": [
+        "DET-001"
+      ],
+      "commands": [
+        "CMD-06"
+      ],
+      "basis": "三种语言存在结构、null、整数和兼容性边界；既有结构与镜像检查需要绑定当前版本。",
+      "inputs": "desktop.rs ↔ types.ts；worker.rs ↔ Protocol.cs；Core ↔ Infrastructure 镜像。",
+      "steps": [
+        "运行结构自检和真实 Rust→C#→Rust DTO 往返，将导出 corpus 放新 runId。",
+        "覆盖 null/缺失/空字符串、枚举未知值、u64/JS安全整数、旧 snapshot 默认值、版本/能力字段组合。",
+        "运行镜像变异负例；确认实际生产语义变化会触发门禁，规范化不能屏蔽安全差异。"
+      ],
+      "acceptance": [
+        "结构与真实序列化一致；每个兼容差异有明确规则和样例。",
+        "错字段、可空性和关键策略漂移能被负向对照捕获，错误数据不产生默认成功。"
+      ],
+      "evidence": [
+        "contract-corpus/",
+        "contracts.log",
+        "mirrors.log",
+        "compatibility-matrix.json"
+      ],
+      "targets": [
+        "scripts/check-contracts.mjs",
+        "scripts/check-mirrors.mjs",
+        "crates/protocol/examples/contract_samples.rs",
+        "tests/OpenUnpack.ProtocolChecks",
+        "apps/desktop-ui/src/types.ts"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-006",
+      "stream": "A",
+      "title": "验证检测器自身不会误报通过",
+      "priority": "P0",
+      "owner": "qa-inspector",
+      "environment": "本机",
+      "mode": "自动 / 负向对照",
+      "dependsOn": [
+        "DET-004",
+        "DET-005"
+      ],
+      "commands": [
+        "CMD-06",
+        "CMD-09"
+      ],
+      "basis": "旧记录曾存在字段 tests:0 实为退出码、可选样本跳过、固定目录覆盖等误读风险。",
+      "inputs": "结果汇总器、fixture 清单、安全报告解析器、命令封装和证据目录。",
+      "steps": [
+        "在隔离副本注入一次内容不匹配、命令非零、缺必需样本、0 tests、坏 JSON/缺分组/网络错误，观察门禁。",
+        "检查 passed 只能来自完成的断言，blocked/skipped/未运行不被折算；每次执行写新目录。",
+        "记录负向对照恢复后的输入哈希；旧 wrapper 只提取命令，不原地覆盖历史日志。"
+      ],
+      "acceptance": [
+        "所有负面控制都能使对应门禁失败或明确阻塞。",
+        "汇总字段明确区分 exitCode 与 counts；没有用测试重试、扩大超时或删断言掩盖失败。"
+      ],
+      "evidence": [
+        "detector-negative-controls.json",
+        "result-schema-check.json",
+        "evidence-directory-audit.md"
+      ],
+      "targets": [
+        "scripts/test-security-audit-policy.ps1",
+        "scripts/test-release-validation.ps1",
+        "_workspace/release-readiness-2026-10-15/verify-current.ps1"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-007",
+      "stream": "B",
+      "title": "建立格式承诺与独立明文矩阵",
+      "priority": "P1",
+      "owner": "worker-dev / qa-inspector",
+      "environment": "本机",
+      "mode": "自动 / 原生",
+      "dependsOn": [
+        "DET-004"
+      ],
+      "commands": [
+        "CMD-04",
+        "CMD-07"
+      ],
+      "basis": "已有真实 Rust 格式矩阵及 upstream 哈希；C# 另有 artifacts/rar-fixtures 可跳过的辅助入口，需核对覆盖交集。",
+      "inputs": "ZIP/7z/RAR2–5/TAR/GZ/BZ2/XZ/Zstd/LZ4/CAB/WIM/LZH/SFX；README 或 UI 明确承诺支持的格式优先。",
+      "steps": [
+        "为每种实际承诺格式列正常、空包、扩展名伪装、截断、坏头、条目损坏；标出仅引擎能力、未承诺和不支持格式。",
+        "使用预先固定的明文路径/长度/SHA-256 oracle，复用 format_matrix.rs 与 upstream provenance，不从本次输出反推期望。",
+        "把 C# 可跳过入口与 Rust 已有覆盖映射；必需矩阵缺样本失败，不以非空输出或引擎能打开代表正确。"
+      ],
+      "acceptance": [
+        "承诺格式逐格得到可复核结果；所有成品路径、数量、长度和哈希与独立 oracle 一致。",
+        "不支持格式明确分类，SFX 只读取字节，绝不执行来源 EXE。"
+      ],
+      "evidence": [
+        "format-matrix.json",
+        "fixture-manifest.json",
+        "expected-files.json",
+        "actual-files.json"
+      ],
+      "targets": [
+        "crates/core/tests/format_matrix.rs",
+        "tests/OpenUnpack.Tests/Program.cs",
+        "tests/fixtures/upstream-archives/provenance.json",
+        "src/OpenUnpack.Engine/CompositeArchiveEngine.cs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-008",
+      "stream": "B",
+      "title": "分卷归组、任意卷导入与缺卷分类",
+      "priority": "P0",
+      "owner": "worker-dev / rust-dev",
+      "environment": "本机",
+      "mode": "自动 / 原生",
+      "dependsOn": [
+        "DET-007"
+      ],
+      "commands": [
+        "CMD-04",
+        "CMD-07"
+      ],
+      "basis": "扫描器、VolumeResolver 与原生引擎对首卷、后继卷和允许读取范围必须一致。",
+      "inputs": "7z .001、RAR2 .r00、RAR4/5 .partNN、ZIP .z01；完整与缺首/中/尾、错卷、重复卷样本。",
+      "steps": [
+        "分别从首、中、末卷导入，混用零填充、大小写、同 stem 不同目录与巨大序号，检查只入队一组。",
+        "删除/替换合成卷、锁住卷，覆盖实际打开路径授权和完整卷集的句柄租约。",
+        "区分必要卷缺失与可选后继卷不存在；重复导入及递归扫描要去重。"
+      ],
+      "acceptance": [
+        "完整归档内容与 oracle 一致；缺卷/坏卷/密码分类准确，无局部成功假报。",
+        "未授权路径或外部同名卷不被读取；所有源卷摘要保持且退出后锁释放。"
+      ],
+      "evidence": [
+        "volume-matrix.json",
+        "opened-source-identities.json",
+        "terminal-events.jsonl",
+        "files-before-after.json"
+      ],
+      "targets": [
+        "crates/core/src/scanner.rs",
+        "crates/core/tests/scanner_regressions.rs",
+        "crates/core/tests/format_matrix.rs",
+        "src/OpenUnpack.Engine/VolumeResolver.cs",
+        "tests/OpenUnpack.Tests/PathIdentityChecks.cs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-009",
+      "stream": "B",
+      "title": "加密、候选密码与错误优先级",
+      "priority": "P0",
+      "owner": "worker-dev / rust-dev",
+      "environment": "本机",
+      "mode": "自动 / 原生",
+      "dependsOn": [
+        "DET-007"
+      ],
+      "commands": [
+        "CMD-04",
+        "CMD-07",
+        "CMD-08"
+      ],
+      "basis": "明文条目在前、头加密、损坏密文和不支持方法会影响探测与终态归因。",
+      "inputs": "ZipCrypto/AES、7z 头加密开/关、RAR4/5 文件/头加密；公开合成口令与独立明文。",
+      "steps": [
+        "候选为空、全部错误、正确位于首/中/末、128+候选、禁用组和 Unicode/首尾空格密码。",
+        "构造前置明文条目、坏 CRC、缺卷和未知加密方法；检查 probe 与 extract 的分类一致。",
+        "在候选尝试中取消、补临时密码、重试失败内包；只记实际匹配 candidateId。"
+      ],
+      "acceptance": [
+        "不能因读到明文条目误判无需密码，Corrupt/Unsupported/MissingVolume 不统一误报 NeedsPassword。",
+        "不回传密码明文，不把未使用候选记为成功，取消后可安全重试。"
+      ],
+      "evidence": [
+        "encryption-matrix.json",
+        "candidate-events-redacted.jsonl",
+        "error-taxonomy.json"
+      ],
+      "targets": [
+        "src/OpenUnpack.Engine/Native/SevenZipEngine.cs",
+        "src/OpenUnpack.Worker/WorkerOperations.cs",
+        "crates/core/tests/desktop_pipeline.rs",
+        "crates/core/src/vault.rs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-010",
+      "stream": "B",
+      "title": "LZ4 历史缺陷复验与边界组合",
+      "priority": "P0",
+      "owner": "worker-dev",
+      "environment": "本机",
+      "mode": "自动 / 原生",
+      "dependsOn": [
+        "DET-004"
+      ],
+      "commands": [
+        "CMD-04",
+        "CMD-07"
+      ],
+      "basis": "当前已有单帧策略和专门回归；历史连帧静默截断、尾部垃圾、已有目标误删不能直接当现存缺陷。",
+      "inputs": "合法单帧、拼接帧/skippable、垃圾尾部、坏 header/block/content checksum、错误 contentSize/descriptor、依赖块/字典。",
+      "steps": [
+        "重跑 WorkerBoundaryChecks；对大小/预算/块长做 0、阈值−1、阈值、阈值+1 变体。",
+        "通过真实 Worker 覆盖直写、缓存、嵌套、恢复、排除规则及目标 sentinel；检查未知展开大小到已知大小的转换。",
+        "核对单帧政策：不支持变体明确 Unsupported，不能静默忽略第二帧；验证范围与 UI 品质声明一致。"
+      ],
+      "acceptance": [
+        "合法结果完整；损坏/不支持变体不误报完整成功。",
+        "失败时原包与已有目标字节不变；只清理本次创建输出；品质不冒称无内建校验的格式已做原生 CRC。"
+      ],
+      "evidence": [
+        "lz4-corpus.json",
+        "lz4-results.json",
+        "sentinel-before-after.json",
+        "quality-scope.json"
+      ],
+      "targets": [
+        "src/OpenUnpack.Engine/Lz4Decoder.cs",
+        "src/OpenUnpack.Engine/Lz4Engine.cs",
+        "tests/OpenUnpack.Tests/WorkerBoundaryChecks.cs",
+        "crates/core/tests/desktop_pipeline.rs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-011",
+      "stream": "B",
+      "title": "抢救模式与混合错误的真实复现",
+      "priority": "P0",
+      "owner": "worker-dev / qa-inspector",
+      "environment": "本机",
+      "mode": "新增用例 / 原生",
+      "dependsOn": [
+        "DET-007",
+        "DET-009"
+      ],
+      "commands": [
+        "CMD-04",
+        "CMD-07"
+      ],
+      "basis": "源码保留首个 OperationResult，并在 salvage 且有文件时允许返回；CRC 在前、Unsupported 在后是待复现风险，尚非本轮确认缺陷。",
+      "inputs": "CRC 损坏 + Unsupported method + 正常文件的多成员包，交换顺序；叠加取消、缺卷和资源不足。",
+      "steps": [
+        "制作能被原生引擎真实触发的最小多成员样本，先关闭再开启 salvage；不能只 mock terminal。",
+        "对条目顺序、恢复入口、部分交付、严格回读和源清理开关逐组测试。",
+        "观察逐文件损坏记录、顶层错误、publication 品质及 UI；保存引擎回调与跨层终态。"
+      ],
+      "acceptance": [
+        "Unsupported/取消/资源错误不被 CRC 抢救吞掉，失败不变普通完成。",
+        "salvaged 品质在恢复和重启后保留；部分交付必须显式，绝不自动删除源包。"
+      ],
+      "evidence": [
+        "salvage-mixed-corpus.json",
+        "engine-operation-results.jsonl",
+        "publication-quality.json",
+        "native-ui-observation.md"
+      ],
+      "targets": [
+        "src/OpenUnpack.Engine/Native/SevenZipEngine.cs:637",
+        "src/OpenUnpack.Engine/Native/SevenZipEngine.cs:943",
+        "tests/OpenUnpack.Tests/Program.cs:75",
+        "crates/core/src/coordinator.rs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-012",
+      "stream": "B",
+      "title": "高压缩比、未知大小与累计预算",
+      "priority": "P0",
+      "owner": "rust-dev / worker-dev",
+      "environment": "本机",
+      "mode": "自动 / 原生",
+      "dependsOn": [
+        "DET-004"
+      ],
+      "commands": [
+        "CMD-04",
+        "CMD-07"
+      ],
+      "basis": "高压缩比等待资源已有修复与回归，应验证实际大小、估计、硬限制和共享预留的一致性。",
+      "inputs": "受限大小的高压缩比 ZIP、未知大小 LZ4、深层归档；entry/bytes/depth/cache/空间余量阈值与 u64 极值元数据。",
+      "steps": [
+        "各阈值使用 −1/等于/+1，比较 probe/inspect/extract/copy/readback；永不真实无限展开。",
+        "测试声明大小小于实际、空包、零预算、大整数溢出和嵌套累计额度；固定总时间和物理输出上限。",
+        "共享预算两任务竞争、取消等待、释放额度后唤醒；永久超过配置限额与暂时竞争分开。"
+      ],
+      "acceptance": [
+        "合法包在足够预算时可完成，实际超限有界停止并准确分类。",
+        "没有整数回绕、预算绕过、自等待或永久卡 waitingResource；保留工作区计入占用。"
+      ],
+      "evidence": [
+        "budget-boundaries.json",
+        "resource-reservations.jsonl",
+        "measured-output-bytes.json"
+      ],
+      "targets": [
+        "crates/core/src/route.rs",
+        "crates/core/src/coordinator.rs",
+        "crates/core/tests/desktop_pipeline.rs",
+        "src/OpenUnpack.Worker/WorkerOperations.cs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-013",
+      "stream": "B",
+      "title": "嵌套树、同名内包与部分交付",
+      "priority": "P1",
+      "owner": "rust-dev / worker-dev",
+      "environment": "本机",
+      "mode": "自动 / 原生",
+      "dependsOn": [
+        "DET-009",
+        "DET-012"
+      ],
+      "commands": [
+        "CMD-07"
+      ],
+      "basis": "父成功不能遮盖子失败，内外包可有不同密码，DOCX/APK 等容器不应被无意当通用嵌套包展开。",
+      "inputs": "同 stem 内包、不同层口令、父成功子坏/缺卷/Unsupported、深层空目录、容器文件及混合普通文件。",
+      "steps": [
+        "展开多分支树，单独补失败子包密码，验证父成果复用而成功分支不重复发布。",
+        "按边界深度、累计预算和排除规则检查树闭合；重试、清理、重启、部分交付各走一轮。",
+        "对同名节点、重命名源和内容变化核对节点内容身份与成功密码关联。"
+      ],
+      "acceptance": [
+        "节点状态、内容和品质可追溯，未展开内包清楚可见。",
+        "部分结果不会自动升级完整成功；树未闭合或品质不足时源包保持。"
+      ],
+      "evidence": [
+        "nested-tree-before-after.json",
+        "node-content-oracle.json",
+        "retry-publications.json"
+      ],
+      "targets": [
+        "crates/core/src/scanner.rs",
+        "crates/core/src/coordinator.rs",
+        "crates/core/tests/desktop_pipeline.rs",
+        "apps/desktop-ui/tests/node-tree.test.tsx"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-014",
+      "stream": "B",
+      "title": "有界畸形输入与随机序列检测",
+      "priority": "P1",
+      "owner": "worker-dev / qa-inspector",
+      "environment": "隔离测试进程",
+      "mode": "新增 harness / 随机检测",
+      "dependsOn": [
+        "DET-007",
+        "DET-010",
+        "DET-012"
+      ],
+      "commands": [],
+      "basis": "定向检索尚未找到专用 fuzz/property runner；传统用例对组合边界的发现能力有限。",
+      "inputs": "已有最小正常/损坏 corpus，固定 PRNG seeds；LZ4、ZIP 元数据、manifest、JSON 和任务操作模型。",
+      "steps": [
+        "首轮每解析入口至少 10,000 个有界变体，或 2 小时总预算内已执行量；逐例子进程/总字节/条目/深度/时间限制。",
+        "根据生产状态模型随机生成开始/暂停/取消/重试/删除/恢复序列，保留 seed 和最短失败序列。",
+        "对支持且语义一致的格式与独立工具/已知明文做差分；差异先分类，不盲信参考工具。"
+      ],
+      "acceptance": [
+        "没有 Host 崩溃、越界输出、已有目标损坏、假成功或永久挂起。",
+        "崩溃/超时/差分均可由 seed 重放；低于计划样本数或时长注明实际覆盖，不写成无限输入证明。"
+      ],
+      "evidence": [
+        "fuzz-invocation.json",
+        "seeds.txt",
+        "corpus/",
+        "crashes/",
+        "sequence-replays.json"
+      ],
+      "targets": [
+        "src/OpenUnpack.Engine/Lz4Decoder.cs",
+        "crates/core/src/zip_encoding.rs",
+        "crates/core/src/worker_manifest.rs",
+        "src/OpenUnpack.Worker/Protocol.cs",
+        "crates/core/src/coordinator.rs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-015",
+      "stream": "C",
+      "title": "恶意路径、名称与目录树边界",
+      "priority": "P0",
+      "owner": "worker-dev / rust-dev",
+      "environment": "本机 NTFS；其他文件系统扩展",
+      "mode": "自动 / 原生",
+      "dependsOn": [
+        "DET-004"
+      ],
+      "commands": [
+        "CMD-04",
+        "CMD-07"
+      ],
+      "basis": "归档条目名称与元数据不可信，扫描、Engine、manifest、复制和发布需采用一致的安全政策。",
+      "inputs": "../、绝对/UNC/盘符/verbatim、ADS、DOS 设备名、尾点/空格、大小写重复、文件目录冲突、超深/长路径与 Unicode。",
+      "steps": [
+        "每类输入通过实际归档→Worker→Core 处理，外部放只读核对用 sentinel 目录。",
+        "覆盖排除规则前后、重复条目、空目录、符号链接/reparse、受保护系统目录及近似目录名。",
+        "记录拒绝点与错误，不在生产目录做实际写入。"
+      ],
+      "acceptance": [
+        "外部 sentinel 零修改、零新增；无逃逸、任意 ADS 写入或受保护目录绕过。",
+        "对安全可表达名称给出一致结果，无法安全表达的路径明确失败而非静默丢文件。"
+      ],
+      "evidence": [
+        "path-corpus.json",
+        "external-sentinel-manifest.json",
+        "filesystem-events.jsonl"
+      ],
+      "targets": [
+        "crates/core/src/paths.rs",
+        "crates/core/src/toolbox.rs",
+        "src/OpenUnpack.Engine/WorkerSandbox.cs",
+        "tests/OpenUnpack.Tests/PathIdentityChecks.cs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-016",
+      "stream": "C",
+      "title": "原子不覆盖与并发同名发布",
+      "priority": "P0",
+      "owner": "rust-dev / worker-dev",
+      "environment": "本机",
+      "mode": "自动 / 原生竞态",
+      "dependsOn": [
+        "DET-015"
+      ],
+      "commands": [
+        "CMD-04",
+        "CMD-07"
+      ],
+      "basis": "预览/检查后目标可被其他任务创建；原子发布必须保护非本任务对象。",
+      "inputs": "既有文件/目录、编号/跳过策略、两任务同目标、rename/copy 前抢建目标、坏 LZ4 与临时文件碰撞。",
+      "steps": [
+        "先对已有 sentinel 测正常、失败与重试，再用同步屏障在检查与写入之间制造碰撞。",
+        "覆盖同卷发布、跨卷临时复制、取消和清理；核对临时对象归属及发布 ID。",
+        "每条竞态至少 100 轮或确定性覆盖所有同步点，记录实际轮次。"
+      ],
+      "acceptance": [
+        "既有对象身份/内容不变，编号/跳过行为一致。",
+        "任何失败只清理本任务新建对象；不可用普通 exists 检查作为原子安全证据。"
+      ],
+      "evidence": [
+        "collision-rounds.json",
+        "object-identities.json",
+        "sentinel-before-after.json"
+      ],
+      "targets": [
+        "crates/core/src/paths.rs",
+        "crates/core/src/coordinator.rs",
+        "crates/core/tests/release_reliability.rs",
+        "src/OpenUnpack.Engine/Lz4Engine.cs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-017",
+      "stream": "C",
+      "title": "祖先替换、junction、源锁与硬链接",
+      "priority": "P0",
+      "owner": "rust-dev / worker-dev",
+      "environment": "本机 NTFS",
+      "mode": "自动 / 原生竞态",
+      "dependsOn": [
+        "DET-015"
+      ],
+      "commands": [
+        "CMD-04",
+        "CMD-07"
+      ],
+      "basis": "S06 已有本机 NTFS 对象身份整改与真实回归，当前任务是重验并扩展组合，不重复宣称旧竞态未修。",
+      "inputs": "固定目录句柄、祖先改名/junction 切换、属性方式 reparse 变化、源/卷替换、旧打开句柄、锁/ACL/硬链接。",
+      "steps": [
+        "重跑 PathIdentityChecks 和 Rust paths/toolbox；对解压、复制、回读、发布、清理、回收站逐动作组合。",
+        "外部 sentinel 用身份、内容与文件系统事件观测；安全拒绝也核对源/工作区保留。",
+        "明确当前用户恶意进程、管理员、内核及既授予高权限旧句柄的威胁边界。"
+      ],
+      "acceptance": [
+        "写入/删除始终关联已批准对象，未证明安全时拒绝而保留现场。",
+        "没有外部写入/误删；操作结束后本次租约可释放，不永久锁死合法对象；不夸大为 OS 沙箱。"
+      ],
+      "evidence": [
+        "identity-race-rounds.json",
+        "handle-errors.json",
+        "external-filesystem-events.jsonl"
+      ],
+      "targets": [
+        "crates/core/src/paths.rs",
+        "crates/core/src/saferecycle.rs",
+        "tests/OpenUnpack.Tests/PathIdentityChecks.cs",
+        "docs/s06-directory-identity-report-2026-10-15.md"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-018",
+      "stream": "C",
+      "title": "跨卷移动、失败回退与源对象保持",
+      "priority": "P0",
+      "owner": "rust-dev",
+      "environment": "两个明确选定测试卷",
+      "mode": "自动 / 原生",
+      "dependsOn": [
+        "DET-016",
+        "DET-017"
+      ],
+      "commands": [
+        "CMD-08"
+      ],
+      "basis": "跨卷复制和最终删除之间必须持有同一源对象；不是所有 rename 错误都允许复制回退。",
+      "inputs": "独立合成源/目标卷、工具箱移动、锁冲突/ACL拒绝/已有目标、复制中断。",
+      "steps": [
+        "显式配置第二测试卷并核对其身份；运行现有 ignored 跨卷用例。",
+        "在复制前/中/后和删除前改变源路径、抢建目标、取消或触发有限写失败。",
+        "比较字节/哈希、对象身份与临时文件集合；记录仅明确跨卷错误进入回退。"
+      ],
+      "acceptance": [
+        "成功时目标完整且仅删除原持有源对象；失败时源与已有目标保持。",
+        "临时对象有归属、可恢复；两卷结果不冒充两块不同物理磁盘的性能证据。"
+      ],
+      "evidence": [
+        "volumes.json",
+        "cross-volume-results.json",
+        "source-target-manifests.json"
+      ],
+      "targets": [
+        "crates/core/src/toolbox.rs",
+        "crates/core/src/paths.rs",
+        "crates/core/tests/physical_disk_cross_device.rs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-019",
+      "stream": "C",
+      "title": "大清单、内容校验与发布一致性",
+      "priority": "P0",
+      "owner": "rust-dev / worker-dev",
+      "environment": "本机",
+      "mode": "自动 / 原生",
+      "dependsOn": [
+        "DET-005",
+        "DET-016"
+      ],
+      "commands": [
+        "CMD-04",
+        "CMD-07",
+        "CMD-08"
+      ],
+      "basis": "生产端 spill 与 Rust 消费端均有单项覆盖，仍需真实双端联合以及校验失败负例。",
+      "inputs": "16,000/40,000 小文件、超 8 MiB 元数据、内联阈值±1、128 MiB清单边界、Unicode 转义、标准/严格校验模式。",
+      "steps": [
+        "通过真实 Worker 生成 spill，Rust 实际消费；比较总数、末项、相对路径、长度和 SHA-256。",
+        "篡改长度/hash/path/owner/代号、替换文件身份、清单发布碰撞及中途取消，必须真实拒绝。",
+        "在写回/回读前注入单文件内容改变，检查标准流式验证与严格目标逻辑回读的实际覆盖。"
+      ],
+      "acceptance": [
+        "全量清单和独立明文一致；不接受部分清单、错误代号或任意外部文件。",
+        "损坏负例不发布完整成功；不能把逻辑回读说成绕过系统缓存的物理持久性证明。"
+      ],
+      "evidence": [
+        "manifest-spill-events.jsonl",
+        "manifest-tamper-results.json",
+        "expected-actual-files.json",
+        "verification-scope.json"
+      ],
+      "targets": [
+        "src/OpenUnpack.Worker/WorkerOperations.cs",
+        "crates/core/src/worker_manifest.rs",
+        "crates/core/tests/archive_inspection.rs",
+        "crates/core/tests/desktop_pipeline.rs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-020",
+      "stream": "C",
+      "title": "来源标记与文件系统兼容边界",
+      "priority": "P1",
+      "owner": "worker-dev / rust-dev",
+      "environment": "NTFS；隔离 exFAT/SMB 扩展",
+      "mode": "自动 / 原生",
+      "dependsOn": [
+        "DET-015",
+        "DET-019"
+      ],
+      "commands": [
+        "CMD-04",
+        "CMD-07"
+      ],
+      "basis": "MOTW/ACL/对象身份保护依赖实际文件系统能力，不能为兼容性跳过安全要求。",
+      "inputs": "带 ZoneId=3 的无害归档、嵌套包、缓存/跨卷路径、16 KiB ADS 边界、只读目标及不支持 ADS 的测试卷。",
+      "steps": [
+        "核对 Internet 来源经解压、内包、复制、发布传递，检查每个输出的 Zone.Identifier。",
+        "制造 ADS读取过长/写入失败/ACL无法证明私有性的负例，记录拒绝和保留状态。",
+        "把 FAT/exFAT、SMB、特殊 ACL 与 NTFS 分开出结论；无法提供测试卷时标 blocked。"
+      ],
+      "acceptance": [
+        "需要传播的来源标记失败不得完整发布或清源；不得允许归档自定义任意 ADS。",
+        "不支持场景明确诊断，源/既有输出保持；支持声明只覆盖真实验证组合。"
+      ],
+      "evidence": [
+        "motw-before-after.json",
+        "filesystem-capabilities.json",
+        "acl-failure-results.json"
+      ],
+      "targets": [
+        "tests/OpenUnpack.Tests/WorkerBoundaryChecks.cs",
+        "src/OpenUnpack.Engine/ZoneIdentifier.cs",
+        "crates/core/src/saferecycle.rs",
+        "docs/s06-directory-identity-report-2026-10-15.md"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-021",
+      "stream": "C",
+      "title": "源清理与回收站的完整成功门槛",
+      "priority": "P0",
+      "owner": "rust-dev / qa-inspector",
+      "environment": "本机合成数据",
+      "mode": "自动 / 原生 + GUI抽查",
+      "dependsOn": [
+        "DET-011",
+        "DET-013",
+        "DET-017",
+        "DET-019"
+      ],
+      "commands": [
+        "CMD-07"
+      ],
+      "basis": "默认保留源；源清理是数据丢失风险最高的动作之一，须与树闭合、品质和 publication 提交关联。",
+      "inputs": "保留/回收站/删除三策略；完整成功、salvaged、部分交付、缺密码、待核对、cleanupPending、锁/硬链接/ACL拒绝。",
+      "steps": [
+        "仅使用合成源包，逐状态测试清理资格和全分卷集合；清理前后记录对象身份。",
+        "在提交前后取消/重启/保存失败及 Shell 交接不确定时复验。",
+        "确认失败工作区计量、清理重试幂等，用户已发布成品与密码库从不被任务删除波及。"
+      ],
+      "acceptance": [
+        "只有品质/树/发布/退出证据全部满足时才可按用户选择清源。",
+        "部分、损坏、失败、未知退出、待核对和身份不确定均保留源；无误删、无晚到清理误伤。"
+      ],
+      "evidence": [
+        "cleanup-eligibility-matrix.json",
+        "source-before-after.json",
+        "recycle-handoff.json",
+        "retained-workspace-bytes.json"
+      ],
+      "targets": [
+        "crates/core/src/coordinator.rs",
+        "crates/core/src/saferecycle.rs",
+        "crates/core/src/recycle_shell.rs",
+        "crates/core/tests/desktop_pipeline.rs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-022",
+      "stream": "D",
+      "title": "按事务边界强杀并验证重启恢复",
+      "priority": "P0",
+      "owner": "rust-dev / qa-inspector",
+      "environment": "独立数据目录 / 专用测试进程",
+      "mode": "故障注入 / 原生",
+      "dependsOn": [
+        "DET-004",
+        "DET-019"
+      ],
+      "commands": [
+        "CMD-07"
+      ],
+      "basis": "现有三项真实可靠性用例不等于所有发布/数据库窗口都已覆盖。",
+      "inputs": "正常/加密/嵌套/缓存/直写任务；扫描、解压、复制、回读、发布意图、改名前后、commit前后、清理阶段。",
+      "steps": [
+        "以测试钩子/可观测屏障定位每个阶段；分别杀 Worker、杀 Host，并记录 PID+创建时间和准确注入时点。",
+        "重开同一合成数据目录，核对 jobs/publications/outbox/目录标记与文件内容，执行恢复。",
+        "每个关键窗口至少 3 次确定性重放；强杀不声称等同真实掉电。"
+      ],
+      "acceptance": [
+        "原包、既有成品不变；未提交结果不假成功；已提交输出不会被清理误删。",
+        "恢复可重复且无重复交付/重复密码成功记账，未决状态保守保留。"
+      ],
+      "evidence": [
+        "crash-point-matrix.json",
+        "pid-events.jsonl",
+        "sqlite-after-restart.json",
+        "filesystem-before-after.json"
+      ],
+      "targets": [
+        "crates/core/src/coordinator.rs",
+        "crates/core/src/repository.rs",
+        "crates/core/tests/release_reliability.rs",
+        "crates/core/tests/resource_recovery_regressions.rs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-023",
+      "stream": "D",
+      "title": "提交后错误、品质保持与 outbox 幂等",
+      "priority": "P0",
+      "owner": "rust-dev",
+      "environment": "本机隔离存储",
+      "mode": "故障注入 / 自动",
+      "dependsOn": [
+        "DET-022"
+      ],
+      "commands": [
+        "CMD-07"
+      ],
+      "basis": "已交付内容、publication提交与后处理失败必须区分；旧 A02/A03 已有修复，需跨入口复验。",
+      "inputs": "完整/salvaged/partial 品质，commit后统计/保存/密码成功记账/源清理失败，重复事件与恢复。",
+      "steps": [
+        "在提交后注入持久化失败或后处理失败，检查 cleanupPending/待核对诊断及有效输出。",
+        "重放相同 success event 与恢复请求，核对 passwordId+passwordRevision、ack和outbox唯一性。",
+        "跨 restart/delete/verify/cleanup 流程检查品质与验证范围不被抬升或丢失。"
+      ],
+      "acceptance": [
+        "已提交成品不降为未交付失败，不因后处理错误删除输出。",
+        "品质保持、记录幂等、陈旧 passwordRevision 不修改新密码；诊断指向实际失败阶段。"
+      ],
+      "evidence": [
+        "post-commit-faults.json",
+        "outbox-before-after.json",
+        "quality-state-transitions.json"
+      ],
+      "targets": [
+        "crates/core/src/repository.rs",
+        "crates/core/src/coordinator.rs",
+        "crates/core/src/vault.rs",
+        "crates/core/tests/desktop_pipeline.rs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-024",
+      "stream": "D",
+      "title": "暂停、取消、删除与迟到事件竞态",
+      "priority": "P0",
+      "owner": "rust-dev / qa-inspector",
+      "environment": "本机",
+      "mode": "自动 / 原生竞态",
+      "dependsOn": [
+        "DET-004"
+      ],
+      "commands": [
+        "CMD-07",
+        "CMD-08"
+      ],
+      "basis": "已有删除/迟到put/恢复竞争回归；实际任务控制仍需组合与重复操作覆盖。",
+      "inputs": "排队、实际解压、copy/readback、waitingResource、cleanupPending 与已结束任务混合批次。",
+      "steps": [
+        "反复快速暂停/恢复、单取消、批停、删除、重试，注入旧generation和乱序终态。",
+        "在外层 future 被丢弃、删除调用者取消、Worker迟退、记录淘汰和恢复并发时重放。",
+        "用准确 PID+创建时间确认退出后才释放工作区/额度，其他任务继续。"
+      ],
+      "acceptance": [
+        "暂停后不再领取新任务；取消/删除幂等，旧事件不复活记录。",
+        "未经退出确认不清理或复用对象；删除不影响源、成品、密码库或其他任务。"
+      ],
+      "evidence": [
+        "control-sequences.json",
+        "late-event-replay.jsonl",
+        "worker-exit-proof.json",
+        "deleted-record-reopen.json"
+      ],
+      "targets": [
+        "crates/core/src/coordinator.rs",
+        "crates/core/tests/desktop_pipeline.rs",
+        "crates/core/tests/worker_client.rs",
+        "crates/core/tests/load_profile.rs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-025",
+      "stream": "D",
+      "title": "缓存路线、等待唤醒与旧工作区恢复",
+      "priority": "P0",
+      "owner": "rust-dev",
+      "environment": "本机；有界 SSD/HDD扩展",
+      "mode": "自动 / 原生",
+      "dependsOn": [
+        "DET-012",
+        "DET-024"
+      ],
+      "commands": [
+        "CMD-07",
+        "CMD-08"
+      ],
+      "basis": "最后修复涉及旧缓存工作区按实际目录计量与同卷直写发布，需纳入统一最终基线。",
+      "inputs": "cache关闭/auto/always；同卷/跨卷；未知大小/高压缩比；旧保留工作区与中途降低配额/修改路线。",
+      "steps": [
+        "先保留缓存目录再改变全局设置重试，核对按持有对象的实际存储位置恢复。",
+        "两任务共用不足以并行的缓存，取消/释放/失败清理后自动唤醒，观察FIFO和长期等待。",
+        "直写同卷发布检查没有多余全量copy；并行占用采样记录delete-pending，不能把读失败当零。"
+      ],
+      "acceptance": [
+        "不绕过缓存配额、没有自等待/饥饿，永久越限与暂时竞争分类准确。",
+        "未知目录身份拒绝恢复且保留现场；所有成功文件及源哈希正确。"
+      ],
+      "evidence": [
+        "cache-route-matrix.json",
+        "reservation-timeline.jsonl",
+        "retained-bytes.json",
+        "pipeline-stages.jsonl"
+      ],
+      "targets": [
+        "crates/core/src/coordinator.rs",
+        "crates/core/src/route.rs",
+        "crates/core/tests/desktop_pipeline.rs:305",
+        "crates/core/tests/resource_recovery_regressions.rs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-026",
+      "stream": "D",
+      "title": "数据库、配置与多实例故障",
+      "priority": "P0",
+      "owner": "rust-dev / qa-inspector",
+      "environment": "合成数据副本",
+      "mode": "自动 / 故障注入",
+      "dependsOn": [
+        "DET-001",
+        "DET-004"
+      ],
+      "commands": [
+        "CMD-07"
+      ],
+      "basis": "持久化与数据库租约是恢复和单写权威基础，启动时仍一次读全任务。",
+      "inputs": "SQLite schema各历史版本、WAL/SHM、空/截断/坏文件、只读目录、锁占用、坏设置、同数据目录双实例。",
+      "steps": [
+        "仅复制合成库，注入读写/事务提交失败和不支持schema；检查启动错误与降级政策。",
+        "两个 Host 同时打开同一目录、异常退出后重启，核对 DatabaseLease 与写冲突诊断。",
+        "迁移失败回滚后比较原库、密码库、恢复行和输出引用，不直接编辑用户实际SQLite。"
+      ],
+      "acceptance": [
+        "失败不创建空库覆盖旧数据，不静默重置设置/密码；缺权限可诊断。",
+        "不支持schema明确阻断；多个实例不会双领取或交错破坏任务/发布状态。"
+      ],
+      "evidence": [
+        "database-fault-matrix.json",
+        "schema-before-after.json",
+        "multi-instance-events.jsonl",
+        "backup-recovery-proof.json"
+      ],
+      "targets": [
+        "crates/core/src/repository.rs",
+        "crates/core/src/database_lease.rs",
+        "crates/infrastructure/tests/migration_regressions.rs",
+        "apps/desktop-host/src/lib.rs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-027",
+      "stream": "D",
+      "title": "重试、恢复与操作模型对等",
+      "priority": "P1",
+      "owner": "rust-dev / qa-inspector",
+      "environment": "本机",
+      "mode": "自动 / 模型对照",
+      "dependsOn": [
+        "DET-013",
+        "DET-022",
+        "DET-023"
+      ],
+      "commands": [
+        "CMD-07"
+      ],
+      "basis": "Domain 目标状态机与生产 Core 不完全同源，不能假定新层 guards 已约束当前运行。",
+      "inputs": "NeedsPassword/WaitingResource/Cancelled/Failed/partial/salvaged/cleanupPending/pending-publication 全状态。",
+      "steps": [
+        "按生产允许动作生成 transition table；对非法操作、重复重试、缺工作区与目录替换逐格验证。",
+        "同一故障用例分别驱动 Core 与可测试的新层，列出差异；未实现事务/outbox/身份保护记迁移缺口。",
+        "节点级重试、部分交付、恢复不应全树重复运行或替换有效输出。"
+      ],
+      "acceptance": [
+        "生产状态和UI动作一致，非法转换失败且不产生副作用。",
+        "迁移层差异明确记录且阻止未经验证的架构切换；现阶段保持生产Core路径。"
+      ],
+      "evidence": [
+        "transition-matrix.json",
+        "recovery-action-results.json",
+        "layer-parity-gaps.md"
+      ],
+      "targets": [
+        "crates/domain/src/jobs/state_machine.rs",
+        "crates/application/src/use_cases",
+        "crates/core/src/coordinator.rs",
+        "crates/infrastructure/tests"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-028",
+      "stream": "D",
+      "title": "快照、历史分页与会话修订正确性",
+      "priority": "P1",
+      "owner": "rust-dev / ui-dev",
+      "environment": "本机",
+      "mode": "自动 + 原生抽查",
+      "dependsOn": [
+        "DET-005",
+        "DET-026"
+      ],
+      "commands": [
+        "CMD-03",
+        "CMD-07",
+        "CMD-08"
+      ],
+      "basis": "有限队列快照保留活跃/可恢复记录，普通完成记录只取近期；历史可见窗口和数据库总量不是一回事。",
+      "inputs": "10/1000/10000 条合成记录，混入活跃/可恢复/保留目录/旧session记录；最后一页删除、搜索与迟到详情。",
+      "steps": [
+        "比较只读数据库总量、backend摘要、queue_snapshot、history_page和job_details，逐ID核对。",
+        "模拟事件乱序、相同/旧revision、Host重启session变化、搜索快速修改和请求失败。",
+        "核对所有恢复项不被20条近期上限裁掉，分页不会出现遗漏/重复/错误清空保护。"
+      ],
+      "acceptance": [
+        "数据真值与各页面计数可解释一致；加载失败保留旧数据并可重试。",
+        "旧请求不覆盖新会话/查询/详情；隐藏页的工作区与恢复记录仍受删除保护。"
+      ],
+      "evidence": [
+        "snapshot-page-reconciliation.json",
+        "session-events.jsonl",
+        "history-errors.json",
+        "native-pages.png"
+      ],
+      "targets": [
+        "crates/core/src/coordinator.rs",
+        "crates/protocol/tests/snapshot_revision.rs",
+        "apps/desktop-ui/src/snapshot-cursor.ts",
+        "apps/desktop-ui/tests/history-pagination.test.tsx"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-029",
+      "stream": "E",
+      "title": "密码导入、原文保持与原子操作",
+      "priority": "P1",
+      "owner": "rust-dev / ui-dev",
+      "environment": "合成密码库",
+      "mode": "自动 + 原生抽查",
+      "dependsOn": [
+        "DET-004"
+      ],
+      "commands": [
+        "CMD-03",
+        "CMD-07"
+      ],
+      "basis": "密码空白、分组上限、预览去重与合并是跨UI/后端的数据一致性边界。",
+      "inputs": "TXT/CSV/TSV，BOM/不同编码、引号/逗号/换行、空密码、首尾空格、Unicode、重复密码/分组，字节/数量边界。",
+      "steps": [
+        "导入预览与确认分别校验；测试100分组+1合并、重叠合法组、备份叠加和超限旧数据。",
+        "取消/关窗/切任务/重复提交/异步迟到时比较前后库摘要；原子失败不出现半导入。",
+        "按启用/停用/组筛选核对真实候选，不以名称显示值替代密码原文字节。"
+      ],
+      "acceptance": [
+        "密码不trim、不误改编码；去重与合并可解释，预览与实际提交一致。",
+        "失败和取消不污染库，边界错误不产生不可导出的新记录。"
+      ],
+      "evidence": [
+        "password-import-matrix.json",
+        "vault-state-digests.json",
+        "candidate-selection.json"
+      ],
+      "targets": [
+        "crates/core/src/vault.rs",
+        "crates/domain/tests/password_safety.rs",
+        "apps/desktop-ui/src/components/VaultPage.tsx",
+        "apps/desktop-ui/tests/draft-lifecycle.test.tsx"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-030",
+      "stream": "E",
+      "title": "DPAPI、备份恢复与旧格式兼容",
+      "priority": "P0",
+      "owner": "rust-dev / qa-inspector",
+      "environment": "本机；隔离第二账户扩展",
+      "mode": "自动 / 原生",
+      "dependsOn": [
+        "DET-029"
+      ],
+      "commands": [
+        "CMD-07"
+      ],
+      "basis": "账户绑定库与独立备份口令有不同迁移边界，不能把便携EXE误认为密码库跨账户可移动。",
+      "inputs": "旧/新合成vault、正确/错误备份口令、截断/篡改/超长口令、过期/重放恢复预览、第二测试账户。",
+      "steps": [
+        "同账户读写、重启、备份导出/预览/合并；验证每次失败前后库和磁盘均保持。",
+        "跨账户直接解密应失败；使用独立备份口令在第二合成库恢复，核对密码、分组与禁用属性。",
+        "检查文件ACL、原子写、备份文件完整性和老格式路径；不导出真实库或DPAPI密钥。"
+      ],
+      "acceptance": [
+        "错误口令/篡改/过期确认不导入任何部分记录；合法备份完整恢复。",
+        "直接复制账户绑定vault不被宣称支持迁移；报告/普通文件无合成密码明文。"
+      ],
+      "evidence": [
+        "vault-backup-results.json",
+        "backup-integrity.json",
+        "account-boundary.json",
+        "file-acl.json"
+      ],
+      "targets": [
+        "crates/core/src/vault.rs",
+        "crates/infrastructure/tests/vault_regressions.rs",
+        "crates/infrastructure/src/dpapi/vault.rs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-031",
+      "stream": "E",
+      "title": "临时密码、成功关联与秘密清理",
+      "priority": "P0",
+      "owner": "rust-dev / ui-dev / worker-dev",
+      "environment": "合成密码库",
+      "mode": "自动 + 原生",
+      "dependsOn": [
+        "DET-009",
+        "DET-029"
+      ],
+      "commands": [
+        "CMD-03",
+        "CMD-07",
+        "CMD-08"
+      ],
+      "basis": "临时口令、不保存重试、passwordRevision 和迟到请求容易跨任务串用。",
+      "inputs": "公开合成secret、保存/不保存、内外层不同口令、尝试中编辑/删除密码、旧generation成功事件。",
+      "steps": [
+        "真实加密包不保存重试后核对vault/SQLite/快照/标准流/结构日志/临时文件无该口令。",
+        "切任务/关弹窗/取消/卸载组件/旧保存迟到，确认只清理本草稿且不清新输入。",
+        "修改密码revision后注入旧成功事件；重命名同内容与同名换内容分别检查成功关联。"
+      ],
+      "acceptance": [
+        "临时密码只用于授权的本次任务；没有落盘泄漏、串任务或过期成功记账。",
+        "前端和托管内存清理按可证明范围报告，不承诺所有物理内存副本擦除。"
+      ],
+      "evidence": [
+        "synthetic-secret-scan.json",
+        "revision-race-results.json",
+        "draft-ownership.json"
+      ],
+      "targets": [
+        "crates/core/src/vault.rs",
+        "crates/core/src/coordinator.rs",
+        "apps/desktop-ui/tests/draft-lifecycle.test.tsx",
+        "apps/desktop-ui/src/components/BulkPasswordBar.tsx"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-032",
+      "stream": "E",
+      "title": "系统剪贴板历史、同步与清理归属",
+      "priority": "P1",
+      "owner": "ui-dev / qa-inspector",
+      "environment": "原生桌面合成秘密",
+      "mode": "原生 / 人工",
+      "dependsOn": [
+        "DET-031"
+      ],
+      "commands": [],
+      "basis": "写入排除历史/同步格式和序号绑定有代码实现，仍需实际Windows行为证据。",
+      "inputs": "合成密码A、随后复制普通文本B、重复复制和超时清理；隔离账户或明确授权的系统配置。",
+      "steps": [
+        "通过真实UI复制，核对排除历史/云格式是否设置成功；记录实际系统设置，不擅自修改用户设置。",
+        "A复制后立刻复制B及再次复制A，等待旧定时器，核对不会清空新剪贴板。",
+        "在隔离账户验证Win+V和具备环境时云同步；无环境标blocked，不读取用户现有秘密内容。"
+      ],
+      "acceptance": [
+        "序号/归属保证旧计时器不清新内容；保护格式设置失败明确拒绝复制。",
+        "只对实际观测的历史/同步组合给结论，工具API成功不能替代系统结果。"
+      ],
+      "evidence": [
+        "clipboard-sequence-events.json",
+        "clipboard-policy-observation.md",
+        "synthetic-history-check.png"
+      ],
+      "targets": [
+        "apps/desktop-host/src/clipboard.rs",
+        "apps/desktop-ui/src/components/VaultPage.tsx"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-033",
+      "stream": "E",
+      "title": "原生命名管道身份、协议负例与背压",
+      "priority": "P0",
+      "owner": "worker-dev / rust-dev",
+      "environment": "隔离测试进程",
+      "mode": "新增进程harness / 原生",
+      "dependsOn": [
+        "DET-005"
+      ],
+      "commands": [
+        "CMD-08"
+      ],
+      "basis": "双向PID校验、8 MiB帧、JSON深度32、request/operation/generation关联是源码约束，需真实进程负例。",
+      "inputs": "错误父/服务PID、单管道连通、v1/v2握手、空/重复ID、generation 0/旧代、无换行、分片UTF8、坏JSON、边界帧、慢消费者。",
+      "steps": [
+        "真实双管道重跑v2，再对每个身份/长度/版本/顺序负例注入并记录拒绝。",
+        "事件背压、失联、仅心跳无业务进展下触发取消/总期限；同时发旧cancel/exit和新请求。",
+        "检查每次operation终态唯一，坏请求不污染后续新Worker会话。"
+      ],
+      "acceptance": [
+        "未授权进程不能操作，旧代事件/控制不影响当前代。",
+        "输入和等待有界；背压不阻止Host最终超时终止并确认退出；普通日志无秘密。"
+      ],
+      "evidence": [
+        "pipe-negative-cases.json",
+        "wire-events-redacted.jsonl",
+        "deadlines.json",
+        "exit-proof.json"
+      ],
+      "targets": [
+        "src/OpenUnpack.Worker/WorkerHost.cs",
+        "src/OpenUnpack.Worker/Protocol.cs",
+        "crates/core/src/worker.rs",
+        "scripts/verify-worker-v2.ps1"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-034",
+      "stream": "E",
+      "title": "Worker生命周期、防护与二进制解析",
+      "priority": "P0",
+      "owner": "rust-dev / worker-dev",
+      "environment": "本机 / 隔离进程",
+      "mode": "自动 / 原生故障注入",
+      "dependsOn": [
+        "DET-033"
+      ],
+      "commands": [
+        "CMD-04",
+        "CMD-07",
+        "CMD-08"
+      ],
+      "basis": "WriteScopeGuard 是应用约束，JobObject/mitigation 是另外的机制；缺失/替换Worker或DLL不能落到不可信路径。",
+      "inputs": "worker/7z.dll缺失/篡改、错误manifest、失效PID创建时间、崩溃、拒绝Job限制/mitigation、派生子进程和外层future丢弃。",
+      "steps": [
+        "直接读取真实进程Job内存/ActiveProcessLimit/mitigation/权限状态，检查设置或读回失败的生产处理。",
+        "测试异常退出、启动半失败、Host强杀、父future丢弃与未确认退出预留；核对PID+创建时间而非仅进程名。",
+        "从候选目录启动并放置CWD/PATH假DLL，确认解析绑定打包路径且Release不回退源树。"
+      ],
+      "acceptance": [
+        "Host隔离Worker失败，未知退出不复用额度/目录；没有遗留本任务Worker。",
+        "缺防护/错组件明确失败，无不可信加载回退；不夸大为对抗任意恶意原生DLL的完整沙箱。"
+      ],
+      "evidence": [
+        "job-policy-readback.json",
+        "mitigation-readback.json",
+        "binary-resolution.json",
+        "process-lifecycle.jsonl"
+      ],
+      "targets": [
+        "crates/core/src/worker.rs",
+        "crates/core/tests/worker_client.rs",
+        "src/OpenUnpack.Engine/WorkerSandbox.cs",
+        "apps/desktop-host/src/lib.rs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-035",
+      "stream": "E",
+      "title": "工具箱预览令牌与异步归属",
+      "priority": "P0",
+      "owner": "rust-dev / ui-dev",
+      "environment": "合成目录",
+      "mode": "自动 + 原生GUI",
+      "dependsOn": [
+        "DET-016",
+        "DET-005"
+      ],
+      "commands": [
+        "CMD-03",
+        "CMD-07"
+      ],
+      "basis": "工具箱会重命名/移动/清理真实对象，执行必须绑定用户看到的有效预览。",
+      "inputs": "一次性token、过期/重放/空token、参数变化、源/目标替换、快速换选项、同requestId替换与旧取消。",
+      "steps": [
+        "预览后改变每个关键字段和对象身份，尝试执行；另测合法执行后重放。",
+        "快速改变UI选项、取消/关闭和同ID新请求，让旧结果/旧清理迟到。",
+        "执行中锁冲突/权限失败/大目录预算，检查每项诊断、部分动作清单和可操作恢复。"
+      ],
+      "acceptance": [
+        "旧/过期/被篡改计划不能改变文件，合法token只能消费一次。",
+        "loading不永久挂起，旧结果不授权新选项；不覆盖/误删外部对象，结果按项可核对。"
+      ],
+      "evidence": [
+        "toolbox-token-matrix.json",
+        "preview-race-events.jsonl",
+        "toolbox-before-after.json"
+      ],
+      "targets": [
+        "crates/core/src/toolbox.rs",
+        "apps/desktop-ui/src/components/ToolboxPage.tsx",
+        "apps/desktop-ui/tests/toolbox-preview.test.tsx",
+        "crates/core/src/coordinator.rs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-036",
+      "stream": "F",
+      "title": "Explorer拖放与原生选择导入",
+      "priority": "P0",
+      "owner": "ui-dev / qa-inspector",
+      "environment": "真实生产EXE",
+      "mode": "原生GUI / 人工",
+      "dependsOn": [
+        "DET-001",
+        "DET-004"
+      ],
+      "commands": [
+        "CMD-13"
+      ],
+      "basis": "原生文件/文件夹选择已有记录；上轮跨窗口拖放被工具在输入前拒绝，既非通过也非应用失败。",
+      "inputs": "文件/文件夹/多选、深目录、分卷中间卷、重复输入、长中文路径、受限目录和空目录。",
+      "steps": [
+        "先核对实际启动EXE路径/Hash、UI摘要、独立数据目录及实际Worker子进程路径/Hash均匹配DET-004构建清单；如启动工具未继承测试目录环境，禁止默认使用个人数据目录。",
+        "从真实Explorer分别拖入文件、多个文件与包含归档的文件夹；再走原生文件/文件夹对话框。",
+        "覆盖扫描进度、排除预览、确认/取消、重复导入、扫描中换来源和关闭窗口。",
+        "开始真实解压后逐文件核对内容；自动化无法跨窗口时由人工按相同步骤执行并留证。"
+      ],
+      "acceptance": [
+        "扫描/确认/取消/入队数与样本清单一致，不漏分卷、不双入队、取消不入队。",
+        "证据来自实际EXE和Explorer；浏览器预览、mock或工具拒绝不能核销。"
+      ],
+      "evidence": [
+        "native-import-recording-or-steps.md",
+        "native-import-screenshots/",
+        "queue-input-reconciliation.json",
+        "output-oracle.json"
+      ],
+      "targets": [
+        "apps/desktop-host/src/lib.rs",
+        "apps/desktop-ui/src/api.ts",
+        "apps/desktop-ui/src/components/QueuePage.tsx",
+        "scripts/native-file-dialog.ps1"
+      ],
+      "status": "planned",
+      "requiresPassed": [
+        "DET-001"
+      ],
+      "casePrerequisites": [
+        "普通ZIP文件/文件夹导入只需DET-004同源码检测构建和合成样本，不要求全部基线或分卷矩阵先通过。",
+        "分卷拖入只需DET-008对应样本与归组预期；缺某种格式仅阻塞该子场景。"
+      ]
+    },
+    {
+      "id": "DET-037",
+      "stream": "F",
+      "title": "真实按钮的暂停、取消、删除和恢复",
+      "priority": "P0",
+      "owner": "ui-dev / qa-inspector",
+      "environment": "真实生产EXE",
+      "mode": "原生GUI",
+      "dependsOn": [
+        "DET-001",
+        "DET-004",
+        "DET-024"
+      ],
+      "commands": [
+        "CMD-13"
+      ],
+      "basis": "上一轮GUI没有完整点击删除/暂停/取消，前端与Core回归不能替代按钮全链。",
+      "inputs": "至少5项并发+2项排队、实际有进度的任务、等待资源/缺密码/待核对/已完成混合队列。",
+      "steps": [
+        "依次点击开始、暂停、恢复、单项取消、批停；必须在真实进度后触发并检查未选任务。",
+        "删除运行项与历史项，取消删除对话框再确认；查看记录并重启验证不复活。",
+        "对恢复/严格核对/清理按钮逐状态测试，保存点击到UI反馈与后端终态时间。"
+      ],
+      "acceptance": [
+        "按钮可用性与后端状态一致；暂停不再领取，取消只影响目标。",
+        "原包和已发布成品保持，退出证明与数据状态一致；删除不复活，无无反馈误操作。"
+      ],
+      "evidence": [
+        "native-controls-steps.md",
+        "native-control-timestamps.json",
+        "pid-exits.json",
+        "restart-records.json",
+        "screenshots/"
+      ],
+      "targets": [
+        "apps/desktop-ui/src/components/QueuePage.tsx",
+        "apps/desktop-ui/src/components/HistoryPage.tsx",
+        "apps/desktop-ui/src/components/TaskDeleteDialog.tsx",
+        "apps/desktop-ui/tests/task-deletion.test.tsx"
+      ],
+      "status": "planned",
+      "casePrerequisites": [
+        "只需同源码Host、可正常导入的ZIP合成队列与DET-024控制预期；完整拖放/格式矩阵通过不是前置。",
+        "若某动作已证实会误删，仅停止对应危险场景并保全失败，其他独立按钮继续。"
+      ]
+    },
+    {
+      "id": "DET-038",
+      "stream": "F",
+      "title": "密码库与临时重试的原生全流程",
+      "priority": "P1",
+      "owner": "ui-dev / qa-inspector",
+      "environment": "真实EXE / 合成vault",
+      "mode": "原生GUI",
+      "dependsOn": [
+        "DET-004",
+        "DET-029",
+        "DET-031"
+      ],
+      "commands": [
+        "CMD-13"
+      ],
+      "basis": "密码流程已有组件与部分原生记录，需覆盖导入/备份/批量动作与草稿竞争的完整操作。",
+      "inputs": "公开测试口令、TXT/CSV/TSV、不同组、禁用项、错误/正确备份口令、内外包不同口令。",
+      "steps": [
+        "从界面新增/编辑/搜索/分组/启用停用/批量导入去重/导出恢复并核对真实库。",
+        "缺密码任务不保存重试与保存后重试各执行；错误口令、取消、切任务、重开弹窗逐项检查。",
+        "在操作途中发起新草稿，让旧原生选择器/保存迟到，观察焦点和内容归属。"
+      ],
+      "acceptance": [
+        "用户看到的预览、计数、组与后端一致；真实加密结果正确。",
+        "新草稿不被旧操作覆盖；临时口令不落库，错误恢复无半导入。"
+      ],
+      "evidence": [
+        "native-vault-workflow.md",
+        "vault-before-after-digests.json",
+        "draft-screenshots/",
+        "secret-scan.json"
+      ],
+      "targets": [
+        "apps/desktop-ui/src/components/VaultPage.tsx",
+        "apps/desktop-ui/src/components/BulkPasswordBar.tsx",
+        "apps/desktop-ui/tests/workflows.test.tsx"
+      ],
+      "status": "planned",
+      "casePrerequisites": [
+        "同账户备份/恢复GUI仅需DET-030同账户样本和预期，不依赖第二账户或云同步验收。",
+        "第二账户迁移属于DET-030独立子场景，缺该环境不阻塞本项核心流程。"
+      ]
+    },
+    {
+      "id": "DET-039",
+      "stream": "F",
+      "title": "归档浏览、详情、进度和错误视图",
+      "priority": "P1",
+      "owner": "ui-dev / qa-inspector",
+      "environment": "真实生产EXE",
+      "mode": "原生GUI",
+      "dependsOn": [
+        "DET-028",
+        "DET-033"
+      ],
+      "commands": [],
+      "basis": "常态快照、懒加载详情和独立浏览Worker相互作用，易出现过期结果、重置或进度虚假。",
+      "inputs": "大目录树、未知大小LZ4、同名内包、缺密码/损坏/资源等待/不支持、分页和迟到详情。",
+      "steps": [
+        "持续进度时浏览归档，快速切源/关闭/重开；选择节点、滚动、展开状态不应无故重置。",
+        "核对阶段、字节、百分比、速度/ETA、品质与验证范围；未知总量不伪造完成百分比。",
+        "历史页切换/搜索/详情/失败重试及后端失联，验证错误信息与可执行动作。"
+      ],
+      "acceptance": [
+        "旧详情不显示到新源；浏览取消释放对应Worker，不阻塞队列控制。",
+        "错误/部分/损坏状态明显，进度与后台阶段一致；失败保留可读上下文并能重试。"
+      ],
+      "evidence": [
+        "native-browser-events.jsonl",
+        "ui-backend-state-matrix.json",
+        "progress-screenshots/"
+      ],
+      "targets": [
+        "apps/desktop-ui/src/components/ArchiveBrowser.tsx",
+        "apps/desktop-ui/src/components/TransferMetrics.tsx",
+        "apps/desktop-ui/src/components/HistoryPage.tsx",
+        "apps/desktop-ui/tests/archive-browser.test.tsx"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-040",
+      "stream": "F",
+      "title": "DPI、多显示器、键盘与读屏",
+      "priority": "P1",
+      "owner": "ui-dev / qa-inspector",
+      "environment": "真实桌面 / 对应显示设备",
+      "mode": "人工GUI",
+      "dependsOn": [
+        "DET-036"
+      ],
+      "commands": [],
+      "basis": "DPI/多屏/键盘仍是未验收范围，不能仅凭组件样式判断。",
+      "inputs": "100/125/150/200% DPI、常见窗口尺寸、多屏不同缩放、中文IME、键盘、可用读屏工具。",
+      "steps": [
+        "逐页检查导航、表格、弹窗、长路径/错误文案；跨屏移动和最小窗口下操作关键按钮。",
+        "仅键盘完成导入、确认、密码输入、取消/删除；核对Tab顺序、焦点恢复、Esc与Enter。",
+        "检查深浅色/跟随系统、对比度和读屏标签；设备缺失项目明确blocked。"
+      ],
+      "acceptance": [
+        "关键按钮和风险提示不遮挡，表格有可用滚动，密码不会意外展示。",
+        "键盘和焦点操作可完成核心流程；错误及状态不仅靠颜色表达。"
+      ],
+      "evidence": [
+        "dpi-device-matrix.json",
+        "native-accessibility-checklist.md",
+        "screenshots-by-scale/"
+      ],
+      "targets": [
+        "apps/desktop-ui/src/App.tsx",
+        "apps/desktop-ui/src/components/shared.tsx",
+        "apps/desktop-ui/src/components/InterfaceBoundary.tsx"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-041",
+      "stream": "F",
+      "title": "托盘、关闭、重启和现有设置生效",
+      "priority": "P1",
+      "owner": "ui-dev / rust-dev / qa-inspector",
+      "environment": "真实EXE / 合成设置",
+      "mode": "原生GUI",
+      "dependsOn": [
+        "DET-024",
+        "DET-025",
+        "DET-038"
+      ],
+      "commands": [],
+      "basis": "只检查已经实现且含义明确的设置，不新增未约定设置；进程退出与关闭到托盘必须区分。",
+      "inputs": "当前支持的主题/置顶/托盘/提示音/并发/缓存/校验/输出策略；运行/等待/结束三类任务。",
+      "steps": [
+        "在测试数据目录保存现有设置，核对重启保持及后端实际消费；auto/always和cache关闭分别观察。",
+        "最小化、关闭到托盘、恢复、托盘退出、再次启动；检查Host/Worker、后台任务及数据租约。",
+        "处理中退出/系统睡眠唤醒/会话恢复后检查状态、原包、工作区和临时口令。"
+      ],
+      "acceptance": [
+        "界面显示、持久化值与实际行为一致；窗口关闭和退出有清楚反馈。",
+        "真正退出后本任务Host/Worker和租约释放，重启恢复准确，没有静默双运行。"
+      ],
+      "evidence": [
+        "settings-effect-matrix.json",
+        "tray-lifecycle.jsonl",
+        "restart-content.json"
+      ],
+      "targets": [
+        "apps/desktop-host/src/lib.rs",
+        "apps/desktop-ui/src/components/SettingsPage.tsx",
+        "crates/core/src/coordinator.rs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-042",
+      "stream": "F",
+      "title": "错误可操作性与桌面边界恢复",
+      "priority": "P1",
+      "owner": "ui-dev / qa-inspector",
+      "environment": "真实EXE / 隔离故障",
+      "mode": "原生GUI",
+      "dependsOn": [
+        "DET-026",
+        "DET-034",
+        "DET-039"
+      ],
+      "commands": [],
+      "basis": "后台分类正确也可能被界面吞掉，用户需知道发生阶段、保留内容和下一步。",
+      "inputs": "Worker缺失、引擎错误、输入移动、目标占用、无权限、坏配置、数据库不可写、网络输出失联及UI渲染错误。",
+      "steps": [
+        "在副本候选/合成数据制造错误，记录从操作到界面消息/任务详情的映射。",
+        "执行消息提供的重试、改目录、补密码、恢复/核对动作，并验证是否真正恢复。",
+        "检查InterfaceBoundary、空态/加载/错误态和日志脱敏；不能依靠开发者控制台完成普通恢复。"
+      ],
+      "acceptance": [
+        "不无限loading、不假成功；错误说明能定位阶段并给出有效操作。",
+        "失败不丢旧数据/输入，关键错误可复制去敏诊断；普通用户无需开发工具可理解处理。"
+      ],
+      "evidence": [
+        "native-error-action-matrix.json",
+        "screenshots/",
+        "recovery-outcomes.json"
+      ],
+      "targets": [
+        "apps/desktop-ui/src/components/InterfaceBoundary.tsx",
+        "apps/desktop-ui/src/components/QueuePage.tsx",
+        "apps/desktop-ui/src/components/HistoryPage.tsx",
+        "apps/desktop-host/src/lib.rs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-043",
+      "stream": "G",
+      "title": "并发、物理盘仲裁与完整吞吐",
+      "priority": "P1",
+      "owner": "qa-inspector / rust-dev",
+      "environment": "明确拓扑的SSD/HDD；其他设备扩展",
+      "mode": "原生性能测量",
+      "dependsOn": [
+        "DET-004",
+        "DET-025"
+      ],
+      "commands": [
+        "CMD-08"
+      ],
+      "basis": "本机曾测并发5与HDD/SSD，缓存样本更慢；结果不能推广到所有包或设备。",
+      "inputs": "并发1/2/3/4/5，10任务/档；ZIP小文件/大文件、7z大字典，直写/auto/always，同物理盘多卷与不同盘。",
+      "steps": [
+        "编译完成后单独测，先核对物理盘ID和源/目标映射；运行显式ignored负载与物理盘入口。",
+        "每档预热1次、测量3次，轮换顺序，记录缓存热度/全机负载；计时包含复制→解压→回写→选定校验。",
+        "独立核对所有成品/源不变、Worker峰值和盘许可；不关闭系统保护或清空全机缓存来制造倍速。"
+      ],
+      "acceptance": [
+        "有完整P50/P95/吞吐/IO/CPU/内存和样本说明；无同HDD错误并行、饥饿或内容错误。",
+        "相同机器/样本性能回退>20%触发调查，属于本计划初始调查阈值；缓存只按实测建议。"
+      ],
+      "evidence": [
+        "topology.json",
+        "measurements/",
+        "benchmark-summary.json",
+        "independent-output-check.json"
+      ],
+      "targets": [
+        "scripts/measure-load.ps1",
+        "crates/core/tests/load_profile.rs",
+        "crates/core/tests/physical_disk_cross_device.rs",
+        "crates/core/src/route.rs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-044",
+      "stream": "G",
+      "title": "全入口共享内存与低资源准入",
+      "priority": "P0",
+      "owner": "rust-dev / worker-dev / qa-inspector",
+      "environment": "受限测试进程/VM",
+      "mode": "自动 / 原生资源测量",
+      "dependsOn": [
+        "DET-024",
+        "DET-034"
+      ],
+      "commands": [
+        "CMD-07",
+        "CMD-08"
+      ],
+      "basis": "Worker池不等于Host/WebView或全应用内存上限；浏览/预览也应进入统一准入。",
+      "inputs": "解压+probe+inspect+规则预览混合，并发1..5；大字典、低commit余量、启动失败、未知退出和等待取消。",
+      "steps": [
+        "记录各入口预留、实际Job读回与退出，覆盖64 KiB对齐及额度缩减边界。",
+        "在隔离VM或有界注入资源探测，不耗尽用户整机；记录Host/WebView/全部归属Worker与系统commit。",
+        "检查FIFO、取消等待、未确认退出保留预留、PID重用与回调释放。"
+      ],
+      "acceptance": [
+        "所有Worker入口共享预算，真实上限可读回；错误或取消不泄漏额度。",
+        "资源探测失败不绕过保护；Host/WebView实测单列，不把池限额声称为整机硬限制。"
+      ],
+      "evidence": [
+        "resource-pool-timeline.jsonl",
+        "job-memory-readback.json",
+        "process-tree-memory.csv",
+        "admission-failures.json"
+      ],
+      "targets": [
+        "crates/core/src/worker.rs",
+        "crates/core/tests/worker_client.rs",
+        "crates/core/tests/load_profile.rs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-045",
+      "stream": "G",
+      "title": "历史规模、真实IPC与窗口响应",
+      "priority": "P1",
+      "owner": "ui-dev / qa-inspector / rust-dev",
+      "environment": "真实EXE",
+      "mode": "原生性能测量",
+      "dependsOn": [
+        "DET-028",
+        "DET-039"
+      ],
+      "commands": [
+        "CMD-08"
+      ],
+      "basis": "现有1000条基准只测Core snapshot+JSON，不覆盖启动全量历史、Tauri传输和WebView渲染。",
+      "inputs": "10/1000/10000条标记为未执行的合成历史；1000活跃摘要；宽/深节点树，10万历史为扩展压力。",
+      "steps": [
+        "分开测启动加载、首屏、IPC字节/频率、分页搜索详情和实际窗口点击反馈；合成历史不算解压成功。",
+        "每场景预热20次、测至少100次交互，记录P50/P95/P99、主进程/WebView/Worker内存。",
+        "进度事件持续流入时滚动/搜索/选节点；比较有限快照、可恢复记录和启动全量加载成本。"
+      ],
+      "acceptance": [
+        "首轮暂定调查阈值：1000条普通历史首屏≤3s，分页/搜索反馈P95≤500ms；10000条超过1s的交互列P1调查。",
+        "阈值需在执行前冻结并记录硬件；1000+活跃/可恢复项单列，不强行断言队列恒定20条。"
+      ],
+      "evidence": [
+        "startup-timing.json",
+        "ipc-payloads.json",
+        "interaction-latencies.csv",
+        "process-memory.json",
+        "render-observation.md"
+      ],
+      "targets": [
+        "crates/core/src/coordinator.rs:412",
+        "apps/desktop-ui/src/api.ts",
+        "apps/desktop-ui/src/components/QueuePage.tsx",
+        "apps/desktop-ui/src/components/HistoryPage.tsx"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-046",
+      "stream": "G",
+      "title": "取消延迟、长时稳定性与句柄泄漏趋势",
+      "priority": "P1",
+      "owner": "qa-inspector / rust-dev / ui-dev",
+      "environment": "本机合成负载",
+      "mode": "原生耐久测试",
+      "dependsOn": [
+        "DET-024",
+        "DET-034"
+      ],
+      "commands": [
+        "CMD-08",
+        "CMD-13"
+      ],
+      "basis": "单次118ms后端取消记录不是GUI延迟或长期无泄漏证明。",
+      "inputs": "至少100次导入/浏览/取消/重试/删除循环，8小时有界队列，睡眠/唤醒与窗口开关。",
+      "steps": [
+        "分别量点击反馈、请求发出、目标Worker退出和终态落盘，至少30个真实进度后取消样本。",
+        "每分钟采集CPU/私有内存/句柄/线程/Worker/保留缓存；预热后各100轮空闲检查点比较。",
+        "8小时内约束最大输出/磁盘余量，停止后核对所有仍保留对象和进程归属。"
+      ],
+      "acceptance": [
+        "初始调查阈值：点击反馈P95≤300ms，Worker退出P95≤2s且最差≤10s；原有更严格用例期限仍保留。",
+        "无持续无界增长/遗留Worker/重复终态；空闲内存或句柄持续单调增长即调查，不能只凭一次GC峰值判泄漏。"
+      ],
+      "evidence": [
+        "cancel-latencies.csv",
+        "soak-timeseries.csv",
+        "idle-checkpoints.json",
+        "final-content-and-process-audit.json"
+      ],
+      "targets": [
+        "crates/core/tests/load_profile.rs",
+        "crates/core/tests/worker_client.rs",
+        "apps/desktop-ui/src/api.ts",
+        "src/OpenUnpack.Engine/Native/SevenZipEngine.cs"
+      ],
+      "status": "planned",
+      "casePrerequisites": [
+        "本机SSD有界耐久与后端取消不依赖物理HDD；DET-043缺HDD仍可执行。",
+        "GUI反馈延迟只需DET-037对应按钮与同源码Host；HDD/特殊盘扩展独立判断。"
+      ]
+    },
+    {
+      "id": "DET-047",
+      "stream": "G",
+      "title": "专用VHD满盘、脱机和写失败恢复",
+      "priority": "P0",
+      "owner": "qa-inspector / rust-dev / worker-dev",
+      "environment": "专用限容VHD/VM",
+      "mode": "隔离故障测试",
+      "dependsOn": [
+        "DET-022",
+        "DET-025"
+      ],
+      "commands": [],
+      "basis": "本机配额和强杀不能替代真实文件系统ENOSPC/脱机；不对用户正在使用的盘填满或卸载。",
+      "inputs": "全新专用有容量上限VHD，合成原包/缓存/目标/数据库分别放入；解压、复制、回读、commit、清理故障点。",
+      "steps": [
+        "登记VHD文件、卷GUID、挂载点和归属；只在专用卷用有界填充触发满盘，在隔离VM脱机。",
+        "记录错误时点与真实Win32码，释放空间/重新联机后重启/恢复/重试。",
+        "对每次故障核对源、既有输出、publication、缓存计量和目标Worker退出。"
+      ],
+      "acceptance": [
+        "不假成功、不误删；已提交输出保持；未知退出工作区不清理。",
+        "恢复幂等、可诊断；没有专用环境则blocked，不用mock替代该环境验收。"
+      ],
+      "evidence": [
+        "vhd-ownership.json",
+        "fault-point-results.json",
+        "win32-errors.json",
+        "recovery-content-manifests.json"
+      ],
+      "targets": [
+        "crates/core/tests/release_reliability.rs",
+        "crates/core/src/coordinator.rs",
+        "src/OpenUnpack.Worker/WorkerOperations.cs"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-048",
+      "stream": "G",
+      "title": "隔离SMB、USB与特殊文件系统故障",
+      "priority": "P1",
+      "owner": "qa-inspector / rust-dev",
+      "environment": "隔离共享/专用可移除介质",
+      "mode": "环境验收",
+      "dependsOn": [
+        "DET-001",
+        "DET-017",
+        "DET-022"
+      ],
+      "commands": [],
+      "basis": "固定NTFS本机结果不能外推NAS/UNC别名、映射盘、FAT/exFAT或设备移除。",
+      "inputs": "专用SMB共享、UNC与映射盘别名、专用USB/测试VHD，源/缓存/目标三个位置分别断连。",
+      "steps": [
+        "在隔离共享断开测试会话/停服务，USB只在专用无用户数据设备按测试环境步骤移除。",
+        "覆盖复制/回读/发布/源清理中断及重连后恢复；核对盘身份变化和共享仲裁。",
+        "记录不支持ACL/ADS/句柄语义时的拒绝；真实拔盘/物理掉电仅另有专用环境时执行。"
+      ],
+      "acceptance": [
+        "无误覆盖/误删/假成功，失败状态与诊断准确；恢复不读取换盘后的非授权对象。",
+        "每种介质/协议分别出结论；缺环境明确blocked，不以C/D跨卷冒充设备故障。"
+      ],
+      "evidence": [
+        "device-share-topology.json",
+        "disconnect-events.jsonl",
+        "reconnect-recovery.json",
+        "support-boundaries.md"
+      ],
+      "targets": [
+        "crates/core/src/route.rs",
+        "crates/core/src/paths.rs",
+        "crates/core/src/saferecycle.rs",
+        "docs/s06-directory-identity-report-2026-10-15.md"
+      ],
+      "status": "planned",
+      "casePrerequisites": [
+        "SMB只需本项专用共享，不依赖DET-047的VHD可用或通过。",
+        "USB、exFAT/特殊ACL、跨卷各自需要明确设备/样本及DET-018/020对应预期；按子场景blocked，互不串联。"
+      ]
+    },
+    {
+      "id": "DET-049",
+      "stream": "H",
+      "title": "复核随包运行时安全基线 DS-01",
+      "priority": "P0",
+      "owner": "worker-dev / qa-inspector",
+      "environment": "本机 + 官方公告访问",
+      "mode": "依赖与载荷审计",
+      "dependsOn": [
+        "DET-001"
+      ],
+      "commands": [
+        "CMD-09"
+      ],
+      "basis": "10/17 本地依赖报告记录随包10.0.12落后当时10.0.13安全补丁，未修复；本轮未重新联网核验公告，不宣称可利用性。",
+      "inputs": "实际Worker runtimeconfig、CoreLib/CoreCLR/MsQuic、准备脚本、材料名单、便携与安装包；执行当天官方安全发行元数据。",
+      "steps": [
+        "读取实际分发组件身份，与执行当天官方运行时安全元数据和适用架构公告对照并保存快照。",
+        "核对默认RuntimeFrameworkVersion、已审阅名单、notice摘要及两个候选包是否一致，分清SDK/NuGet/runtime。",
+        "若旧版本仍分发，输出确定缺陷和修复验收要求；修复后须另冻结新完整载荷并复跑相关门禁。"
+      ],
+      "acceptance": [
+        "当前分发runtime满足当日已审阅安全基线；零NuGet告警不能代替本项。",
+        "仅组件版本命中不称业务漏洞可利用；旧版本/来源不明/元数据不可得不得过发布门禁。"
+      ],
+      "evidence": [
+        "official-release-metadata.json",
+        "runtime-advisory-applicability.json",
+        "runtime-binary-identities.json",
+        "candidate-runtime-parity.json"
+      ],
+      "targets": [
+        "scripts/prepare-desktop.ps1:3",
+        "scripts/collect-release-materials.mjs:49",
+        "artifacts/worker/OpenUnpack.Worker.runtimeconfig.json",
+        "docs/dependency-security-report-2026-10-17.md"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-050",
+      "stream": "H",
+      "title": "全依赖与扫描失败门禁 DS-02",
+      "priority": "P0",
+      "owner": "qa-inspector / worker-dev",
+      "environment": "联网审计；离线仅记受限结果",
+      "mode": "自动 + 适用性审阅",
+      "dependsOn": [
+        "DET-005",
+        "DET-049"
+      ],
+      "commands": [
+        "CMD-09"
+      ],
+      "basis": "当前自动审计未动态覆盖自包含runtime，ProtocolChecks不在solution；CI npm生产扫描也不能代表开发依赖全覆盖。",
+      "inputs": "Cargo.lock及Windows可达图、npm全部依赖、四个csproj、runtime、7-Zip、实际分发文件与公告库快照。",
+      "steps": [
+        "保存未抑制Cargo/npm/NuGet原始JSON与退出码，再审阅平台适用性；7-Zip固定资产摘要和版本单独核对。",
+        "注入过期runtime+零NuGet、缺项目、坏JSON/缺响应组、网络失败、过期库/缺工具等负例。",
+        "对DS-02缺少自动检查的路径立检测基础设施任务；执行前不伪造已存在命令。"
+      ],
+      "acceptance": [
+        "四项目与实际runtime/原生DLL都有来源/时点；未知、离线跳过、解析错误不汇总为通过。",
+        "所有忽略项有当前目标不可达或正式适用性证据；扫描零记录只表明该快照没有匹配公告。"
+      ],
+      "evidence": [
+        "cargo-audit-raw.json",
+        "windows-reachability.json",
+        "npm-audit-all.json",
+        "nuget-four-projects.json",
+        "runtime-and-7zip.json",
+        "negative-policy-results.json"
+      ],
+      "targets": [
+        "scripts/audit-security.ps1",
+        "scripts/security-audit-policy.ps1",
+        "scripts/test-security-audit-policy.ps1",
+        "tests/OpenUnpack.ProtocolChecks/OpenUnpack.ProtocolChecks.csproj",
+        ".github/workflows/windows.yml"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-051",
+      "stream": "H",
+      "title": "新候选包与最终源码逐项对应",
+      "priority": "P0",
+      "owner": "qa-inspector / rust-dev / worker-dev",
+      "environment": "隔离构建副本 / 本机",
+      "mode": "构建与解包审计",
+      "dependsOn": [
+        "DET-004",
+        "DET-049",
+        "DET-050"
+      ],
+      "commands": [
+        "CMD-10",
+        "CMD-08"
+      ],
+      "basis": "Host版本号或Worker.exe apphost哈希不能证明Engine/runtime新鲜；打包脚本有固定输出目录。",
+      "inputs": "最终源码冻结、已审阅安全runtime、Host+全部worker/runtime、7z、release-materials、标准/便携候选。",
+      "steps": [
+        "先保全旧artifacts/worker/release/materials，在包含脏源码的隔离副本构建，不从干净HEAD丢掉改动。",
+        "解包NSIS和ZIP逐文件核对；如存在Tauri bundle类型差异，只接受已证实唯一偏移，签名后另按实际签名核验。",
+        "两个包内Worker分别跑v2，实际EXE用独立数据目录冒烟，Release缺依赖不回退源树。"
+      ],
+      "acceptance": [
+        "源码、Host、Engine、runtime、7z、材料与当前候选一致，错误/混入旧载荷能被检测。",
+        "新包有独立SHA清单和来源证据，旧包完整保留；构建通过不冒充GUI/安装验收。"
+      ],
+      "evidence": [
+        "candidate-files.json",
+        "unpacked-payload-manifests.json",
+        "source-package-parity.json",
+        "package-native-v2.json",
+        "SHA256SUMS.txt"
+      ],
+      "targets": [
+        "scripts/build-desktop.ps1",
+        "scripts/prepare-desktop.ps1",
+        "scripts/collect-release-materials.mjs",
+        "apps/desktop-host/tauri.conf.json"
+      ],
+      "status": "planned",
+      "requiresPassed": [
+        "DET-004",
+        "DET-049",
+        "DET-050"
+      ],
+      "casePrerequisites": [
+        "本项指修复后拟发行的新候选，最终基线和安全依赖门禁必须通过。检测当前已知缺陷版本的GUI用CMD-13，不等待本项。"
+      ]
+    },
+    {
+      "id": "DET-052",
+      "stream": "H",
+      "title": "Windows干净机与WebView2安装矩阵",
+      "priority": "P1",
+      "owner": "qa-inspector",
+      "environment": "Windows 10/11 x64干净VM",
+      "mode": "原生环境验收",
+      "dependsOn": [
+        "DET-051"
+      ],
+      "commands": [],
+      "basis": "开发机已有SDK和WebView2，不能证明普通用户首次运行；标准包与离线包路径不同。",
+      "inputs": "Windows10/11代表版本、标准用户、无Node/.NET SDK；WebView2已有/缺失、联网/离线，标准/离线NSIS与便携包。",
+      "steps": [
+        "每个基础镜像保存快照、OS补丁与运行时清单；安装/启动候选，记录下载与缺依赖行为。",
+        "标准包无WebView2且断网应清楚失败；离线包应不依赖联网完成前置安装；便携缺WebView2给出可操作提示。",
+        "跑小型正常/加密/缺卷流程并核对源/成品/退出，不只看窗口出现。"
+      ],
+      "acceptance": [
+        "无开发环境亦可按声明运行；所有依赖和联网要求与提示一致。",
+        "每个必需环境有实际结果；没有VM时该门禁blocked，本机解包不能替代。"
+      ],
+      "evidence": [
+        "clean-machine-matrix.json",
+        "vm-snapshots.json",
+        "install-and-launch-logs/",
+        "native-smoke-files.json"
+      ],
+      "targets": [
+        "README.md",
+        "scripts/build-desktop.ps1",
+        "apps/desktop-host/installer.nsi",
+        "apps/desktop-host/tauri.conf.json"
+      ],
+      "status": "planned",
+      "requiresPassed": [
+        "DET-051"
+      ]
+    },
+    {
+      "id": "DET-053",
+      "stream": "H",
+      "title": "安装、真实版本升级、卸载和回退",
+      "priority": "P1",
+      "owner": "qa-inspector / rust-dev",
+      "environment": "同机独立产品 + 干净VM正式产品身份",
+      "mode": "安装生命周期验收",
+      "dependsOn": [
+        "DET-026",
+        "DET-051"
+      ],
+      "commands": [
+        "CMD-11"
+      ],
+      "basis": "已有OpenUnpackAudit独立产品的本机安装/重复安装/卸载证据，不是正式产品跨版本验收。",
+      "inputs": "冻结旧版和新版候选；合成vault/历史/待恢复publication/已发布成品；数据目录与安装目录冲突样本。",
+      "steps": [
+        "先复用独立产品检测脚本，匹配唯一ProductName、同一NSIS解包载荷及新EvidenceDirectory。",
+        "在快照VM以正式产品身份安装旧版建合成数据，升级新版、重复安装、卸载保留数据并重新安装。",
+        "回退前核对schema向后兼容；不兼容时通过旧版应用+匹配的合成数据快照一起恢复，拒绝旧版静默重写新schema。"
+      ],
+      "acceptance": [
+        "升级和卸载按约定保留vault、历史、恢复状态、源与成品；程序文件无不当残留。",
+        "安装不落入数据目录或沿链接误清理；回退恢复的应用/数据版本匹配，不破坏新数据。"
+      ],
+      "evidence": [
+        "audit-install-results.json",
+        "production-upgrade-matrix.json",
+        "data-before-after.json",
+        "rollback-proof.json"
+      ],
+      "targets": [
+        "scripts/verify-installer-isolated.ps1",
+        "apps/desktop-host/installer.nsi",
+        "crates/infrastructure/tests/migration_regressions.rs"
+      ],
+      "status": "planned",
+      "requiresPassed": [
+        "DET-051"
+      ],
+      "casePrerequisites": [
+        "本机独立审计产品不依赖干净VM。正式产品跨版场景需要DET-052对应VM和快照，但其余环境格不必全通过。"
+      ]
+    },
+    {
+      "id": "DET-054",
+      "stream": "H",
+      "title": "实际分发Host和Setup的正式签名",
+      "priority": "P1",
+      "owner": "qa-inspector / 发行负责人",
+      "environment": "可信证书或签名服务",
+      "mode": "正式发行门禁",
+      "dependsOn": [
+        "DET-051"
+      ],
+      "commands": [
+        "CMD-11"
+      ],
+      "basis": "既有Host/Setup为NotSigned，门禁正确失败；缺证书是发行条件缺口，不等同功能缺陷。",
+      "inputs": "正式发行者身份/指纹、最终便携Host、安装包内Host、最终Setup及每次签名后字节。",
+      "steps": [
+        "先核对bundle处理完成，再由有权发行流程签名各实际分发对象；不创建自签证书冒充正式签名。",
+        "执行Authenticode Valid、CodeSigning EKU、预期指纹与信任链检查，并对错指纹/未签名/篡改负例验证拒绝。",
+        "签名后重新解包/核验实际Host并重算所有分发摘要；不沿用未签名SHA。"
+      ],
+      "acceptance": [
+        "实际分发对象签名有效且匹配可信发行者，包内也通过检查。",
+        "证书/服务不可用则blocked，不能用16项合成策略检查或一次NotSigned预期失败替代发行通过。"
+      ],
+      "evidence": [
+        "authenticode-final.json",
+        "publisher-policy-negative-cases.json",
+        "signed-payload-manifests.json",
+        "SHA256SUMS-signed.txt"
+      ],
+      "targets": [
+        "scripts/verify-release-signatures.ps1",
+        "scripts/test-release-validation.ps1",
+        "scripts/build-desktop.ps1"
+      ],
+      "status": "planned",
+      "requiresPassed": [
+        "DET-051"
+      ]
+    },
+    {
+      "id": "DET-055",
+      "stream": "H",
+      "title": "源码重建、许可证、秘密与CI遗漏",
+      "priority": "P1",
+      "owner": "qa-inspector / scout",
+      "environment": "源码ZIP隔离副本 / CI可用时",
+      "mode": "自动 / 构建审计",
+      "dependsOn": [
+        "DET-051"
+      ],
+      "commands": [
+        "CMD-10",
+        "CMD-12"
+      ],
+      "basis": "本地打包通过不证明源码ZIP可重建或远程CI真实执行；新增计划不得混入个人数据。",
+      "inputs": "最终源码ZIP、Cargo/npm锁文件、7-Zip来源、runtime notice、Windows workflow、隔离工具链。",
+      "steps": [
+        "从源码ZIP新目录按文档准备/构建并运行最小原生管线；核对必需文件和被误排除测试样本。",
+        "对解出的源码运行audit-source，对材料运行audit-release-materials；不对含.git/artifacts的工作区根直接跑源码包审计。",
+        "核对锁版本、公告扫描、完整测试/ignored分派、CI超时和失败证据保留；无远程运行证据时仅记本地模拟。"
+      ],
+      "acceptance": [
+        "源码包可依声明重建并执行核心流程；无密码库、数据库、私钥、凭据或构建缓存。",
+        "许可证/来源文件逐项对应实际组件；CI配置存在与CI跑过分开记录。"
+      ],
+      "evidence": [
+        "source-rebuild.log",
+        "source-audit.json",
+        "materials-audit.json",
+        "ci-coverage-matrix.json"
+      ],
+      "targets": [
+        "scripts/package-source.ps1",
+        "scripts/audit-source.mjs",
+        "scripts/audit-release-materials.mjs",
+        ".github/workflows/windows.yml",
+        "THIRD_PARTY_NOTICES.md"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "DET-056",
+      "stream": "H",
+      "title": "统一结案、风险排序与修复闭环",
+      "priority": "P0",
+      "owner": "qa-inspector → 项目负责人",
+      "environment": "全部可用证据",
+      "mode": "独立复核 / 报告",
+      "dependsOn": [
+        "DET-006",
+        "DET-011",
+        "DET-021",
+        "DET-022",
+        "DET-037",
+        "DET-044",
+        "DET-049",
+        "DET-050"
+      ],
+      "commands": [],
+      "basis": "检测完成、缺陷修复和正式发行是不同结论；不能让大批通过数淹没数据安全失败与外部blocked。",
+      "inputs": "DET-001–055 每项及子场景结果，runId对应的输入摘要和原始证据；需求→用例→命令→证据映射。",
+      "steps": [
+        "逐项核对计划任务实际执行/未执行/阻塞，不把依赖已完成等同本项已完成；其他任务未结束时本项不能结案。",
+        "按严重度、可复现性、用户影响、根因置信度和修复范围输出缺陷；历史已修、当前失败、待复现、未覆盖分别列。",
+        "修复另建明确任务，冻结修复版本，先重放失败样本再跑受影响与最终全量；由另一检查者复核后关闭。"
+      ],
+      "acceptance": [
+        "每个pass有完整证据；数据丢失/误覆盖/秘密泄漏/假成功/不可恢复等零容忍问题未关闭不得判系统检测通过。",
+        "检测报告可完整交付但系统仍needs changes；本机通过与正式发布通过分别给结论，任何必需环境blocked保留。"
+      ],
+      "evidence": [
+        "requirements-evidence-matrix.json",
+        "findings.md",
+        "summary.json",
+        "release-blockers.md",
+        "regression-followups.json"
+      ],
+      "targets": [
+        "docs/acceptance-checklist.md",
+        "docs/dependency-security-report-2026-10-17.md",
+        "docs/plans/2026-10-17-system-detection-tasks.json"
+      ],
+      "status": "planned",
+      "requiresResultRange": "DET-001..DET-055"
+    }
+  ],
+  "dependencyPolicy": {
+    "dependsOn": "默认仅要求取得相关核心场景的输入或可审阅结果，不要求整个任务通过。单项失败不应阻止其他独立扫描；扩展环境缺失仅阻塞对应子场景。",
+    "requiresPassed": "仅列真正需要通过的前置；未列即为空。所有有写入或故障注入的场景均先通过DET-001输入/对象归属核验。",
+    "casePrerequisites": "子场景条件单独判断；不得把第二账户、HDD、VHD或完整分卷矩阵扩展为其他核心场景的强制前置。",
+    "finalReport": "DET-056必须取得DET-001至DET-055全部任务及子场景终态；关键dependsOn数组不是全量结案清单。报告可包含blocked，系统通过及正式发布仍须满足各自必需门禁。"
+  }
+}

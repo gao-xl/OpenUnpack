@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "OpenUnpack Web Assistant",
+  "version": "1.0.0",
+  "description": "Send downloaded archives to OpenUnpack Daemon automatically and monitor progress.",
+  "permissions": [
+    "contextMenus",
+    "notifications",
+    "storage",
+    "downloads"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:*/*",
+    "http://localhost:*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "OpenUnpack Status"
+  }
+}

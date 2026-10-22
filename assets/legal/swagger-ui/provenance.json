@@ -1,0 +1,34 @@
+{
+  "version": "5.32.6",
+  "files": [
+    {
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "path": "LICENSE"
+    },
+    {
+      "sha256": "0d20d1adef18aee3f40dd258172155521ce702ac445cb5f7b7d60ed32dad2fb2",
+      "path": "NOTICE"
+    }
+  ],
+  "license": "Apache-2.0",
+  "source": "https://github.com/swagger-api/swagger-ui/archive/refs/tags/v5.32.6.zip",
+  "archiveSha256": "b3c07e091559b59a833f66547eb1fc18f2896f96e3f1f953e2f1efb328aa3394",
+  "component": "Swagger UI",
+  "vendoredCrateVersion": "0.2.0",
+  "repository": "https://github.com/swagger-api/swagger-ui",
+  "vendoredCrate": "utoipa-swagger-ui-vendored",
+  "assets": [
+    {
+      "sha256": "ca238f7d7c2cf4480c1e77a9c3b9da915ab216e96ffd354e69076560c650c6de",
+      "path": "swagger-ui.css"
+    },
+    {
+      "sha256": "4b5a9b35a1adf37f00d39c0bae23cdb37007e2946240ef035137cc85b4d55349",
+      "path": "swagger-ui-bundle.js"
+    },
+    {
+      "sha256": "38f7334300f524e1d456b1c5f6ec45383316283c257444aa9453143fdb434c73",
+      "path": "swagger-ui-standalone-preset.js"
+    }
+  ]
+}

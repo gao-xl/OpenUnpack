@@ -1,0 +1,45 @@
+{
+  "runId": "<唯一轮次>",
+  "taskId": "DET-011",
+  "caseId": "DET-011-03",
+  "status": "planned",
+  "evidenceLevel": "nativeCoreWorker",
+  "startedAt": null,
+  "finishedAt": null,
+  "environment": {
+    "os": null,
+    "filesystem": null,
+    "topologyId": null,
+    "toolVersions": {}
+  },
+  "inputs": {
+    "sourceManifestSha256": null,
+    "binaryManifestSha256": null,
+    "fixtureManifestSha256": null
+  },
+  "command": null,
+  "cwd": null,
+  "exitCode": null,
+  "counts": {
+    "passed": null,
+    "failed": null,
+    "ignored": null,
+    "skipped": null
+  },
+  "expected": [
+    "Unsupported不得被CRC抢救吞掉"
+  ],
+  "observed": [],
+  "assertions": [
+    {
+      "name": "sourceUnchanged",
+      "passed": null,
+      "evidence": null
+    }
+  ],
+  "evidence": [],
+  "limitations": [],
+  "blocker": null,
+  "findingId": null,
+  "rerunOf": null
+}

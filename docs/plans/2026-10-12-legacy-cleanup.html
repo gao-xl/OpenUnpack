@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenUnpack 旧文件清理与退役方案</title>
+  <style>
+    :root{color-scheme:light;--ink:#183333;--muted:#526665;--line:#d7e2df;--paper:#fff;--bg:#f3f6f4;--accent:#16685c;--warn:#85501a}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.75 system-ui,"Microsoft YaHei",sans-serif}
+    main{max-width:1120px;margin:auto;padding:36px 24px 72px}h1{font-size:32px;line-height:1.4;margin:8px 0 12px}h2{font-size:23px;margin:0 0 14px}h3{font-size:18px;margin:12px 0 6px}p{margin:8px 0 14px}a{color:var(--accent);overflow-wrap:anywhere}
+    header,section{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:24px;margin:16px 0}header{border-top:5px solid var(--accent)}nav{display:flex;flex-wrap:wrap;gap:10px 20px;margin:20px 0}nav a{text-decoration:none;font-size:14px}.eyebrow,.muted{color:var(--muted);font-size:14px}
+    .note{background:#eef6f2;border-left:4px solid var(--accent);padding:12px 16px;margin:16px 0}.caution{background:#fbf4e9;border-left-color:var(--warn)}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.card{border:1px solid var(--line);padding:16px;border-radius:8px}.card p{margin-bottom:0;font-size:14px}
+    .scroll{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:14px;margin:12px 0}th,td{padding:12px;vertical-align:top;text-align:left;border:1px solid var(--line)}th{background:#edf3ef}code{font:13px/1.6 ui-monospace,Consolas,monospace;background:#edf2ef;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#edf2ef;padding:16px;border-radius:8px;font-size:13px}pre code{padding:0}ul,ol{padding-left:23px}li{margin:8px 0}.pill{display:inline-block;background:#e7f2ec;color:var(--accent);padding:3px 10px;border-radius:20px;font-size:13px}
+    @media(max-width:760px){main{padding:18px 12px 40px}header,section{padding:18px}h1{font-size:26px}.cards{grid-template-columns:1fr}th,td{padding:9px;min-width:120px}}
+    @media print{body{background:#fff}main{max-width:none;padding:0}header,section{border-radius:0;break-inside:avoid}nav{display:none}a{color:inherit}table{font-size:11px}h1{font-size:25px}}
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">OpenUnpack · 2026-10-12 · 基于当前未提交工作区的只读核查</div>
+    <h1>旧文件清理与退役方案</h1>
+    <p>目标是让活动目录、构建依赖、发布包和状态文档保持一致：可再生成的文件退出版本管理，历史材料可恢复，废弃实现没有活动调用方。仍在运行的生产代码必须完成行为迁移后才能退役。</p>
+    <span class="pill">本次交付为方案</span>
+    <nav aria-label="目录">
+      <a href="#scope">范围</a><a href="#decisions">决策</a><a href="#current">当前情况</a><a href="#target">完成状态</a><a href="#phases">执行顺序</a><a href="#qa">验证</a><a href="#done">验收标准</a><a href="#sources">依据</a>
+    </nav>
+  </header>
+
+  <section id="scope">
+    <h2>1. 范围与边界</h2>
+    <p>工作区：<code>C:\Users\im\Documents\ChatGPT\批量解压缩</code>。包含已删除旧源码的引用核销、开发临时材料归档、生成文件退出 Git、文档同步、发布包排除规则，以及 Rust Core 后续退役门槛。</p>
+    <ul>
+      <li>日常清理不改业务行为，不增加设置，不切换任务协调器，不提交、推送或发布。</li>
+      <li>密码库、任务库、WAL、迁移备份、源压缩包和可恢复任务工作目录均不属于普通旧文件清理范围。</li>
+      <li>保留当前全部未提交修改。不得使用全量重置或不加审查的 Git 清理命令。</li>
+      <li>历史日志和失败截图先建索引、归档，再从活动目录移出；活动会话仍引用的材料保留原位。</li>
+    </ul>
+  </section>
+
+  <section id="decisions">
+    <h2>2. 推荐决策与待确认项</h2>
+    <div class="cards">
+      <div class="card"><h3>历史材料放在哪里？</h3><p>推荐外置到 <code>C:\Users\im\Documents\ChatGPT\OpenUnpack-Archive\2026-10-12\</code>，按清理批次保存归档、摘要和原路径索引。执行者先核对该绝对目录及所有父路径，不覆盖现有批次。<a href="#phases">执行步骤</a></p></div>
+      <div class="card"><h3>缓存什么时候删？</h3><p>确认使用它的构建已经结束后再删。默认保留正在使用的工具链、官方 7z 组件及当前候选；本次无需重新下载依赖。<a href="#environment">环境边界</a></p></div>
+      <div class="card"><h3>Rust Core 是否一起删？</h3><p>当前保留；它仍是生产实现。完整退役另开迁移阶段，完成新链路对等与旧任务恢复验收后才删除。技术执行者负责引用核销，用户决定迁移是否纳入当前版本。<a href="#retire">退役门槛</a></p></div>
+    </div>
+    <p class="muted">上述默认方案足够完成日常清理。若范围扩展到永久销毁历史材料或操作个人数据，需要另行明确保留范围；本方案不执行这些动作。</p>
+  </section>
+
+  <section id="sources">
+    <h2>3. 已核查依据</h2>
+    <p>以下结论来自本次文件、引用和进程查询，不把早期报告状态当成当前事实。未运行删除、迁移、原生界面或新安装包验收。</p>
+    <ul>
+      <li><a href="../../Cargo.toml">Cargo 工作区</a>、<a href="../../OpenUnpack.sln">.NET Solution</a>、<a href="../../src/OpenUnpack.Worker/OpenUnpack.Worker.csproj">Worker 引用</a>、<a href="../../tests/OpenUnpack.Tests/OpenUnpack.Tests.csproj">测试引用</a>。</li>
+      <li><a href="../../apps/desktop-host/Cargo.toml">Host 依赖</a>、<a href="../../apps/desktop-host/src/lib.rs">Host 入口</a>、<a href="../../crates/infrastructure/Cargo.toml">Infrastructure 依赖</a>及 Vault / Worker / SQLite 适配器。</li>
+      <li><a href="../../.gitignore">忽略规则</a>、Git 跟踪清单、<a href="../../scripts/package-source.ps1">源码打包白名单</a>、<a href="../../scripts/audit-source.mjs">源码包审计</a>、<a href="../../scripts/build-desktop.ps1">桌面构建</a>与许可证收集脚本。</li>
+      <li><a href="../status-ledger-2026-10-11.md">当前状态台账</a>、<a href="../refactoring-plan-final.md">重构终态方案（历史依据）</a>、<a href="../../README.md">README</a>及 <code>.pi/agents</code>、<code>.pi/skills/openunpack-dev</code>、<code>.pi/prompts</code>。</li>
+      <li>本地目录核查：四个带日期的 <code>_workspace_*</code>、<code>gen-qa.cjs</code>、<code>save_scout.py</code> 和模板图标；PID 20220 / 30948 本次仍存在，进程创建时间均为 2026-10-11。进程归属未进一步确认。</li>
+    </ul>
+  </section>
+
+  <section id="current">
+    <h2>4. 当前旧文件与依赖分类</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>对象</th><th>本次确认</th><th>处置</th></tr></thead>
+      <tbody>
+        <tr><td><code>src/OpenUnpack.Core/</code>、<code>src/OpenUnpack.Desktop/</code></td><td>目录已不存在；旧源码删除仍未提交；Worker 与 .NET 测试引用已切换到 Engine。</td><td>核销 README / 开发指引中的活动引用；保留 Git 历史。无需重复删目录。</td></tr>
+        <tr><td><code>crates/core/</code></td><td>Host 仍调用其 Coordinator；Infrastructure 的 Vault、Worker、数据库租约仍借用它。</td><td>保留。完成 <a href="#retire">迁移阶段</a> 后才可退役。</td></tr>
+        <tr><td><code>_workspace_20261010_215129/</code>、<code>_workspace_20261011_073507/</code>、<code>_workspace_20261011_093042/</code>、<code>_workspace_20261011_120014/</code></td><td>包含多轮侦察、开发、审查记录；Harness 明确保留工作区报告作审计追踪。</td><td>结束的批次打包归档并记录原路径；当前 <code>_workspace/</code> 留在原位。不能作为空缓存直接删除。</td></tr>
+        <tr><td><code>gen-qa.cjs</code>、<code>save_scout.py</code></td><td>前者只有 ready 输出；后者包含历史报告生成内容；目前未找到正常构建/测试入口引用。</td><td>归档后移出根目录；执行前复查工具配置和当前会话，避免仍有生成任务使用。</td></tr>
+        <tr><td><code>target/</code>、<code>bin/obj</code>、<code>dist</code>、<code>*.tsbuildinfo</code></td><td>可由构建再生成。<code>apps/desktop-ui/tsconfig.tsbuildinfo</code> 虽已忽略，仍受 Git 跟踪。</td><td>停止使用对应路径的构建后清理；缓存退出 Git 跟踪并补防回流检查。</td></tr>
+        <tr><td>旧候选包、日志、截图、<code>artifacts/</code></td><td>包含唯一的验证和失败证据；部分候选早于最新修复。</td><td>按摘要、源码快照与验证状态建索引；保留当前候选和恢复材料；旧批次归档。</td></tr>
+        <tr><td>Android / iOS / 其他模板图标</td><td>当前发布目标为 Windows NSIS；仍有跨平台模板资源。</td><td>核查默认图标与构建使用后缩小资源集；当前 Windows 必需图标保留。不能只按文件名删除。</td></tr>
+        <tr><td>README、台账、Harness 指引</td><td>README / 部分代理指引仍称旧 C# Core 存在；台账第 4 节称归档浏览未交付，第 9 节已经交付。</td><td>更新活动说明；历史报告保留原记录并添加状态入口，避免篡改历史证据。</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="target">
+    <h2>5. 清理后的目标状态</h2>
+    <ol>
+      <li>活动目录只含当前源码、必要资源、正式脚本、当前说明和仍在使用的开发配置。</li>
+      <li>每个移除对象都有原路径、原因、引用检查、文件摘要、归档位置和恢复方法。</li>
+      <li>生成文件允许在构建后重新出现，但不再成为 Git 改动，也不进入源码发布包。</li>
+      <li>归档材料有一个统一索引；当前候选包只有一个明确入口，记录实际源码与全部组件摘要。</li>
+      <li>发布包没有开发工作区、旧二进制、个人数据库、临时清单或未批准资源。</li>
+      <li>活动说明不会继续让开发者寻找不存在的 C# Core；当前 Rust Core 的保留原因写清楚。</li>
+    </ol>
+  </section>
+
+  <section id="path">
+    <h2>6. 推荐路线与取舍</h2>
+    <p>采用“先建可恢复清单 → 归档历史材料 → 移除生成文件的跟踪与活动引用 → 干净构建 → 验证发布包”的路线。它可以先完成日常旧文件整理，再独立完成 Rust Core 的行为迁移。</p>
+    <p>按时间或文件名批量永久删除，会误伤审查证据、当前 Worker 组件或恢复材料。仅补忽略规则也不能移除已经受 Git 跟踪的文件。两种做法都无法满足本方案的完成标准。</p>
+  </section>
+
+  <section id="phases">
+    <h2>7. 执行阶段与先后依赖</h2>
+    <h3>P0 · 记录与备份（必须先完成）</h3>
+    <ul>
+      <li>记录当前提交、已暂存/未暂存差异、未跟踪的待清理文件，以及构建进程的 PID、创建时间和目录归属。</li>
+      <li>生成 <code>cleanup-manifest.json</code>：<code>path / category / reason / references / sha256 / bytes / tracked / archivePath / disposition / verifiedAt</code>。目录按文件逐项登记。</li>
+      <li>把清理清单内的历史材料和将修改的说明文件备份到外置批次目录；解开抽查并核对摘要。真实密码与任务数据不复制进源码归档。</li>
+      <li>所有路径先转为绝对路径并核对边界；拒绝目录联结、符号链接及其他越界重解析路径。不覆盖既有归档。</li>
+    </ul>
+    <h3>P1 · 引用核销与归档（P0 后；只读引用核查可分组进行，修改串行）</h3>
+    <ul>
+      <li>检查源码导入、Cargo / Solution / project references、CI、构建/打包脚本、Harness 和文档链接。</li>
+      <li>归档已结束的四个带日期工作区和临时报告脚本；记录原路径映射。保留当前 <code>_workspace/</code>、<code>AGENTS.md</code>、<code>.pi</code> 和仍使用的开发配置。</li>
+      <li>更新 README、台账和 Harness 的活动结构说明；历史报告保留日期、结论及后续修复链接。</li>
+      <li>审查平台图标引用后整理未使用模板资源；正式 7z.dll、工具链及测试夹具的来源和许可保持完整。</li>
+    </ul>
+    <h3>P2 · 生成文件与进程（先确认归属；不得与对应构建并行）</h3>
+    <ul>
+      <li>确认 PID 20220 / 30948 属于已结束的本项目任务后终止对应进程树；仅凭 PID 或进程名不足以批准终止。</li>
+      <li>对具体清单中的缓存目录使用 PowerShell 原生删除，逐个核对解析后的绝对路径；拒绝以 Git、项目根或个人数据目录为递归删除目标。</li>
+      <li>将 <code>apps/desktop-ui/tsconfig.tsbuildinfo</code> 从 Git 索引移除，保留忽略规则；该操作仅针对这个缓存文件，记录并保留其他暂存内容。</li>
+      <li>独立设置构建输出目录；不清空其他会话仍占用的 target，不为了清理重新下载整个 node_modules。</li>
+    </ul>
+    <h3>P3 · 阻止回流（P1 / P2 后）</h3>
+    <ul>
+      <li>收紧源码包与资料包的包含清单：活动源码和当前说明进入包，外置归档、开发报告、旧候选及生成缓存不进入包。</li>
+      <li>增加跟踪清单检查：<code>*.tsbuildinfo</code>、构建缓存、已退役工程不可重新进入版本管理；历史文档提到旧路径允许保留，活动代码和构建引用不得保留。</li>
+      <li>刷新当前候选索引，标明旧候选对应的源码、测试和淘汰原因，不重命名旧成功记录冒充新包验证。</li>
+    </ul>
+    <h3>P4 · 验证与发布绑定（清理批次完成后）</h3>
+    <ul>
+      <li>在独立目录从已审查源码快照重建，运行与改动范围匹配的构建/测试；新包需补真实启动与核心路径验收。</li>
+      <li>逐项记录“已归档 / 已删除 / 仍使用 / 待迁移 / 已验证”，清单与磁盘、Git 状态、发布包内容相互核对。</li>
+      <li>本次方案不做提交。执行清理后，由后续已授权发布流程仅纳入审查过的文件，记录最终提交并重建候选。</li>
+    </ul>
+    <h3 id="retire">P5 · Rust Core 完整退役（独立工程；不属于日常文件删除）</h3>
+    <ol>
+      <li>把生产用例逐项迁到 Application：调度、Worker 事件、嵌套、并发资源预算、发布/恢复、成功事件、快照、速度与取消。</li>
+      <li>将 Vault 格式与持久化、WorkerClient / manifest 安全处理、数据库租约等适配能力落实到目标模块；移除 Infrastructure 对 Core 的借用，确保只保留一个写入实现。</li>
+      <li>迁移旧任务、journal、密码库和备份兼容测试；建立新链路与当前 Core 的行为对等证据，保留数据恢复/回退路径。</li>
+      <li>Host 切换到新链路并通过真实桌面、故障恢复和安装升级验收；迁移中不得让两套协调器同时写同一库。</li>
+      <li>最终将 <code>crates/core</code> 从依赖、工作区成员、脚本与活动文档中移除；仅在没有生产调用、测试借用或未迁移恢复能力时删除源码。</li>
+    </ol>
+    <p class="note caution">P5 的调用链与数据变化必须使用既有重构终态方案另行展开实施。当前可以完整完成 P0–P4 的文件整理，但不能把它报告为 Rust Core 已退役。</p>
+  </section>
+
+  <section id="impact">
+    <h2>8. 文件与数据影响</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>阶段</th><th>预期涉及文件</th><th>影响</th></tr></thead>
+      <tbody>
+        <tr><td>日常清理</td><td><code>.gitignore</code>、<code>README.md</code>、<code>docs/status-ledger-2026-10-11.md</code>、<code>.pi/agents/{scout,worker-dev}.md</code>、<code>.pi/skills/openunpack-dev/SKILL.md</code></td><td>活动说明与生成文件策略同步；原始历史记录归档。</td></tr>
+        <tr><td>打包和检查</td><td><code>scripts/package-source.ps1</code>、<code>scripts/audit-source.mjs</code>、<code>scripts/verify.ps1</code>；许可证资料收集脚本与当前候选索引需复核</td><td>保证源包和资料包仅包含批准材料；保留许可证要求。</td></tr>
+        <tr><td>Core 退役</td><td><code>Cargo.toml / Cargo.lock</code>、Host <code>Cargo.toml / src/lib.rs</code>、Application 用例/端口、Infrastructure Vault / Worker / SQLite、Core 测试</td><td>生产装配改变；旧格式、恢复行为与协议必须对等。不能随文件整理一并处理。</td></tr>
+        <tr><td>日常数据模型</td><td>只新增清理清单与归档索引</td><td>不修改用户任务、密码、备份或发布 journal 的格式。</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="environment">
+    <h2>9. 环境、配置与运行时临时文件</h2>
+    <p>所有文件清理在 PowerShell 内完成；直接使用 <code>-LiteralPath</code>，不把枚举到的路径交给另一种 shell 组合删除命令。执行前后记录具体清单与摘要。</p>
+    <p>当前源码打包已经使用白名单并排除构建目录和用户库，需在此基础上收敛归档材料。<code>CARGO_TARGET_DIR</code> 使用独立目录；只清理属于本次已结束任务的输出。当前候选、官方 7z 组件、许可证材料及项目内 SDK 不作为普通缓存整批删除。</p>
+    <p><code>inspect-*</code> 属于运行时工作目录，不适用按名称直接删除。后续安全回收需要所有权标记、Worker 进程身份和退出确认；未确认退出时保留，重启后再判断是否可以回收，并记录结果。该回收缺口应单独修复与测试。</p>
+  </section>
+
+  <section id="qa">
+    <h2>10. 验证矩阵</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>改动</th><th>必要验证</th><th>证据要求</th></tr></thead>
+      <tbody>
+        <tr><td>临时报告归档</td><td>引用查找、文档链接核对、归档解开与摘要比对</td><td>全部归档对象可按原路径恢复；活动 Harness 仍可生成报告</td></tr>
+        <tr><td>缓存退出 Git</td><td>Git 跟踪清单查询，前端构建后再次检查状态</td><td>构建可通过；缓存不再受跟踪或进入源包</td></tr>
+        <tr><td>图标整理</td><td>真实 Tauri 构建、窗口/托盘/安装器图标检查</td><td>使用的图标正确；没有缺失资源错误</td></tr>
+        <tr><td>源码和资料包收敛</td><td>源码包审计、许可证资料审计、独立目录重建</td><td>文件清单、摘要、测试结果和源码快照一致；构建不用未打包的旧文件</td></tr>
+        <tr><td>应用引用变化</td><td><code>scripts/verify.ps1 -WorkerProtocol</code>；独立的 <code>apps/desktop-ui/audit</code> 回归需另行运行</td><td>Host / Rust / C# / UI / 协议回归通过；记录源快照和执行日志</td></tr>
+        <tr><td>运行时目录回收</td><td>正常 inspect、Worker 异常、进程退出未确认、重启恢复、重复回收</td><td>不删除仍在使用的目录；确认退出后可回收；用户数据和源包不变</td></tr>
+        <tr><td>Rust Core 退役</td><td>新链路全套行为、恢复、升级/回退、原生套件与干净机安装</td><td>无 Core 活动依赖；旧数据可恢复；全新检出和打包程序可运行</td></tr>
+      </tbody>
+    </table></div>
+    <p>纯说明或归档整理无需重复运行全部慢测试。改变生产引用、构建资源或任务链时才扩大验证范围。原生界面验收仍需活动且解锁的 Windows 会话。</p>
+  </section>
+
+  <section id="done">
+    <h2>11. “完全处理”的完成标准</h2>
+    <ul>
+      <li>所有清单项都已核销，没有“删了一半但状态仍不明”的条目；归档摘要正确、恢复入口清楚。</li>
+      <li>已退役 C# 工程没有活动引用；缓存和旧工具不会回流进版本管理或发布包。</li>
+      <li>README、台账、Harness 与实际目录一致；历史文档明确日期与当前状态入口。</li>
+      <li>干净源码快照能独立构建；候选安装包包含同一快照的最新 Host / UI / Worker / Engine。</li>
+      <li>用户数据与可恢复任务保留；归档未泄入源码包或许可证资料包。</li>
+      <li>若范围包含 Rust Core，须追加 P5 的全部门槛；否则结果明确为“旧文件整理完成，Core 迁移待办”。</li>
+    </ul>
+  </section>
+
+  <section id="risks">
+    <h2>12. 风险与恢复</h2>
+    <ul>
+      <li><strong>误删尚在使用的文件：</strong>先确认引用、活动会话和进程身份；删除前备份清单内的文件，校验后才移除。</li>
+      <li><strong>越界或目录链接：</strong>逐项检查解析后的绝对路径和重解析标记，使用明确允许目录和 PowerShell 原生操作。</li>
+      <li><strong>归档失去证据链：</strong>保留原路径、批次、源码快照、摘要与验证状态；从索引恢复原位置并重新核查引用。</li>
+      <li><strong>误改已有暂存内容：</strong>清理提交只处理明确文件；记录前后 Git 状态，不批量暂存或重置。</li>
+      <li><strong>Core 迁移损坏恢复能力：</strong>保留旧格式读取、迁移前备份、当前可用二进制和 journal 回退证据；不同时运行两套写入者。</li>
+    </ul>
+    <p>日常清理恢复按清单逐项还原归档文件、说明改动及必要跟踪状态；生成缓存用重新构建恢复。架构/数据迁移的回退单独执行，不能用恢复文件名代替数据库与未完成发布记录核对。</p>
+  </section>
+
+  <section id="handoff">
+    <h2>13. 实施交接</h2>
+    <p><strong>推荐先执行 P0–P4：</strong>建清单和备份 → 归档已结束材料 → 核销活动引用 → 处理缓存跟踪 → 收紧打包 → 独立验证。这个阶段可以形成单独、可审查的清理结果。</p>
+    <p><strong>P5 单独排期：</strong>按行为对等和数据兼容迁移生产链，达到零依赖后删除 Rust Core。当前不能以“文件较旧”作为删除它的依据。</p>
+    <p class="muted">本方案文件已生成；尚未执行归档、删除、终止进程、迁移、提交或发布。执行时重新核查工作区漂移与并行会话。</p>
+  </section>
+</main>
+</body>
+</html>

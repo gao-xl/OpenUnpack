@@ -1,0 +1,301 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-22",
+  "project": "OpenUnpack",
+  "head": "cf6e34411c809d092c48ed2f4bdd4ab6160222c1",
+  "scope": "Plan only; no external publishing authorization",
+  "tasks": [
+    {
+      "id": "OS-01",
+      "priority": "P0",
+      "title": "权属与公开边界",
+      "owner": "项目所有者/审计",
+      "dependsOn": [],
+      "passCriteria": "完成已跟踪私有/第三方资料清单，逐项确认公开源码权属；疑问组件先替换或排除。",
+      "evidence": "private/source-ownership.json",
+      "status": "blocked"
+    },
+    {
+      "id": "OS-02",
+      "priority": "P0",
+      "title": "修正源码导出",
+      "owner": "构建维护者",
+      "dependsOn": [
+        "OS-01"
+      ],
+      "passCriteria": "补 CODE_OF_CONDUCT、必要 .sh/.bat/示例；docs 改显式公开清单；验证链接/敏感路径拒绝。",
+      "evidence": "source-export-manifest.json",
+      "status": "not_run"
+    },
+    {
+      "id": "OS-03",
+      "priority": "P0",
+      "title": "秘密与隐私审计",
+      "owner": "安全维护者",
+      "dependsOn": [
+        "OS-02",
+        "OS-05",
+        "OS-06"
+      ],
+      "passCriteria": "新导出全量扫描且打码，人工复核个人路径/历史/二进制/测试素材；未解释命中为0。",
+      "evidence": "private/source-secrets.json + review.md",
+      "status": "not_run"
+    },
+    {
+      "id": "OS-04",
+      "priority": "P0",
+      "title": "干净克隆重建",
+      "owner": "构建维护者/QA",
+      "dependsOn": [
+        "OS-03"
+      ],
+      "passCriteria": "完整生产图、资源、测试与文档引用齐全，脱离原工作区构建通过。",
+      "evidence": "clean-build-results.json",
+      "status": "not_run"
+    },
+    {
+      "id": "OS-05",
+      "priority": "P1",
+      "title": "公开文档与模板",
+      "owner": "文档维护者",
+      "dependsOn": [
+        "OS-01"
+      ],
+      "passCriteria": "README 中英文、SECURITY、贡献规范、Issue/PR 模板、事实边界和真实入口齐全。",
+      "evidence": "docs-review.md",
+      "status": "not_run"
+    },
+    {
+      "id": "OS-06",
+      "priority": "P0",
+      "title": "许可与精确物料",
+      "owner": "发行维护者",
+      "dependsOn": [
+        "OS-02"
+      ],
+      "passCriteria": "实际发行图与第三方 LICENSE/NOTICE/对应源码/SHA 一致；7-Zip 与 .NET 版本核验。",
+      "evidence": "release-materials/audit.json",
+      "status": "not_run"
+    },
+    {
+      "id": "CI-01",
+      "priority": "P1",
+      "title": "拆分无秘密 PR CI",
+      "owner": "构建维护者",
+      "dependsOn": [
+        "OS-04"
+      ],
+      "passCriteria": "格式/Clippy/架构/契约/单测/原生集成按职责拆分，Action 固定 SHA，失败保护 main。",
+      "evidence": ".github/workflows + run IDs",
+      "status": "not_run"
+    },
+    {
+      "id": "CI-02",
+      "priority": "P0",
+      "title": "受控候选与签名流水线",
+      "owner": "发行维护者",
+      "dependsOn": [
+        "CI-01"
+      ],
+      "passCriteria": "同一 sourceManifest/payloadSHA 贯穿构建、QA、签名、打包与发布，PR 无签名权限。 必须新增/验证只重打包已签固定载荷的入口或签名钩子；现build-desktop.ps1会tauri build，不能直接签后再调用。 先完成portable UNK与NSIS NSS两种Host标记，再分别签名；签后禁止任何marker补丁。解包验证每个自有PE签名/时间戳，维护unsigned→signed摘要映射，现unsigned字节验证器需扩展。",
+      "evidence": "pipeline-review.md",
+      "status": "not_run"
+    },
+    {
+      "id": "REL-01",
+      "priority": "P0",
+      "title": "当前0.1.0诊断：Rust普通用户全套",
+      "owner": "QA",
+      "dependsOn": [],
+      "passCriteria": "完整 workspace 与真实 HTTP 通过；ignored 单列；严格回收流程原断言通过；输入前后不变。",
+      "evidence": "_workspace/release-finalization-20261021/serial-results.json + serial-input-after-check.json",
+      "status": "blocked",
+      "currentEvidence": "最终串行全套尚未收尾，不计通过。 首次整套468/1/9及模块复跑5/5分别保留；显式HDD负载失败不因默认套件通过而关闭。"
+    },
+    {
+      "id": "REL-02",
+      "priority": "P0",
+      "title": "当前0.1.0诊断：重建候选",
+      "owner": "构建维护者",
+      "dependsOn": [],
+      "passCriteria": "Setup/portable/source 均为本次构建；自包含运行时与已验 Worker 一致；解包逐文件核验。",
+      "evidence": "package-candidate-result.json + package-verification.json",
+      "status": "passed",
+      "currentEvidence": "0.1.0新Setup/portable/source已生成；两包Worker198项、运行时、v2、物料与完整便携清单核对通过。仅本地诊断包，不代表公开源码审查或发版验收。"
+    },
+    {
+      "id": "REL-03",
+      "priority": "P0",
+      "title": "16 项真实原生窗口",
+      "owner": "UI/QA",
+      "dependsOn": [
+        "REL-05"
+      ],
+      "passCriteria": "完整普通用户候选和隔离数据下逐项独立证据；未执行、工具受限不计 passed。 必须绑定最终签名成品SHA；当前0.1.0诊断GUI结果不得转用。",
+      "evidence": "gui-acceptance.json",
+      "status": "blocked",
+      "currentEvidence": "0.1.0诊断候选为Medium，UIA主文档可读；截图/点击/激活恢复仍失败，16项blocked、0 passed。正式版本仍须重新独立验收。"
+    },
+    {
+      "id": "REL-04",
+      "priority": "P0",
+      "title": "Win10/11 干净机",
+      "owner": "QA/用户提供环境",
+      "dependsOn": [
+        "REL-05"
+      ],
+      "passCriteria": "安装/首次启动/升级/卸载/恢复/保留数据；WebView2 有无，普通用户与路径矩阵。 每个结果必须绑定最终签名产品/安装包SHA。",
+      "evidence": "clean-machine-matrix.json",
+      "status": "blocked"
+    },
+    {
+      "id": "REL-05",
+      "priority": "P0",
+      "title": "可信签名与签后复核",
+      "owner": "发行负责人/签名服务",
+      "dependsOn": [
+        "REL-09"
+      ],
+      "passCriteria": "真实发行者签名与时间戳；签后重打包/摘要/验证/最小 smoke；不修改现有正式门禁。 使用CI-02只打包固定已签载荷入口，禁止再次tauri build替换Host。",
+      "evidence": "release-signatures.json",
+      "status": "blocked",
+      "currentEvidence": "本轮实际Host与Setup均NotSigned；签名门禁失败。没有可用可信发行者身份。"
+    },
+    {
+      "id": "REL-06",
+      "priority": "P1",
+      "title": "物理盘/长时/DPI/辅助功能",
+      "owner": "QA",
+      "dependsOn": [
+        "REL-05"
+      ],
+      "passCriteria": "发布支持范围中相应项通过；未覆盖范围记录并调整公开承诺。",
+      "evidence": "extended-acceptance.json",
+      "status": "blocked",
+      "currentEvidence": "真实单归档HDD→SSD缓存→HDD、磁盘识别及跨卷移动通过；Debug Core HDD direct负载首组超时，D盘满忙，需Release Core/空闲盘对照。用户指定本轮先完成其他检测，HDD矩阵不再重跑、失败保留。DPI/辅助功能仍未完成。"
+    },
+    {
+      "id": "REL-07",
+      "priority": "P0",
+      "title": "同步 Beta 版本并冻结",
+      "owner": "发行维护者",
+      "dependsOn": [
+        "REL-01",
+        "OS-04",
+        "OS-05",
+        "CI-01"
+      ],
+      "passCriteria": "Cargo/Tauri/npm/.NET 映射明确，改版本后重新构建并验证，同一 Tag/源码/成品一致。 冻结后任何输入变化都使对应旧证据失效，重跑受影响检查。",
+      "evidence": "version-manifest.json",
+      "status": "not_run"
+    },
+    {
+      "id": "REL-08",
+      "priority": "P0",
+      "title": "SBOM/来源证明/资产清单",
+      "owner": "发行维护者",
+      "dependsOn": [
+        "OS-06",
+        "CI-02",
+        "REL-05",
+        "REL-07"
+      ],
+      "passCriteria": "最终签名资产 SHA、SBOM、对应源码、provenance 和说明全部一致。",
+      "evidence": "release-manifest.json",
+      "status": "not_run"
+    },
+    {
+      "id": "GH-01",
+      "priority": "P0",
+      "title": "确认 OWNER 与公开内容",
+      "owner": "用户",
+      "dependsOn": [
+        "OS-03",
+        "OS-04",
+        "OS-05",
+        "OS-06"
+      ],
+      "passCriteria": "审阅完整导出、真实维护人、仓库归属和可见性；明确批准对外公开。 所有通过证据sourceManifestSHA必须与待公开最终树相同；文档/模板变更也重扫并检查链接/构建影响。",
+      "evidence": "approval-record",
+      "status": "blocked"
+    },
+    {
+      "id": "GH-02",
+      "priority": "P1",
+      "title": "建仓/治理/安全入口",
+      "owner": "仓库管理员",
+      "dependsOn": [
+        "GH-01"
+      ],
+      "passCriteria": "新公共历史、受保护 main/tags、真实 CODEOWNERS、Issue/Discussions、私密漏洞报告入口。",
+      "evidence": "repository-settings-review.md",
+      "status": "not_run"
+    },
+    {
+      "id": "GH-03",
+      "priority": "P0",
+      "title": "Draft 与下载复核",
+      "owner": "发行维护者",
+      "dependsOn": [
+        "GH-02",
+        "REL-03",
+        "REL-04",
+        "REL-08"
+      ],
+      "passCriteria": "Draft 全套资产与说明齐备；GitHub 下载文件与本地最终清单一致。",
+      "evidence": "draft-review.json",
+      "status": "not_run"
+    },
+    {
+      "id": "GH-04",
+      "priority": "P0",
+      "title": "Beta 放行",
+      "owner": "用户/发行负责人",
+      "dependsOn": [
+        "GH-03"
+      ],
+      "passCriteria": "明确批准；Pre-release 标签，已知限制/签名状态/支持范围披露，数据安全项无失败。",
+      "evidence": "release-decision.md",
+      "status": "not_run"
+    },
+    {
+      "id": "MAINT-01",
+      "priority": "P1",
+      "title": "首月维护",
+      "owner": "维护者",
+      "dependsOn": [
+        "GH-04"
+      ],
+      "passCriteria": "每周分诊问题与依赖公告；先数据安全、后易用性；复现→修复→回归→补丁。 首个分诊回合和维护机制建立后即可评估Stable；例行维护持续执行，不强制等待整月。",
+      "evidence": "issue triage / changelog",
+      "status": "not_run"
+    },
+    {
+      "id": "MAINT-02",
+      "priority": "P0",
+      "title": "Stable 最终决策",
+      "owner": "用户/发行负责人",
+      "dependsOn": [
+        "REL-06",
+        "MAINT-01"
+      ],
+      "passCriteria": "G0–G6 全部满足且未决高风险问题为0；Beta反馈处理、签名/干净机/原生范围完整。",
+      "evidence": "stable-go-no-go.md",
+      "status": "not_run"
+    },
+    {
+      "id": "REL-09",
+      "priority": "P0",
+      "title": "公开版本候选构建",
+      "owner": "构建维护者",
+      "dependsOn": [
+        "REL-07",
+        "CI-02",
+        "OS-04"
+      ],
+      "passCriteria": "对冻结后的公开版本构建一次候选并记录源码/载荷清单；不复用0.1.0诊断包的验收结果。 对该冻结版本完成Rust/C#/UI/MCP/契约/协议及安全全套；所有证据必须绑定同一源码清单。",
+      "evidence": "public-candidate-manifest.json",
+      "status": "not_run"
+    }
+  ]
+}

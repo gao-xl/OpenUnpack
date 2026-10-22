@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "planId": "2026-10-19-full-functional-testing",
+  "status": "plan_validated_not_executed",
+  "counts": {
+    "schemaVersion": 1,
+    "planId": "2026-10-19-full-functional-testing",
+    "createdAt": "2026-10-19T05:04:29.448435+00:00",
+    "title": "OpenUnpack 全功能测试方案",
+    "scope": "Windows desktop + local API, current implemented features",
+    "executionStatus": "not_run",
+    "primaryCaseCount": 294,
+    "apiCommandCount": 42,
+    "apiBranchTemplateCount": 294,
+    "settingsFieldCount": 32,
+    "queueStateCount": 15,
+    "priorityCounts": {
+      "P0": 205,
+      "P1": 86,
+      "P2": 3
+    },
+    "moduleCounts": {
+      "BASE": 8,
+      "UI": 16,
+      "SCAN": 12,
+      "FMT": 16,
+      "NEST": 9,
+      "QUEUE": 18,
+      "CACHE": 12,
+      "OUT": 12,
+      "VAULT": 14,
+      "IMPORT": 12,
+      "BACKUP": 8,
+      "BROWSE": 8,
+      "TOOLS": 10,
+      "SET": 10,
+      "LANG": 9,
+      "API": 42,
+      "APIS": 18,
+      "REC": 14,
+      "SEC": 14,
+      "PERF": 10,
+      "REL": 14,
+      "REG": 8
+    },
+    "note": "方案仅设计；历史36/36单列；API分支是主项子场景，计数不得相加；参数/环境执行前展开。"
+  },
+  "validation": {
+    "caseIdsUnique": true,
+    "apiNamesAndScopesFromSource": 42,
+    "settingsMapped": 32,
+    "statesMapped": 15,
+    "htmlAnchorsValid": true,
+    "artifactLinksValid": true,
+    "externalRuntimeAssets": 0,
+    "csvJsonCountConsistent": true,
+    "productSourceAndIndexUnchangedDuringFinalGeneration": true,
+    "earlierConcurrentSourceChanges": [
+      "apps/desktop-host/gen/schemas/acl-manifests.json",
+      "apps/desktop-host/gen/schemas/desktop-schema.json",
+      "apps/desktop-host/gen/schemas/windows-schema.json",
+      "apps/desktop-ui/src/api.ts",
+      "apps/desktop-ui/src/i18n.ts",
+      "apps/desktop-ui/src/components/ApiSettingsPanel.tsx",
+      "apps/desktop-ui/src/components/ArchiveBrowser.tsx",
+      "apps/desktop-ui/src/components/BulkPasswordBar.tsx",
+      "apps/desktop-ui/src/components/HistoryPage.tsx",
+      "apps/desktop-ui/src/components/QueuePage.tsx",
+      "apps/desktop-ui/src/components/RulePreview.tsx",
+      "apps/desktop-ui/src/components/SettingsPage.tsx",
+      "apps/desktop-ui/src/components/shared.tsx",
+      "apps/desktop-ui/src/components/SourceCleanupSelect.tsx",
+      "apps/desktop-ui/src/components/ToolboxPage.tsx",
+      "apps/desktop-ui/src/locales/pages.ts"
+    ],
+    "protectedSourceFileCount": 265,
+    "browserInteractionChecked": {
+      "scope": "Plan artifact verification only, no product functional execution",
+      "browser": "in-app browser, 127.0.0.1 temporary preview; server stopped after review",
+      "checks": {
+        "renderedPrimaryCases": 294,
+        "initialVisibleCases": 294,
+        "API001SearchVisibleCases": 1,
+        "API001ExpandedBranches": 7,
+        "P0FilterVisibleCases": 205,
+        "languageFilterVisibleCases": 9,
+        "emptySearchVisibleCases": 0,
+        "emptyStateVisible": true,
+        "resetVisibleCases": 294,
+        "collapsedAfterReset": true,
+        "horizontalOverflow": false
+      },
+      "screenshot": "_workspace/full-test-plan-20261019/plan-preview.png",
+      "screenshotSha256": "a1cf6519f70c1a629c61fea33ac0de256a723101f06f545a8e38e84a429097f8",
+      "artifactHashesReverified": true,
+      "allPlannedTestsStillNotRun": true
+    }
+  },
+  "artifacts": [
+    {
+      "path": "docs/plans/2026-10-19-full-functional-testing.html",
+      "sha256": "133986d907032573521a885143510bd0ecaa17ae9f98348b0b9133a3619e0177",
+      "bytes": 562358
+    },
+    {
+      "path": "docs/plans/2026-10-19-full-functional-testing.md",
+      "sha256": "233a2432c91de0e9ec26664f960f39e13aa350b53e9c72765b570b54a5d1d09f",
+      "bytes": 378004
+    },
+    {
+      "path": "docs/plans/2026-10-19-full-functional-testing.cases.json",
+      "sha256": "4b09e33fb43e12388b3aae1a59db666cacd03c5eb6680e174c43a3095acac409",
+      "bytes": 525127
+    },
+    {
+      "path": "docs/plans/2026-10-19-full-functional-testing.cases.csv",
+      "sha256": "8c3a686d6bef30eb73e78759fb7a9f7f0f1835c03e9d48cdf8a23d76f222f560",
+      "bytes": 249793
+    },
+    {
+      "path": "docs/plans/2026-10-19-full-functional-testing.result-template.json",
+      "sha256": "e6e033993345da548e860e47964f975f7a01450bef968ee11050cdf2aec65c4d",
+      "bytes": 122953
+    }
+  ]
+}

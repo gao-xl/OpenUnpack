@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenUnpack 系统逻辑与使用体验全方位修复方案</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #183333;
+      --muted: #526665;
+      --line: #d7e2df;
+      --paper: #ffffff;
+      --bg: #f3f6f4;
+      --accent: #16685c;
+      --accent-hover: #104e45;
+      --warn: #85501a;
+      --danger: #a32a2a;
+      --info-bg: #eef6f2;
+      --warn-bg: #fbf4e9;
+      --danger-bg: #fdf2f2;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 16px/1.75 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    main { max-width: 1160px; margin: auto; padding: 36px 24px 72px; }
+    h1 { font-size: 32px; line-height: 1.35; margin: 8px 0 12px; }
+    h2 { font-size: 22px; margin: 0 0 14px; border-bottom: 2px solid var(--line); padding-bottom: 8px; color: var(--accent); }
+    h3 { font-size: 17px; margin: 16px 0 6px; }
+    p { margin: 8px 0 14px; }
+    a { color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
+    a:hover { text-decoration: underline; }
+    header, section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 24px;
+      margin: 20px 0;
+    }
+    header { border-top: 6px solid var(--accent); }
+    nav { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 20px 0 6px; }
+    nav a { font-size: 14px; font-weight: 500; }
+    .eyebrow { color: var(--muted); font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .pill {
+      display: inline-block;
+      background: #e7f2ec;
+      color: var(--accent);
+      padding: 3px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .pill-warn { background: #fdf3e5; color: var(--warn); }
+    .pill-danger { background: #fde8e8; color: var(--danger); }
+    .note { background: var(--info-bg); border-left: 4px solid var(--accent); padding: 12px 16px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+    .caution { background: var(--warn-bg); border-left: 4px solid var(--warn); padding: 12px 16px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+    .danger-box { background: var(--danger-bg); border-left: 4px solid var(--danger); padding: 12px 16px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin: 16px 0; }
+    .card { border: 1px solid var(--line); padding: 18px; border-radius: 8px; background: #fafcfb; }
+    .card h3 { margin-top: 0; font-size: 16px; }
+    .card p { margin-bottom: 0; font-size: 14px; }
+    .scroll { overflow-x: auto; margin: 14px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 10px 12px; vertical-align: top; text-align: left; border: 1px solid var(--line); }
+    th { background: #edf3ef; font-weight: 600; }
+    code { font: 13px/1.6 Consolas, "Fira Code", monospace; background: #edf2ef; padding: 2px 6px; border-radius: 4px; overflow-wrap: anywhere; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #22292f; color: #f8fafc; padding: 16px; border-radius: 8px; font-size: 13px; font-family: Consolas, monospace; }
+    pre code { background: transparent; color: inherit; padding: 0; }
+    ul, ol { padding-left: 22px; margin: 8px 0; }
+    li { margin: 6px 0; }
+    .tag { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-right: 4px; }
+    .tag-p0 { background: #ffe4e6; color: #9f1239; }
+    .tag-p1 { background: #fef3c7; color: #92400e; }
+    .tag-p2 { background: #e0f2fe; color: #075985; }
+    @media(max-width: 760px) {
+      main { padding: 16px 12px 40px; }
+      header, section { padding: 16px; }
+      h1 { font-size: 26px; }
+      .cards { grid-template-columns: 1fr; }
+      th, td { padding: 8px; font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">OpenUnpack · 工业级重构与交互重塑规划 · 2026-10-12</div>
+    <h1>系统底层与交互使用逻辑全方位修复方案</h1>
+    <p>针对架构双轨割裂、进程状态机失步、硬件与文件系统边界陷阱，以及三层弹窗轰炸、密码死胡同、卡死无法删除等体验顽疾，制定端到端工程级根治方案。</p>
+    <span class="pill">MVP开发专家团交付件</span>
+    <span class="pill pill-warn">涵盖架构(P0-P2)与交互UX</span>
+    <nav aria-label="目录导航">
+      <a href="#summary">方案总纲</a>
+      <a href="#arch-fixes">底层与架构逻辑根治</a>
+      <a href="#ux-fixes">使用交互逻辑重塑</a>
+      <a href="#feature-matrix">规划功能协同落地</a>
+      <a href="#implementation">四阶段推进路线</a>
+      <a href="#verification">质量门禁与验收指标</a>
+    </nav>
+  </header>
+
+  <section id="summary">
+    <h2>1. 方案背景与核心目标</h2>
+    <p>在经过多轮代码审计与场景推演后，OpenUnpack 暴露出了明显的“系统工程底座”与“日常桌面软件”两层割裂：</p>
+    <div class="cards">
+      <div class="card">
+        <h3>架构与系统层痛点</h3>
+        <p>1. <code>crates/core</code> 与 <code>application/infrastructure</code> 双轨并存，基础设施层反向依赖 Core；<br>
+        2. Worker 假定短进程，C# 端却按常驻服务设计状态机；<br>
+        3. 盲目全局并发导致机械盘磁头严重寻道崩盘；<br>
+        4. 杀软锁盘直接被判为不可逆 IoError。</p>
+      </div>
+      <div class="card">
+        <h3>交互与体验层痛点</h3>
+        <p>1. 添加文件引发“扫描中 → 检查结果 → 批次选项”三层 Modal 轰炸；<br>
+        2. 添加任务后不自动开始，用户误以为卡死；<br>
+        3. 密码错误后没有即时密码输入入口，被迫去密码库建档；<br>
+        4. 任务停止超时后由于保护锁阻断删除，造成界面假死。</p>
+      </div>
+      <div class="card">
+        <h3>修复目标与收益</h3>
+        <p>1. <strong>彻底切流</strong>：P5 退役 <code>crates/core</code>，统一到 DDD 干净分层；<br>
+        2. <strong>物理感知</strong>：同物理盘严格串行队列，跨物理盘放开并发；<br>
+        3. <strong>体验降噪</strong>：单文件拖入静默入队，即时密码弹窗一键解密，支持 5 秒超时强杀与强行移除。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="arch-fixes">
+    <h2>2. 底层系统与架构逻辑根治方案</h2>
+
+    <h3>2.1 [P0] 架构双轨切流与反向借用核销（实施 P5）</h3>
+    <p>彻底解决 <code>desktop-host</code> 依然运行单体 Core，而 <code>infrastructure</code> 反向依赖 Core 的架构死结。</p>
+    <ul>
+      <li><strong>迁移核心调度引擎</strong>：将 <code>crates/core/src/coordinator.rs</code> 的状态机与调度队列彻底迁移至 <code>crates/application/src/use_cases/coordinator.rs</code>，将内存任务状态持久化接口对接 <code>openunpack_application::TaskStore</code>（底层为 SQLite WAL）。</li>
+      <li><strong>迁移 IPC 客户端</strong>：将 <code>crates/core/src/worker.rs</code> 下沉至 <code>crates/infrastructure/src/worker/client.rs</code>，解除 <code>crates/infrastructure/Cargo.toml</code> 对 <code>crates/core</code> 的依赖项。</li>
+      <li><strong>Host 生产切流</strong>：修改 <code>apps/desktop-host/src/lib.rs</code>，直接实例化 <code>openunpack_application::TaskCoordinator</code>，注销对 <code>openunpack_core</code> 的全量引用，随后将 <code>crates/core</code> 从 Cargo 工作区中物理退役。</li>
+    </ul>
+
+    <h3>2.2 [P1] 物理磁盘感知与 I/O 调度器重构</h3>
+    <p>解决 HDD 机械硬盘在 4 并发解压时磁头寻道剧烈衰减（吞吐从 120MB/s 暴跌至 15MB/s）的物理逻辑缺陷。</p>
+    <ul>
+      <li><strong>物理驱动器识别</strong>：在 Windows 下通过调用 <code>IOCTL_STORAGE_GET_DEVICE_NUMBER</code> 或根据驱动器根路径获取物理盘 DeviceID（如 <code>\\.\PhysicalDrive0</code>、<code>PhysicalDrive1</code>）及媒体类型（HDD 旋转介质 vs SSD 固态闪存）。</li>
+      <li><strong>分区隔离队列</strong>：
+        <div class="note">
+          <strong>调度规则</strong>：同一个物理 HDD 驱动器上，<strong>强制限制并发度上限为 1</strong>（串行 FIFO 执行）；仅当源/目标处于不同的物理驱动器或 NVMe SSD 时，才允许按照 <code>Settings.concurrency</code> 启动并发。
+        </div>
+      </li>
+    </ul>
+
+    <h3>2.3 [P1] 杀毒软件排他锁（Sharing Violation）防御循环</h3>
+    <p>在 Windows 系统中，文件落盘关闭流瞬间会被 Windows Defender、360、火绒等实时拦截扫描，造成短时间文件无法读取。</p>
+    <ul>
+      <li>在 Worker 和 Host 中进行文件摘要计算、移动重命名和回读校验时，捕获 Windows <code>ERROR_SHARING_VIOLATION (0x20)</code> 和 <code>ERROR_LOCK_VIOLATION (0x21)</code>。</li>
+      <li>引入<strong>指数退避重试机制</strong>：初始等待 50ms，以 1.5 倍步长递增，最大重试 5 次（总窗口约 1.5 秒）。若在重试窗口内锁释放则静默恢复，不再将杀软临时扫描误判为 <code>IoError</code>。</li>
+    </ul>
+
+    <h3>2.4 [P1] 跨平台同名大小写冲突自适应重命名</h3>
+    <p>解决 Linux 归档中 <code>readme.txt</code> 与 <code>README.TXT</code> 在 Windows 下直接被系统判定为 <code>UnsafePath</code> 导致解压全面崩溃的问题。</p>
+    <ul>
+      <li>预检层（<code>SevenZipEngine.cs</code>）检测到路径仅大小写不同时，不抛出异常。</li>
+      <li>自动触发安全重命名规则：为冲突项追加自增序号后缀（如 <code>README (case-conflict-1).TXT</code>），并在 Manifest 记录映射关系，保证合法 Linux 包在 Windows 上能 100% 完整提取。</li>
+    </ul>
+
+    <h3>2.5 [P1] SSD 两阶段缓存空间 3 倍膨胀熔断保护</h3>
+    <ul>
+      <li>在启动启用缓存的任务前，进行<strong>两阶段全链路预检</strong>：<code>SSD可用空间 &gt;= 预估解压体积 * 1.1 + 保留空闲阈值</code> 且 <code>目标盘可用空间 &gt;= 预估解压体积 * 1.1</code>。</li>
+      <li>若 SSD 缓存空间不足，但目标盘空间充裕，系统<strong>自动静默降级为 Direct 直写模式</strong>，并在任务消息中提示：“SSD 缓存空间不足，已自适应回退至目标卷直接解压”，避免挤爆 C 盘。</li>
+    </ul>
+  </section>
+
+  <section id="ux-fixes">
+    <h2>3. 使用与交互逻辑（UX）全面重塑方案</h2>
+
+    <h3>3.1 消灭三层弹窗轰炸：轻量入队与侧边抽屉</h3>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>用户场景</th>
+            <th>原流程（痛点）</th>
+            <th>重构后新流程（顺畅心智）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>拖入 1 个压缩包</strong></td>
+            <td>等待模态框 → 820px 检查结果弹窗 → 本批次选项弹窗（至少点 3 次）</td>
+            <td><strong>静默直接入队</strong>：右下角弹出轻量 Toast：“已添加 xxx.zip”，默认按照全局设置进入准备状态。</td>
+          </tr>
+          <tr>
+            <td><strong>拖入文件夹 / 批量包</strong></td>
+            <td>强制全屏阻断等待，多层弹窗层叠</td>
+            <td><strong>主界面顶部展开就绪卡片</strong>：以非阻断方式在表格上方展示“已发现 8 个分卷包”，提供【开始解压】与【批次配置抽屉】。</td>
+          </tr>
+          <tr>
+            <td><strong>修改本次输出选项</strong></td>
+            <td>弹窗套弹窗（Modal in Modal）</td>
+            <td>点击侧边滑出的<strong>设置抽屉（Drawer）</strong>，单屏完成修改并立即生效，不遮挡任务主列表。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>3.2 添加任务后“默认自动开始队列”</h3>
+    <ul>
+      <li>新增配置项 <code>autoStartQueue: boolean</code>（默认开启 <code>true</code>）。</li>
+      <li>用户拖入文件或点击添加后，任务进入队列的同时<strong>自动驱动调度器开始工作</strong>。</li>
+      <li>仅当用户主动点击过【暂停队列】时，系统才保持暂停，并在顶部提供黄色常驻警示条：“队列已暂停，新任务已排队等待处理 [继续队列]”。</li>
+    </ul>
+
+    <h3>3.3 破除密码死胡同：任务条目直接提供即时解密入口</h3>
+    <div class="danger-box">
+      <strong>原严重断点</strong>：加密文件解压失败后变为 <code>needsPassword</code>，列表只有“重试”按钮（点重试依然用旧密码库再错一次）。用户无法单点输入密码，被迫跳转到【密码库】页面新建密码条目，再返回重试。
+    </div>
+    <ul>
+      <li><strong>列表直接赋能</strong>：状态为 <code>needsPassword</code> 的任务，操作列将【重试】替换为显目的蓝色【输入密码】按钮。</li>
+      <li><strong>即时弹窗设计</strong>：点击弹出极简浮层：
+        <pre><code>[ 输入解压密码: **********               ] (支持显示明文)
+[x] 同时将该密码保存至我的永久密码库（可选）
+[  立即解密并重试  ]   [ 取消 ]</code></pre>
+      </li>
+      <li>点击后直接将该密码作为优先凭据注入当前任务并立即重试，彻底消灭“为解密一个临时文件必须先在库里建档”的反人类链路。</li>
+    </ul>
+
+    <h3>3.4 5秒超时强杀机制（消除“拒绝删除”引发的假死）</h3>
+    <ul>
+      <li>当任务处于 <code>stopping</code> 或 <code>cleanupPending</code> 状态时，正常等待底层进程和文件句柄释放。</li>
+      <li>若超过 5 秒底层仍未确认退出，【删除任务】按钮解除禁用，变为红色<strong>【强行终止并移除】</strong>。</li>
+      <li>点击后，Host 调动底层 Win32 API <code>TerminateProcess</code> 强杀对应的子进程 JobObject，暴力解绑锁并清理残留注册表项，将控制权 100% 交还给用户。</li>
+    </ul>
+
+    <h3>3.5 批量解压页与处理记录页职能纯化</h3>
+    <ul>
+      <li><strong>《批量解压》（活动工作台）</strong>：仅展示正在处理、等待中、以及本次会话需要用户处理（如输密码、重试）的任务。</li>
+      <li><strong>自动流转归档</strong>：任务一旦 100% 完成且清理完毕，自动从《批量解压》列表中隐去，流转沉淀至《处理记录》历史表中，无需用户频繁手动点击“清除已完成”。</li>
+    </ul>
+  </section>
+
+  <section id="feature-matrix">
+    <h2>4. 规划功能（F3 / F5 / F1 / F6 / F4）的协同落地</h2>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>功能代号</th>
+            <th>功能名称</th>
+            <th>核心落地点</th>
+            <th>协同防御要点</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>F3</strong></td>
+            <td>CPU自适应与进程优先级调节</td>
+            <td>三端契约同步 <code>engineThreads</code> 与 <code>workerPriority</code>；Windows 启动进程时传递 <code>IDLE_PRIORITY_CLASS</code> / <code>BELOW_NORMAL_PRIORITY_CLASS</code>；7z 传递 <code>-mmt</code> 参数。</td>
+            <td>后台解压不再造成用户前台打字或播放视频卡顿；契约套件强校验字段一致性。</td>
+          </tr>
+          <tr>
+            <td><strong>F5</strong></td>
+            <td>CRC 损坏忽略与抢救性提取</td>
+            <td>7-Zip 遭遇 CRC 损坏（退出码 2）时，支持抢救完好文件，将任务状态落盘为新三态 <code>salvaged</code>（抢救提取）。</td>
+            <td><strong>严格熔断源文件删除</strong>；清单中标记损坏文件，豁免损坏项的完整校验，向用户清晰展示损坏报告。</td>
+          </tr>
+          <tr>
+            <td><strong>F1</strong></td>
+            <td>ZIP 文件名乱码识别与重命名修复</td>
+            <td>绕开 7z.dll 的默认 OEM-&gt;Unicode 转换，直接二进制解析 ZIP Central Directory 原始名字节，通过 GBK/Shift-JIS/Big5 判定打分。</td>
+            <td>解压完成后结合安全映射清单进行原子重命名，杜绝原始字节丢失造成的不可逆乱码。</td>
+          </tr>
+          <tr>
+            <td><strong>F6-①</strong></td>
+            <td>解压后空目录清理</td>
+            <td>任务交付前的后处理阶段（Post-processing），自底向上递归清理空文件夹。</td>
+            <td>若压缩包原本就包含空目录，在生成 Manifest 和回读校验时需同步标记空目录豁免，防止报“缺失目录”校验失败。</td>
+          </tr>
+          <tr>
+            <td><strong>F4</strong></td>
+            <td>多后端解压引擎扩展</td>
+            <td>抽象 <code>IArchiveBackend</code> 统一接口，按格式路由（7z / 纯 tar / zstd / 系统原生）。</td>
+            <td>为 WIM、LZH 等格式放开白名单前，必须经过能力矩阵与样本回归测试。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="implementation">
+    <h2>5. 四阶段实施路线图（Implementation Roadmap）</h2>
+    <div class="cards">
+      <div class="card">
+        <h3>Phase 1: 交互闭环与快速体验重构 (1-2 天)</h3>
+        <p>1. 任务条目集成【即时输入密码】弹窗与一键重试；<br>
+        2. 默认开启【添加后自动开始队列】；<br>
+        3. 单文件拖入静默入队，消灭多层模态弹窗；<br>
+        4. 增加 5 秒超时强杀与强制移除兜底逻辑。</p>
+      </div>
+      <div class="card">
+        <h3>Phase 2: 核心功能与性能落地 F3 + F5 + F1 (2-3 天)</h3>
+        <p>1. 落地 F3：完成跨语言三端契约同步，支持引擎线程与进程优先级调节；<br>
+        2. 落地 F5：引入 <code>salvaged</code> 状态机，完成 CRC 容错与抢救模式，锁死源文件清理风险；<br>
+        3. 落地 F1：编写轻量级 ZIP 中央目录原始字节探测器与安全批量重命名。</p>
+      </div>
+      <div class="card">
+        <h3>Phase 3: 底层韧性与硬件感知 (2 天)</h3>
+        <p>1. 引入物理驱动器识别，实施同物理盘串行、跨物理盘并发调度；<br>
+        2. 落地杀毒软件排他锁（Sharing Violation）指数退避重试循环；<br>
+        3. 实施 SSD 两阶段缓存 3 倍空间预检与自动 Direct 降级熔断；<br>
+        4. 落地 F6-① 空目录清理与校验协同。</p>
+      </div>
+      <div class="card">
+        <h3>Phase 4: 生产架构彻底统一 (P5 实施) (2-3 天)</h3>
+        <p>1. 将 <code>Coordinator</code> 完整重构并迁入 <code>openunpack_application</code>；<br>
+        2. 将 Worker IPC 客户端迁入 <code>infrastructure</code>，切断反向依赖；<br>
+        3. 桌面 Host 全量改接 Application，彻底物理退役 <code>crates/core</code>。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="verification">
+    <h2>6. 质量门禁与验收指标</h2>
+    <ul>
+      <li><strong>契约门禁</strong>：运行 <code>node scripts/check-contracts.mjs --self-test</code>，确保 Rust / C# / TS 三端 DTO 字段类型、可选性与序列化规则 100% 严格一致。</li>
+      <li><strong>回归测试</strong>：全量通过 <code>cargo test</code>（包括并发管线、资源恢复回归用例）与 <code>apps/desktop-ui</code> 97+ 项 Vitest 测试。</li>
+      <li><strong>异常注入验证</strong>：
+        <ol>
+          <li>使用带真实密码与错误密码的样本验证即时弹窗解密流，确认无需进入密码库即可一键解开；</li>
+          <li>模拟占用（如后台句柄锁定）验证 5 秒强杀兜底，确认任务列表不发生僵死；</li>
+          <li>构造真实 CRC 损坏 7z 包，验证 F5 抢救提取成功落盘且源文件不被误删；</li>
+          <li>在同一物理 HDD 磁盘同时加入 4 个大任务，验证系统自动串行执行、磁头吞吐平稳不发生抖动。</li>
+        </ol>
+      </li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

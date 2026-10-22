@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OpenUnpack 国际发布准备方案</title>
+<style>
+:root{color-scheme:light;--ink:#142a35;--muted:#526772;--line:#d8e2e6;--brand:#12646b}*{box-sizing:border-box}body{margin:0;font:16px/1.75 "Segoe UI","Microsoft YaHei",sans-serif;color:var(--ink);background:#f3f6f7}main{max-width:1180px;margin:auto;padding:36px 28px 70px}h1{font-size:34px;line-height:1.3;margin:8px 0 18px}h2{font-size:23px;margin:0 0 16px}h3{font-size:18px;margin:10px 0}p{margin:8px 0 16px}section{background:white;border:1px solid var(--line);border-radius:12px;padding:24px;margin-top:20px;scroll-margin-top:65px}.eyebrow{color:var(--brand);font-weight:700;letter-spacing:.1em}nav{position:sticky;top:0;padding:12px 0;background:#f3f6f7ef;z-index:2;display:flex;gap:18px;flex-wrap:wrap}a{color:var(--brand)}table{border-collapse:collapse;width:100%;font-size:14px}th,td{border:1px solid var(--line);padding:12px;text-align:left;vertical-align:top}th{background:#eef5f6}code{font-family:Consolas,monospace;font-size:13px;overflow-wrap:anywhere}pre{background:#102c38;color:#f0f7f7;padding:17px;border-radius:8px;overflow:auto;font-size:13px;line-height:1.6}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.card{padding:16px;border:1px solid var(--line);border-radius:8px}.warn{border-left:5px solid #ba5716;background:#fff7ef;padding:16px}.badge{font-size:12px;padding:3px 7px;background:#e5f2ee;color:#1d6455;border-radius:4px}.wire{max-width:680px;margin:20px auto;border:2px solid #c7d6dc;border-radius:9px;padding:24px;background:#f8fafb}.control{border:1px solid #b5c9ce;padding:8px 13px;background:white;border-radius:5px;display:inline-block;margin:4px}.small{font-size:14px;color:var(--muted)}ul,ol{padding-left:24px}footer{margin-top:30px;color:var(--muted)}@media(max-width:760px){main{padding:20px 12px}.grid{grid-template-columns:1fr}section{padding:18px}table{display:block;overflow-x:auto}h1{font-size:27px}}@media print{body{background:white}nav{display:none}main{max-width:none;padding:0}section{break-inside:avoid;border-radius:0}a{color:inherit}pre{white-space:pre-wrap;background:#eef1f2;color:#142a35}}
+</style></head><body><main>
+<div class="eyebrow">OPENUNPACK · RELEASE PLANNING · 2026-10-20</div>
+<h1>让国际用户能够找到、安装、理解并持续使用 OpenUnpack</h1>
+<p>目标：先交付一个可验证的 Windows x64 英日测试版本，再逐步扩大分发。三语界面已经有基础，接下来优先补齐发行质量、首次使用、安装信任、帮助和反馈。当前状态：<strong>准备阶段，尚未达到正式国际发行条件</strong>。</p>
+<nav aria-label="方案目录"><a href="#scope">范围</a><a href="#decisions">待决策</a><a href="#current">当前缺口</a><a href="#target">目标体验</a><a href="#phases">推进顺序</a><a href="#qa">验收</a><a href="#rollout">发布与回滚</a><a href="#sources">证据</a></nav>
+
+<section id="scope"><h2>范围、假设和权限</h2>
+<p>本方案覆盖 Windows 桌面产品的国际发布准备，初期界面语言为简体中文、英文、日文。以免费限量测试作为规划默认，商业模式尚待维护者决定。先服务需要批量解压、嵌套归档、个人密码管理及可恢复任务的用户。</p>
+<p>本轮只创建规划文档，不改产品代码、不购买证书、不注册服务、不公开仓库、不上传包、不联系用户。暂不扩展 macOS/Linux/ARM64、新语种、云密码服务或支付系统。Windows 版本的支持声明必须绑定实测环境，并明确旧系统的支持边界。</p></section>
+
+<section id="decisions"><h2>待决策与建议默认</h2><div class="grid">
+<div class="card"><h3>首发是测试还是正式收费？</h3><p>由产品维护者决定。建议先免费限量测试，先建立安装成功、任务正确和反馈闭环。收费会新增支付、退款、税务、许可与客服工作。</p><a href="#phases">查看阶段安排</a></div>
+<div class="card"><h3>通过什么渠道分发、使用什么发行者身份？</h3><p>由维护者决定真实名称、公开邮箱/域名、源码公开范围和签名资格。建议先使用官方页面与单一版本下载源，签名方案按所在地和身份资格核对；后续评估商店与包管理器。</p><a href="#rollout">查看发布安排</a></div>
+<div class="card"><h3>先面向哪些用户？</h3><p>建议英语用户作为主要帮助与开发沟通语言，日语界面、快速入门及关键安全操作由母语用户校对。先邀请约 10～20 名用户，明确这是招募目标而非已有用户。</p><a href="#qa">查看语言验收</a></div>
+<div class="card"><h3>是否加入遥测或自动更新？</h3><p>建议测试版先提供手动检查版本、下载和反馈。分析与崩溃上传需要数据清单、明确选择和脱敏；自动更新单独设计签名和运行任务保护。</p><a href="#architecture">查看接口与隐私影响</a></div>
+</div></section>
+
+<section id="current"><h2>当前核对结果</h2><p class="small">核对代码、配置、共享 Worker 的 runtimeconfig 和 2026-10-20 全功能报告；本轮没有重新执行全套测试。历史测试通过不代表当前所有发行条件已关闭。</p>
+<table><thead><tr><th>项目</th><th>证据与实际状态</th><th>需要完成</th></tr></thead><tbody>
+<tr><td>界面语言</td><td><code>src/i18n.ts</code> 默认固定 zh-CN；已有偏好持久化和三语切换。</td><td>首次无偏好时按系统语言匹配 zh/ja，其他语言回退英文；已存偏好优先，语言入口使用三种语言自称。</td></tr>
+<tr><td>窗口和安装器</td><td><code>tauri.conf.json</code> 主标题含“解压工坊”，NSIS 仅 SimpChinese/English。<code>installer.nsi</code> 自定义清缓存文案只有中英。</td><td>统一 OpenUnpack 品牌，补日语安装/卸载与自定义文案，验证安装语言与应用首次语言体验一致。</td></tr>
+<tr><td>错误与帮助</td><td>三语记录明确保留原始后端错误。README、SECURITY、CONTRIBUTING、CHANGELOG 主要为中文。</td><td>用户可理解的本地化错误摘要、操作建议与可展开诊断；英文主帮助、日文入门；真实支持邮箱与私密漏洞渠道。</td></tr>
+<tr><td>发行载荷</td><td>共享 <code>artifacts/worker/OpenUnpack.Worker.runtimeconfig.json</code> 仍为 10.0.12；<code>runtime-policy.json</code> 最低 10.0.13。独立 API 开发候选 10.0.13 的报告不能替代共享载荷。</td><td>重新准备、验证和冻结最终载荷，重建包并回归。不得直接发布旧暂存目录。</td></tr>
+<tr><td>最新工程门禁</td><td>FT-004 偶发 HTTP 10053 未定位；FT-002 多语言 Host 代码 rustfmt 未通过；FT-003 三项维护告警阻断严格审计，报告判定对 Windows 目标不可达。</td><td>保留失败证据并定位连接时序；修格式；审查依赖更新或精确策略，不能宣称已发现 Windows 可利用漏洞或直接全局忽略。</td></tr>
+<tr><td>质量证据</td><td>最新报告默认 UI 166/166；核心多项测试通过。但当前原生 UI 操作、三语/DPI、干净安装、故障恢复和正式签名仍未完整验收。</td><td>使用最终实际分发字节进行实机验收。原生交互曾被工具拒绝访问，不等于产品黑屏或已通过。</td></tr>
+<tr><td>公开分发</td><td>README 仍声明没有公开下载仓库；CI 仅留存候选；未发现 updater 接入配置。</td><td>建立公开版本页、下载、校验、已知问题和支持渠道。是否收费、源码公开与签名服务由维护者决定。</td></tr>
+</tbody></table></section>
+
+<section id="target"><h2>目标产品与首次使用体验</h2>
+<p>建议英文定位：<strong>Batch archive extraction for Windows, with local password management and recoverable jobs.</strong> 实际能力边界写清楚：使用个人保存的候选密码，不宣传密码破解；SSD 缓存说明适用条件，不承诺通用加速倍数；普通用户权限运行，不引导用户关闭防护。</p>
+<div class="wire" aria-label="首次使用低保真示意"><strong>OpenUnpack</strong><h3>Batch archive extraction for Windows</h3><p>Language / 语言 / 言語 <span class="control">English ▾</span></p><p>Files and saved passwords are processed on this PC.<br>Learn how backups and recovery work before your first batch.</p><span class="control">Add archives</span><span class="control">Quick start</span><p class="small">规划示意，未实现界面。退出后保留语言；已有选择不被系统语言覆盖。</p></div>
+<p>界面验收覆盖空队列、扫描中、等待资源、成功、部分失败、错误、取消与恢复；英日长文案不能遮住主操作。任务进行时切换语言不丢失队列、勾选和草稿。无更新网络时显示可理解的状态，解压仍能离线使用。</p>
+<p>日本重点样本：CP932/Shift-JIS 旧 ZIP、日文用户目录、全角字符及密码空格；英语重点样本：带重音字符、长路径、多种地区格式。文件名、密码、路径和用户备注始终原样处理；日期/数字按所选语言显示，日志保留稳定机器格式。文件编码无法可靠判定时应提示并保留原名，不静默改坏数据。</p></section>
+
+<section id="phases"><h2>阶段与工作包</h2><table><thead><tr><th>阶段 / 负责人</th><th>工作和落点</th><th>完成条件</th></tr></thead><tbody>
+<tr><td>P0-A 发行基础<br>开发 + QA</td><td>依次处置 FT-001～004；刷新 <code>artifacts/worker</code>，修 <code>apps/desktop-host/src/lib.rs</code> 格式，定位 API 连接问题；重建并冻结最终候选。若 API 推迟，须另行批准范围并确保发行版入口实际禁用，不能只在文档隐藏。</td><td>工程、载荷、受影响真实链路回归通过；每个开放项有证据与明确结论。</td></tr>
+<tr><td>P0-B 国际使用<br>UI + Rust + 校对</td><td><code>i18n.ts</code> 系统匹配；<code>tauri.conf.json</code> / <code>installer.nsi</code> 日语和品牌；错误摘要与帮助入口；英日关键术语、删除/恢复说明校对。</td><td>三语言首次安装、重开、错误和原生托盘/DPI 人工矩阵通过。</td></tr>
+<tr><td>P0-C 信任与安装<br>维护者 + 发布工程</td><td>选择可信发行者签名；最终 Host/Worker 自有二进制与 Setup 按分发策略签名/检查，第三方组件保留原签名和校验；冻结哈希与法律材料。</td><td>实际下载得到的包签名身份正确，干净 Windows 安装/升级/卸载/数据保持通过。</td></tr>
+<tr><td>P1-A 内容与分发<br>内容 + 维护者</td><td>建议新增 <code>docs/user-guide/en/</code>、<code>docs/user-guide/ja/</code>、英文 README、FAQ、隐私说明、支持模板、公开版本说明。沿用已有第三方许可材料，不重复造一份失配清单。</td><td>新用户能从页面完成下载到首次解压；每个下载明确版本、架构、要求、已知问题和更新方式。</td></tr>
+<tr><td>P1-B 限量 Beta<br>QA + 用户支持</td><td>先招募 10～20 名英语/日语用户，使用合成样本和用户自行选择的归档。记录安装成功、首任务完成、崩溃/数据问题和误解；免费测试期间不同时引入大功能。</td><td>所有破坏数据问题关闭，关键语言/安装问题处理，有两轮可复核反馈后再扩大。</td></tr>
+<tr><td>P2 持续分发<br>发布工程 + 产品</td><td>评估签名自动更新、稳定/Beta 通道、商店/包管理器；收费时再增加支付退款、税务和许可方案。新增依赖、后台联网或平台支持另开设计。</td><td>更新可验证、任务安全、恢复可演练；渠道及商业政策与实际行为一致。</td></tr>
+</tbody></table><p><strong>顺序：</strong>P0-A 完成后生成验收候选，P0-B 与签名身份准备可并行；P1-A 内容可并行起草。公开招募需等关键门禁和可安装包就绪，正式推广需等 Beta 和发行验收完成。</p></section>
+
+<section id="architecture"><h2>数据、接口与隐私影响</h2><ul>
+<li>语言偏好沿用现有 localStorage，新增“无已存偏好时系统匹配”的决策函数，不迁移业务数据库。缺失译文在开发检查中暴露，未知语言明确回退英文。</li>
+<li>错误本地化先覆盖常见可操作分类：密码错误、缺卷、损坏/不支持、磁盘不足、权限、目标冲突。生产链路补稳定 code + 安全参数，保留已有调用兼容；逐个 DTO/IPC/HTTP 契约测试，不全量重写诊断协议。</li>
+<li>诊断包仅用户主动导出，默认去除密码、备份口令、API key、归档内容及个人路径；内容可预览。不要求用户发整个密码库或数据库。</li>
+<li>隐私页面必须说明密码保护的 Windows 账户绑定、历史元数据/路径并非全盘加密、备份与数据删除；逐项核对联网行为，网站统计/下载日志与桌面遥测分开说明。若进入特定市场或收费，针对主体、地区、收集数据和消费者业务单独核对适用义务；本方案不作法律合规完成结论。</li>
+<li>用户产品许可与第三方许可分别维护；检查最终包中的 7-Zip、.NET、Tauri 等材料和来源。7-Zip 有混合许可与 unRAR 限制，不能把整个分发包笼统标为仅 MIT。既有 <code>THIRD_PARTY_NOTICES.md</code> 和法律材料收集脚本应继续作为来源。</li>
+<li>自动更新若实施，Windows Authenticode 和 Tauri 更新签名分别管理。更新前等待/安全停止任务，验证签名，失败不损坏现有安装；已有不兼容数据库迁移时，保留同版本备份并限制降级。</li>
+</ul></section>
+
+<section id="qa"><h2>发布验收矩阵与完成定义</h2><table><thead><tr><th>维度</th><th>最低证据</th><th>通过标准</th></tr></thead><tbody>
+<tr><td>系统 / 语言</td><td>干净 Windows x64：英、日、中文系统；非支持语言回退英文；文档声明的每个 OS 版本独立记录。</td><td>无开发 SDK也能安装运行；首次语言正确，手动选择优先；系统原生按钮按 OS 语言的边界明确。</td></tr>
+<tr><td>安装 / 升级</td><td>已有/缺 WebView2、在线/离线、NSIS/便携、标准用户、旧→新版本、卸载保留数据。</td><td>无误删或覆盖个人数据；下载和最终安装文件身份一致；更新/回滚可恢复任务和库。</td></tr>
+<tr><td>本地化布局</td><td>100/125/150/200% DPI、长英文/日文、键盘、模态框、托盘和长路径。</td><td>关键按钮完整可达；无中文残留的固定应用文案；用户数据及系统原生文本除外。</td></tr>
+<tr><td>内容正确性</td><td>ZIP/7z/RAR/分卷/嵌套；CP932 与 UTF-8；空格、重音、emoji、全角及不同 Unicode 序列；公开合成密码。</td><td>源包不变、输出文件清单及哈希符合预期；错误/不支持不可误标成功；密码不被本地化或 trim。</td></tr>
+<tr><td>安全与恢复</td><td>按最新测试计划完成路径竞争、API 认证/范围、取消/退出、配额、受控 VHD/SMB 故障和账户绑定。</td><td>失败可诊断和恢复，无越界写入、错误发布和秘密泄漏；未执行项不得标通过。</td></tr>
+<tr><td>分发可信度</td><td>正式包签名、时间戳、最终哈希、Worker/.NET/7z 身份、许可清单及真实下载启动。</td><td>发行者可验证；测试 SmartScreen 实际行为。签名不承诺立即无警告，不建议用户关闭 Windows 安全功能。</td></tr>
+<tr><td>内容与支持</td><td>英语/日语用户独立完成下载→安装→解压→查看问题→联系支持。</td><td>无需中文协助；明确已知限制、版本、文件样本脱敏方式和回应渠道。</td></tr>
+</tbody></table><p class="warn">正式发行完成定义：当前 P1 级问题关闭或范围经过明确批准、最终候选工程与安全门禁符合策略、三语原生交互和干净安装矩阵通过、正式签名/分发文件身份已核对、帮助与真实支持渠道可用。组件测试通过不替代最终包验收。</p></section>
+
+<section id="rollout"><h2>环境、发布步骤与回滚</h2><table><thead><tr><th>环境</th><th>配置与职责</th></tr></thead><tbody>
+<tr><td>本地开发</td><td>保留已有脏改动；使用独立 <code>OPENUNPACK_DATA_DIR</code> 和合成样本。Rust 构建目标隔离/串行，不能在验收采样时继续改源码或载荷。</td></tr>
+<tr><td>CI / 候选</td><td>固定工具链、锁文件、源/载荷哈希；运行现有 Windows 工作流并保留结果。发布与普通验证分离。未来签名凭据使用最小权限密钥存储，不进源码、日志或工件。</td></tr>
+<tr><td>验收 / 预发布</td><td>冻结 ZIP/Setup + SHA256 + 测试清单；独立 VM 快照、账户、WebView2 状态；默认不开启本机 API，按发行实际功能逐项测试。</td></tr>
+<tr><td>公开发布</td><td>维护者批准后发布不可变版本资源。下载页提供英语/日语、x64和系统要求、正式签名身份、更新说明、限制与校验。先一个主渠道，避免维护多份不同载荷。</td></tr>
+</tbody></table>
+<ol><li>处理问题并冻结来源；校验共享载荷后构建候选。</li><li>对最终实际分发字节签名并生成新哈希，再进行包内身份核验和干净机器测试。</li><li>发布 Beta 版本和已知限制；仅收集有目的、可脱敏的反馈。</li><li>遇到数据破坏、错误成功或重大安全问题时撤下下载入口/更新指向，保留问题包和证据，不覆盖同版本字节。必要时发布更高版本的修复包，恢复数据库需遵循匹配版本的备份。</li><li>扩大到正式版时再开启更多渠道；以签名和版本清单追踪每个下载资源。</li></ol>
+<p>建议初期以官方页面 + 单一版本托管作为主线；商店能改善分发信任，但需要单独适配和政策审查。自建付费系统会明显扩大首发范围，暂不作为默认。</p>
+<pre><code># 未来实施阶段的检查入口，本轮没有执行这些发布操作
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+npm --prefix apps/desktop-ui run lint
+npm --prefix apps/desktop-ui run build
+npm --prefix apps/desktop-ui test -- --maxWorkers=2
+./scripts/verify-published-runtime.ps1 -WorkerDirectory ./artifacts/worker
+./scripts/build-desktop.ps1 -SkipInstall -Installer
+# 仅在生成并正式签名候选后，按真实路径/预期发行者运行
+./scripts/verify-release-signatures.ps1 -HostExe &lt;final-host&gt; -SetupExe &lt;final-setup&gt; -EvidenceDirectory &lt;new-owned-evidence-dir&gt; -ExpectedSignerThumbprint &lt;publisher-thumbprint&gt;</code></pre>
+</section>
+
+<section id="risks"><h2>主要风险与处理</h2><ul><li>源代码和多个冻结候选混用：分别绑定源码、载荷、哈希与结果；旧运行时修复不能仅靠修改版本策略。</li><li>翻译准确但不能上手：让母语用户走完整任务，优先校对删除、覆盖、备份、失败和恢复文案。</li><li>签名预算和资格不确定：先决定发行者身份，再核对可用签名服务；微软文档明确签名仍可能经历 SmartScreen 信誉积累期。</li><li>国际推广承诺过大：以已验证的格式、系统、功能和恢复语义为准，不宣传“绝对安全”“所有格式”或“SSD必然更快”。</li><li>收集反馈时泄漏内容：使用主动导出与预览、最少字段、私密安全渠道，禁止要求真实密码与私有归档。</li></ul></section>
+
+<section id="sources"><h2>已查阅来源与可信范围</h2><ul>
+<li><a href="../reports/2026-10-20-full-functional-test-report.md">2026-10-20 全功能执行报告</a>：最新已记录 FT-001～004、166/166 UI、原生交互与发行缺口。</li>
+<li><a href="../multilingual-implementation-2026-10-19.md">三语言实现记录</a>、<a href="../release-readiness-report-2026-10-15.md">既有发行准备报告</a>、<a href="../system-fixes-report-2026-10-19.md">问题修复记录</a>：各自绑定候选，不跨候选沿用验收。</li>
+<li>本次直接读取：<code>apps/desktop-ui/src/i18n.ts</code>、<code>apps/desktop-host/tauri.conf.json</code>、<code>installer.nsi</code>、<code>scripts/runtime-policy.json</code>、共享 Worker 的 runtimeconfig、README / SECURITY / CONTRIBUTING / CHANGELOG、Windows CI与签名验证脚本。</li>
+<li><a href="https://v2.tauri.app/distribute/windows-installer/#internationalization-1">Tauri：Windows NSIS 安装语言</a>。安装器可配置语言并默认匹配系统语言。</li>
+<li><a href="https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options">Microsoft：Windows 代码签名选择</a>。签名、SmartScreen和身份/地区资格分别核对；本方案不承诺免警告。</li>
+<li><a href="https://v2.tauri.app/plugin/updater/">Tauri：Updater</a>。更新签名强制校验，Windows 安装更新会退出应用，因此必须保护运行任务。</li>
+<li><a href="https://www.7-zip.org/license.txt">7-Zip 官方许可</a>。最终分发材料按实际包含组件核对混合许可。</li>
+</ul><p class="small">仅进行了读取与规划。未验证公开域名、海外带宽、商标可用性、签名购买资格、目标国家法律、真实用户需求或商业支付条件。</p></section>
+
+<section id="handoff"><h2>实施交接</h2><p>建议下一项工作是“国际测试版 P0”：先处理当前发行门禁，再补首次系统语言、日语安装器和统一标题；同时由维护者确认发行方式与身份。技术准备任务已具备文件落点和验收条件。支付、商店、公开上传及证书采购须在具体方案和资源就绪后另行批准。</p></section>
+<footer>OpenUnpack · 规划文档 · 保留原有工作区改动 · 无应用代码改动或对外发布</footer>
+</main></body></html>
