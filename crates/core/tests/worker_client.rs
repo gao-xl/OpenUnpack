@@ -17,9 +17,14 @@ use std::{
 
 fn client() -> WorkerClient {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let executable =
-        root.join("src/OpenUnpack.Worker/bin/Release/net10.0-windows/OpenUnpack.Worker.exe");
-    let engine = root.join("tools/7zip/7z.dll");
+    let executable = std::env::var_os("OPENUNPACK_TEST_WORKER")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            root.join("src/OpenUnpack.Worker/bin/Release/net10.0-windows/OpenUnpack.Worker.exe")
+        });
+    let engine = std::env::var_os("OPENUNPACK_TEST_ENGINE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join("tools/7zip/7z.dll"));
     assert!(
         executable.is_file(),
         "Build the Release .NET Worker before this integration test."
