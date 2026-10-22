@@ -1,0 +1,50 @@
+name: 功能建议 (Feature Request)
+description: 为 OpenUnpack 提出新功能建议、性能优化思路或交互体验改进方案
+title: "[Feat]: "
+labels: ["enhancement", "proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### 💡 提交功能建议前提示
+        感谢你为 OpenUnpack 的进化建言献策！
+        在提出新特性建议前，请查阅已有的 Issue 讨论或 [docs/acceptance-checklist.md](docs/acceptance-checklist.md)，避免重复提案。
+        请注意：OpenUnpack 坚守“本地离线、数据安全、实测证据驱动”的核心原则，诸如云端撞库解密、暴力破解密码、上传至云端等特性不在本项目规划范围内。
+
+  - type: textarea
+    id: problem-statement
+    attributes:
+      label: 解决的痛点或使用场景
+      description: 请清晰描述您在什么工作流或使用场景下遇到了瓶颈或不便
+      placeholder: "例如：当我批量处理超过 50 个大体积分卷压缩包且部分包含重复内层目录结构时，目前的..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: 期望的功能方案
+      description: 请详细描述您期望 OpenUnpack 如何解决这一痛点，包括建议的交互逻辑或配置选项
+      placeholder: "建议在设置界面的调度策略中增加..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives-considered
+    attributes:
+      label: 考虑过的备选方案
+      description: 是否有通过现有系统功能、第三方外部工具或脚本临时缓解的方案？为什么这些方案不够理想？
+      placeholder: "目前我通常通过编写 PowerShell 脚本先预处理，但这种做法容易导致..."
+
+  - type: textarea
+    id: impact-analysis
+    attributes:
+      label: 架构与系统影响考量（选填）
+      description: 该特性是否可能引入磁盘 I/O 争用、破坏命名管道通信协议、增加内存开销或触碰安全权限边界？
+      placeholder: "可能会对 Worker 内存预算和 IPC 传输频率产生一定影响，建议增加限额控制..."
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: 补充说明或参考资料
+      description: 界面线框草图、相关技术规范或参考实现的文档链接

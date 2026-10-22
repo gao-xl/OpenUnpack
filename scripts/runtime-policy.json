@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "channelVersion": "10.0",
+  "minimumRuntimeVersion": "10.0.13",
+  "defaultRuntimeVersion": "10.0.13",
+  "releaseMetadataUrl": "https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json",
+  "reviewedRuntimes": [
+    {
+      "version": "10.0.13",
+      "releaseDate": "2026-10-13",
+      "reviewedAtUtc": "2026-10-18T13:47:15Z",
+      "licenseSha256": "cfc21f5e8bd655ae997eec916138b707b1d290b83272c02a95c9f821b8c87310",
+      "thirdPartyNoticesSha256": "66f1d4e44973185519bb4aa8a9718eb22fc7af2cc532e3ae9cfc4c127ee7fc54"
+    }
+  ]
+}

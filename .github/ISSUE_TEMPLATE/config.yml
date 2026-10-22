@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 报告安全漏洞 (Security Vulnerability)
+    url: https://github.com/OpenUnpack/OpenUnpack/blob/main/SECURITY.md
+    about: 发现涉及密码泄露、权限越界、路径遍历等安全隐患，请勿提公开 Issue，请遵循安全策略私下提交。
+  - name: 社区讨论与使用交流 (Discussions)
+    url: https://github.com/OpenUnpack/OpenUnpack/discussions
+    about: 如果您有关于日常使用、工作流设计或通用技术方案的疑问，欢迎前往 Discussions 交流。

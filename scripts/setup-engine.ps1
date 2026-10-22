@@ -78,12 +78,14 @@ try {
         Copy-Item -LiteralPath $payloadPath -Destination (Join-Path $destinationPath $fileName) -Force
     }
     $licencePath = Join-Path $destinationPath 'License.txt'
-    if ($files.ContainsKey('License.txt')) {
-        Copy-Item -LiteralPath (Join-Path $expandedPath $files['License.txt']) -Destination $licencePath -Force
-    } else { Invoke-WebRequest -Uri 'https://www.7-zip.org/license.txt' -OutFile $licencePath }
+    # Release material must trace back to the hash-pinned official MSI. A network fallback
+    # here would place unverified bytes next to the engine, so fail loudly instead.
+    if (-not $files.ContainsKey('License.txt')) { throw 'Official MSI is missing License.txt.' }
+    Copy-Item -LiteralPath (Join-Path $expandedPath $files['License.txt']) -Destination $licencePath -Force
+    $licenceHash = (Get-FileHash -LiteralPath $licencePath -Algorithm SHA256).Hash.ToLowerInvariant()
     $dllHash=(Get-FileHash -LiteralPath (Join-Path $destinationPath '7z.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
     [IO.File]::WriteAllText((Join-Path $destinationPath '7z.dll.sha256'), "$dllHash  7z.dll`n", [Text.UTF8Encoding]::new($false))
-    @{ version=$version; source=$sourceUrl; msiSha256=$expectedMsiHash; dllSha256=$dllHash; license='https://www.7-zip.org/license.txt' } |
+    @{ version=$version; source=$sourceUrl; msiSha256=$expectedMsiHash; dllSha256=$dllHash; license='msi:License.txt'; licenseSha256=$licenceHash } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $destinationPath 'provenance.json') -Encoding utf8NoBOM
     Write-Host "Official 7-Zip $version ready at $destinationPath"
 } finally {

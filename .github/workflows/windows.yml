@@ -30,7 +30,9 @@ jobs:
         with:
           node-version: 24.15.0
           cache: npm
-          cache-dependency-path: apps/desktop-ui/package-lock.json
+          cache-dependency-path: |
+            apps/desktop-ui/package-lock.json
+            apps/mcp-connector/package-lock.json
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           global-json-file: global.json
@@ -40,15 +42,53 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           rustup override set 1.96.0
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          tool: cargo-audit
       - name: Prepare self-contained Worker and UI
         run: ./scripts/prepare-desktop.ps1
+      - name: Verify security audit policies with malformed and outdated inputs
+        run: ./scripts/test-security-audit-policy.ps1
+      - name: Lint frontend
+        working-directory: apps/desktop-ui
+        run: |
+          npm run lint
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run lint:a11y
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Audit production dependencies (npm)
+        working-directory: apps/desktop-ui
+        run: |
+          npm audit --omit=dev --audit-level=low
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install and audit local MCP connector
+        working-directory: apps/mcp-connector
+        run: |
+          npm ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm audit --audit-level=low
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Fetch locked Rust dependencies and collect notices/source
         run: |
           cargo fetch --locked --target x86_64-pc-windows-msvc
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ./scripts/collect-release-materials.ps1
+      - name: Run automated security audits (cargo-audit & DotNetCliSAST)
+        # Advisory exclusions require proof of absence in the current Windows dependency graph.
+        # and .NET Roslyn Security Analyzers (CA21xx/CA30xx/CA53xx), outputting artifacts/verification/security-audit.json.
+        run: ./scripts/audit-security.ps1 -InstallCargoAudit -DenyWarnings
+      - name: Rust format and strict static checks
+        run: |
+          . ./scripts/common.ps1
+          Import-OpenUnpackMsvc
+          cargo fmt --all -- --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify native and synthetic regression suites
-        run: ./scripts/verify.ps1 -SkipPrepare -WorkerProtocol
+        # The same source is checked before the real native pipeline starts.
+        run: ./scripts/verify.ps1 -SkipPrepare -WorkerProtocol -SkipSecurityAudit
       - name: Build portable, source and NSIS installer artifacts
         run: |
           $offline = '${{ inputs.offline_installer }}' -eq 'true'
