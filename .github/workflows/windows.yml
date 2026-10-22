@@ -60,14 +60,25 @@ jobs:
       - name: Audit production dependencies (npm)
         working-directory: apps/desktop-ui
         run: |
-          npm audit --omit=dev --audit-level=low
+          # The advisory endpoint is a network service; retry transient timeouts.
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            npm audit --omit=dev --audit-level=low
+            if ($LASTEXITCODE -eq 0) { break }
+            Write-Host "npm audit attempt $attempt failed; retrying in 15s"
+            Start-Sleep -Seconds 15
+          }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install and audit local MCP connector
         working-directory: apps/mcp-connector
         run: |
           npm ci
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm audit --audit-level=low
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            npm audit --audit-level=low
+            if ($LASTEXITCODE -eq 0) { break }
+            Write-Host "npm audit attempt $attempt failed; retrying in 15s"
+            Start-Sleep -Seconds 15
+          }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Fetch locked Rust dependencies and collect notices/source
         run: |
