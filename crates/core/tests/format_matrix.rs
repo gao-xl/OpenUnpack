@@ -252,6 +252,37 @@ fn digest(path: &Path) -> String {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn tar_with_mz_filename_is_scanned_and_delivered_as_archive_not_executable() {
+    let rig = Rig::new();
+    let content = b"TAR filename MZ is data, not an executable prefix";
+    for (name, ustar) in [("mz-ustar.bin", true), ("mz-v7.bin", false)] {
+        let mut header = [0u8; 512];
+        header[..11].copy_from_slice(b"MZ-file.txt");
+        header[100..108].copy_from_slice(b"0000644\0");
+        header[108..116].copy_from_slice(b"0000000\0");
+        header[116..124].copy_from_slice(b"0000000\0");
+        header[124..136].copy_from_slice(format!("{:011o}\0", content.len()).as_bytes());
+        header[136..148].copy_from_slice(b"00000000000\0");
+        header[148..156].fill(b' ');
+        if ustar {
+            header[156] = b'0';
+            header[257..263].copy_from_slice(b"ustar\0");
+            header[263..265].copy_from_slice(b"00");
+        }
+        let checksum: u32 = header.iter().map(|&b| u32::from(b)).sum();
+        header[148..156].copy_from_slice(format!("{checksum:06o}\0 ").as_bytes());
+        let mut bytes = header.to_vec();
+        bytes.extend_from_slice(content);
+        bytes.resize(2048, 0);
+        let archive = rig.root.join(name);
+        fs::write(&archive, bytes).unwrap();
+        let job = rig.run(&archive, 1).await;
+        let output = Path::new(job.output_path.as_ref().unwrap());
+        assert_eq!(fs::read(output.join("MZ-file.txt")).unwrap(), content);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rar4_and_rar5_plain_and_both_encryption_modes_match_independent_payload_bytes() {
     let rig = Rig::new();
     let password = rig.saved_password();
@@ -348,4 +379,132 @@ async fn numeric_zip_volumes_are_really_extracted_when_a_middle_volume_is_select
         fs::read(Path::new(job.output_path.as_ref().unwrap()).join("data.bin")).unwrap(),
         vec![0x57u8; 96 * 1024]
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn batch_zip_and_7z_with_realtime_progress_broadcast() {
+    let rig = Rig::new();
+    let payload_a = rig.root.join("synthetic_a");
+    let payload_b = rig.root.join("synthetic_b");
+    fs::create_dir_all(&payload_a).unwrap();
+    fs::create_dir_all(&payload_b).unwrap();
+    let bytes_a = vec![0x41u8; 128 * 1024]; // 128 KB of 'A'
+    let bytes_b = vec![0x42u8; 128 * 1024]; // 128 KB of 'B'
+    fs::write(payload_a.join("file_a.txt"), &bytes_a).unwrap();
+    fs::write(payload_b.join("file_b.txt"), &bytes_b).unwrap();
+
+    let archives = rig.root.join("batch_archives");
+    fs::create_dir_all(&archives).unwrap();
+    let zip_archive = archives.join("batch_archive.zip");
+    let sz_archive = archives.join("batch_archive.7z");
+
+    let status_zip = Command::new(&rig.seven_zip)
+        .current_dir(&payload_a)
+        .args(["a", "-tzip", "-mx=5", "-y", "-bso0", "-bsp0", "-bse0"])
+        .arg(&zip_archive)
+        .arg(".")
+        .status()
+        .unwrap();
+    assert!(status_zip.success(), "7z creating zip failed");
+
+    let status_7z = Command::new(&rig.seven_zip)
+        .current_dir(&payload_b)
+        .args(["a", "-t7z", "-mx=5", "-y", "-bso0", "-bsp0", "-bse0"])
+        .arg(&sz_archive)
+        .arg(".")
+        .status()
+        .unwrap();
+    assert!(status_7z.success(), "7z creating 7z failed");
+
+    let settings = rig.settings();
+    rig.core.save_settings(settings.clone()).unwrap();
+
+    let scan = rig
+        .core
+        .scan(&[
+            zip_archive.to_string_lossy().into_owned(),
+            sz_archive.to_string_lossy().into_owned(),
+        ])
+        .unwrap();
+    assert_eq!(
+        scan.sources.len(),
+        2,
+        "must discover both ZIP and 7z sources"
+    );
+
+    let mut rx = rig.core.subscribe();
+
+    let added_jobs = rig.core.add_jobs(scan.sources, settings).unwrap();
+    assert_eq!(added_jobs.len(), 2);
+    let job_ids: Vec<_> = added_jobs.iter().map(|j| j.id.clone()).collect();
+
+    rig.core.start().unwrap();
+
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let mut notification_count = 0u64;
+    let mut saw_positive_progress = false;
+
+    loop {
+        tokio::select! {
+            res = rx.recv() => {
+                if res.is_ok() {
+                    notification_count += 1;
+                }
+            }
+            _ = tokio::time::sleep(Duration::from_millis(20)) => {}
+        }
+
+        let snapshot = rig.core.snapshot().unwrap();
+        for job in &snapshot.jobs {
+            if job_ids.contains(&job.id) && job.progress > 0.0 {
+                saw_positive_progress = true;
+            }
+        }
+
+        let all_done = snapshot
+            .jobs
+            .iter()
+            .filter(|j| job_ids.contains(&j.id))
+            .all(|j| j.status == "completed" || j.status == "failed");
+
+        if all_done && !snapshot.running {
+            break;
+        }
+
+        if Instant::now() > deadline {
+            let _ = rig.core.cancel(None);
+            panic!("Batch ZIP & 7z extraction timed out");
+        }
+    }
+
+    assert!(
+        notification_count > 0,
+        "realtime state-changed broadcast must notify subscribers"
+    );
+    assert!(
+        saw_positive_progress,
+        "must observe positive progress during extraction"
+    );
+
+    let final_snapshot = rig.core.snapshot().unwrap();
+    for job_id in &job_ids {
+        let job = final_snapshot
+            .jobs
+            .iter()
+            .find(|j| j.id == *job_id)
+            .expect("job found");
+        assert_eq!(job.status, "completed", "job {} should complete", job_id);
+        assert_eq!(job.stage, "finished");
+        assert!(
+            (job.progress - 1.0).abs() < f64::EPSILON,
+            "final progress must be 1.0"
+        );
+
+        let out = Path::new(job.output_path.as_ref().expect("output path present"));
+        if job.source.path.ends_with(".zip") {
+            assert_eq!(fs::read(out.join("file_a.txt")).unwrap(), bytes_a);
+        } else if job.source.path.ends_with(".7z") {
+            assert_eq!(fs::read(out.join("file_b.txt")).unwrap(), bytes_b);
+        }
+    }
 }

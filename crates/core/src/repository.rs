@@ -6,16 +6,23 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::types::{JobView, Publication, SuccessEvent};
 
+#[path = "database_lease.rs"]
+pub mod database_lease;
+use database_lease::DatabaseLease;
+
 pub struct Repository {
     conn: Mutex<Connection>,
+    _storage_lease: DatabaseLease,
 }
 
 impl Repository {
     pub fn open(path: &Path) -> Result<Self, String> {
-        if let Some(parent) = path.parent() {
-            if !parent.as_os_str().is_empty() {
-                std::fs::create_dir_all(parent).map_err(|_| "StorageError".to_string())?;
-            }
+        let storage_lease = DatabaseLease::shared(path)?;
+        let path = storage_lease.database_path();
+        if let Some(parent) = path.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            std::fs::create_dir_all(parent).map_err(|_| "StorageError".to_string())?;
         }
 
         let mut conn = Connection::open(path).map_err(|_| "StorageError".to_string())?;
@@ -70,6 +77,7 @@ impl Repository {
 
         Ok(Self {
             conn: Mutex::new(conn),
+            _storage_lease: storage_lease,
         })
     }
 
@@ -357,6 +365,7 @@ mod tests {
             workspace: None,
             nodes: vec![],
             stage_times: BTreeMap::new(),
+            transfer_progress: None,
         }
     }
     fn publication(id: &str, job_id: &str, state: &str) -> Publication {
