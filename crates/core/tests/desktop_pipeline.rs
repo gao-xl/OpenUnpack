@@ -1598,6 +1598,59 @@ async fn verify_three_layer_source_cleanup(cleanup: &str, cache_enabled: bool) {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn retry_with_changed_cache_options_replaces_the_last_owned_workspace() {
+    let rig = Rig::new();
+    let payload = b"retry must recreate its cache workspace safely";
+    let input = rig.file("retry-cache-input/payload.txt", payload);
+    let archive = rig.root.join("archives/retry-cache.7z");
+    let secret = "SYNTHETIC-CACHE-RETRY-482";
+    rig.pack(input.parent().unwrap(), &archive, "7z", Some(secret), &[]);
+    let original = digest_file(&archive);
+    let mut settings = rig.settings();
+    settings.cache_enabled = true;
+    settings.cache_policy = "always".into();
+    settings.cache_input = false;
+    let id = rig.add(&archive, settings.clone());
+    rig.core.start().unwrap();
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let view = rig.core.snapshot().unwrap();
+        let job = view.jobs.iter().find(|job| job.id == id).unwrap();
+        if job.stage == "needsPassword" {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "fixture never waited for a password"
+        );
+        tokio::time::sleep(Duration::from_millis(15)).await;
+    }
+    rig.core.cancel(Some(&id)).unwrap();
+    let retained = rig.finish(&id).await;
+    assert_eq!(retained.status, "cancelled", "{}", retained.message);
+    let old_work = PathBuf::from(retained.workspace.unwrap());
+    assert!(old_work.is_dir());
+
+    // A different extraction configuration retires the old generation rather
+    // than resuming it, even though both generations share the cache parent.
+    settings.cache_input = true;
+    rig.core.save_settings(settings).unwrap();
+    rig.core
+        .retry_with_password(&id, false, Some(secret.into()))
+        .unwrap();
+    let retried = rig.run(&id).await;
+    assert_eq!(retried.status, "completed", "{}", retried.message);
+    assert_eq!(
+        fs::read(delivered(&retried).join("payload.txt")).unwrap(),
+        payload
+    );
+    assert_eq!(digest_file(&archive), original);
+    assert!(!old_work.exists());
+    assert!(retried.workspace.is_none());
+    assert_eq!(fs::read_dir(&rig.cache).unwrap().count(), 0);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn source_cleanup_delete_removes_three_layer_archives_and_all_selected_volumes() {
     for cache_enabled in [false, true] {
         verify_three_layer_source_cleanup("delete", cache_enabled).await;

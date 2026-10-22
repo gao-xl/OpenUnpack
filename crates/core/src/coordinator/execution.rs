@@ -137,6 +137,9 @@ impl Coordinator {
             if allow_partial || selected.is_some() {
                 return Err("无可用缓存目录，请重试整个任务。".into());
             }
+            // Retiring an old generation or another job can prune this shared
+            // cache parent. Pin it until the new workspace owns its own lease.
+            let parent_lease = paths::DirectoryGuard::create(&parent).map_err(|_| "UnsafePath")?;
             if let Some(old) = job.workspace.clone() {
                 drop(workspace_lease.take());
                 // Keep the workspace association until removal actually succeeds: a
@@ -151,6 +154,7 @@ impl Coordinator {
             let work = parent.join(format!("{}-{}", job.id, job.attempts));
             paths::mark_owned(&work, &job.id, "")?;
             workspace_lease = Some(lock_private_workspace(&work)?);
+            drop(parent_lease);
             job.workspace = Some(paths::path_string(&work));
             job.nodes.clear();
             job.stage_times.clear();

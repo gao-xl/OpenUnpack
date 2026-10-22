@@ -1196,6 +1196,10 @@ fn remove_owned_with_hook(
         }
         return Err(failure());
     }
+    // Windows only removes the delete-pending workspace after its last handle
+    // closes. The tree also pins the parent without FILE_SHARE_DELETE, so it
+    // must be released before attempting to prune the empty cache container.
+    drop(tree);
     prune_empty_cache_container(path);
     Ok(())
 }
@@ -1657,7 +1661,49 @@ impl Drop for SleepBlockerGuard {
 
 #[cfg(test)]
 mod cache_container_tests {
-    use super::prune_empty_cache_container;
+    use super::{mark_owned, owned, prune_empty_cache_container, remove_owned};
+
+    #[test]
+    fn owned_workspace_retirement_prunes_cache_only_after_the_last_job() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = root.path().join("cache");
+        let container = cache.join("OpenUnpack-cache");
+        std::fs::create_dir_all(&container).unwrap();
+        let first = container.join("job-1");
+        let second = container.join("job-2");
+        mark_owned(&first, "first", "").unwrap();
+        mark_owned(&second, "second", "manifest-kept").unwrap();
+        std::fs::create_dir_all(first.join("nested/deep")).unwrap();
+        std::fs::write(first.join("nested/deep/retire.txt"), b"retire").unwrap();
+        std::fs::write(second.join("keep.txt"), b"keep").unwrap();
+
+        remove_owned(&first, "first").unwrap();
+        assert!(!first.exists());
+        assert!(container.is_dir(), "another job still needs the container");
+        owned(&second, "second", Some("manifest-kept")).unwrap();
+        assert_eq!(std::fs::read(second.join("keep.txt")).unwrap(), b"keep");
+
+        remove_owned(&second, "second").unwrap();
+        assert!(!second.exists());
+        assert!(
+            !container.exists(),
+            "retiring the last real workspace must release its handles before pruning"
+        );
+        assert!(cache.is_dir(), "the user's cache root must stay");
+    }
+
+    #[test]
+    fn owned_workspace_retirement_keeps_a_non_cache_parent() {
+        let root = tempfile::tempdir().unwrap();
+        let parent = root.path().join(".openunpack-work");
+        std::fs::create_dir(&parent).unwrap();
+        let work = parent.join("job");
+        mark_owned(&work, "job", "").unwrap();
+
+        remove_owned(&work, "job").unwrap();
+        assert!(!work.exists());
+        assert!(parent.is_dir(), "only the named cache container is pruned");
+    }
 
     #[test]
     fn empty_cache_container_is_pruned_but_a_shared_one_is_kept() {
