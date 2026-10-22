@@ -1,0 +1,14 @@
+# Byte-exact assets. Release material collection verifies these files by
+# SHA-256, so checkout must not rewrite line endings.
+assets/legal/** -text
+crates/local-api/assets/** -text
+
+# Normalize sources checked by formatting and lint gates.
+*.rs text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.mjs text eol=lf
+*.ps1 text eol=crlf
