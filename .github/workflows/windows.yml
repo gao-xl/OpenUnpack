@@ -47,7 +47,12 @@ jobs:
         with:
           tool: cargo-audit
       - name: Prepare self-contained Worker and UI
-        run: ./scripts/prepare-desktop.ps1
+        # Check the complete tracked tree before preparing or packaging artifacts.
+        # Source packaging alone does not inspect private files committed elsewhere.
+        run: |
+          node scripts/audit-git.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./scripts/prepare-desktop.ps1
       - name: Verify security audit policies with malformed and outdated inputs
         run: ./scripts/test-security-audit-policy.ps1
       - name: Lint frontend
@@ -60,26 +65,42 @@ jobs:
       - name: Audit production dependencies (npm)
         working-directory: apps/desktop-ui
         run: |
-          # The advisory endpoint is a network service; retry transient timeouts.
+          # The advisory endpoint is a network service. Retry transient
+          # timeouts, and only downgrade to a warning when the endpoint itself
+          # is unreachable; a real advisory must still fail the gate.
+          $auditLog = Join-Path $env:RUNNER_TEMP 'npm-audit-ui.log'
           for ($attempt = 1; $attempt -le 3; $attempt++) {
-            npm audit --omit=dev --audit-level=low
+            npm audit --omit=dev --audit-level=low *>&1 | Tee-Object -FilePath $auditLog
             if ($LASTEXITCODE -eq 0) { break }
-            Write-Host "npm audit attempt $attempt failed; retrying in 15s"
-            Start-Sleep -Seconds 15
+            if ($attempt -lt 3) { Start-Sleep -Seconds 15 }
           }
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            $text = Get-Content -Raw -LiteralPath $auditLog -ErrorAction SilentlyContinue
+            if ($text -match 'audit endpoint returned an error|network timeout|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENOTFOUND') {
+              Write-Host '::warning::npm advisory endpoint unreachable; no audit signal for this run.'
+              exit 0
+            }
+            exit $LASTEXITCODE
+          }
       - name: Install and audit local MCP connector
         working-directory: apps/mcp-connector
         run: |
           npm ci
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $auditLog = Join-Path $env:RUNNER_TEMP 'npm-audit-mcp.log'
           for ($attempt = 1; $attempt -le 3; $attempt++) {
-            npm audit --audit-level=low
+            npm audit --audit-level=low *>&1 | Tee-Object -FilePath $auditLog
             if ($LASTEXITCODE -eq 0) { break }
-            Write-Host "npm audit attempt $attempt failed; retrying in 15s"
-            Start-Sleep -Seconds 15
+            if ($attempt -lt 3) { Start-Sleep -Seconds 15 }
           }
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            $text = Get-Content -Raw -LiteralPath $auditLog -ErrorAction SilentlyContinue
+            if ($text -match 'audit endpoint returned an error|network timeout|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENOTFOUND') {
+              Write-Host '::warning::npm advisory endpoint unreachable; no audit signal for this run.'
+              exit 0
+            }
+            exit $LASTEXITCODE
+          }
       - name: Fetch locked Rust dependencies and collect notices/source
         run: |
           cargo fetch --locked --target x86_64-pc-windows-msvc
