@@ -2,6 +2,8 @@
 
 <p align="center">
   <strong>专为 Windows x64 打造的高性能、安全可控的批量归档解压与本地密码管理桌面应用</strong>
+  <br/>
+  <strong>当前为 Beta 预发布版本（<code>v0.1.0-beta.1</code>）</strong>：核心解压、密码库、监听文件夹与本机 API 已可正常使用；界面细节与部分边界场景仍在打磨。请勿用于不可替代的唯一副本，遇到问题欢迎提交 Issue。
 </p>
 
 <p align="center">

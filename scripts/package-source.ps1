@@ -1,4 +1,4 @@
-param([string]$Version = '0.2.0')
+param([string]$Version = '0.1.0')
 . (Join-Path $PSScriptRoot 'common.ps1')
 Assert-OpenUnpackWindows
 if ($Version -notmatch '^\d+\.\d+\.\d+([-.][A-Za-z0-9.-]+)?$') { throw '版本格式无效。' }

@@ -1,6 +1,6 @@
 {
   "name": "@openunpack/mcp-connector",
-  "version": "0.2.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Local stdio MCP connector for the OpenUnpack desktop API",
   "type": "module",

@@ -2744,7 +2744,7 @@ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
 name = "openunpack-application"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "openunpack-domain",
  "openunpack-protocol",
@@ -2755,7 +2755,7 @@ dependencies = [
 
 [[package]]
 name = "openunpack-cli"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "dirs",
  "futures-util",
@@ -2772,7 +2772,7 @@ dependencies = [
 
 [[package]]
 name = "openunpack-core"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "chrono",
  "encoding_rs",
@@ -2797,7 +2797,7 @@ dependencies = [
 
 [[package]]
 name = "openunpack-desktop"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "encoding_rs",
  "indexmap 1.9.3",
@@ -2820,7 +2820,7 @@ dependencies = [
 
 [[package]]
 name = "openunpack-domain"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2830,7 +2830,7 @@ dependencies = [
 
 [[package]]
 name = "openunpack-infrastructure"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
@@ -2858,7 +2858,7 @@ dependencies = [
 
 [[package]]
 name = "openunpack-local-api"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "axum",
  "futures-util",
@@ -2880,7 +2880,7 @@ dependencies = [
 
 [[package]]
 name = "openunpack-protocol"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
