@@ -147,3 +147,14 @@ it('隐藏页面停止轮询，已有页查询期间轮询不产生重叠请求'
   expect(bridge.historyPage).toHaveBeenCalledTimes(2);
   mounted.unmount();
 });
+
+it('删除入口在当前筛选下只作用于可见记录，不再清空全部历史', async () => {
+  const user = userEvent.setup();
+  const jobs = [job('keep-me'), job('drop-me')];
+  bridge.historyPage.mockImplementation(query => Promise.resolve(historyPageResult(jobs, query)));
+  render(view({ ...base, jobs }));
+  await screen.findByText('keep-me.zip');
+  await user.type(screen.getByPlaceholderText('搜索文件路径或名称'), 'drop-me');
+  await waitFor(() => expect(screen.getByRole('button', { name: /删除筛选结果 \(1\)/ })).toBeTruthy());
+  expect(screen.queryByRole('button', { name: '清空历史记录' })).toBeNull();
+});
