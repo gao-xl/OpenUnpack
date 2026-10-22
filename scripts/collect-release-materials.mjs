@@ -42,12 +42,26 @@ function save(relative, bytes) {
   return { path: relative.replaceAll('\\', '/'), sha256: sha(bytes), size: bytes.length };
 }
 function copy(source, relative) { return save(relative, fs.readFileSync(source)); }
+// The upstream registry CDN intermittently resets connections on shared CI
+// runners; retry transient transport failures before failing the build.
+async function fetchWithRetry(url, attempts = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await fetch(url, { signal: AbortSignal.timeout(90000), headers: { 'User-Agent': 'OpenUnpack-release-builder' } });
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) await new Promise(resolve => setTimeout(resolve, attempt * 5000));
+    }
+  }
+  throw lastError;
+}
 async function download(url, relative, expected) {
   const target = path.join(output, relative);
   let bytes = fs.existsSync(target) ? fs.readFileSync(target) : undefined;
   if (!bytes || (expected && sha(bytes) !== expected)) {
     if (offline) throw new Error(`Offline material not cached: ${relative}`);
-    const response = await fetch(url, { signal: AbortSignal.timeout(45000), headers: { 'User-Agent': 'OpenUnpack-release-builder' } });
+    const response = await fetchWithRetry(url);
     if (!response.ok) throw new Error(`Upstream download HTTP ${response.status}: ${url}`);
     bytes = Buffer.from(await response.arrayBuffer());
   }
