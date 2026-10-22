@@ -2,6 +2,8 @@
 # SHA-256, so checkout must not rewrite line endings.
 assets/legal/** -text
 crates/local-api/assets/** -text
+# Upstream archive fixtures are verified byte-for-byte against provenance.json.
+tests/fixtures/** -text
 
 # Normalize sources checked by formatting and lint gates.
 *.rs text eol=lf
