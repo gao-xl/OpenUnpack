@@ -1,9 +1,5 @@
-import { afterEach, vi } from 'vitest';
-import { cleanup } from '@testing-library/react';
-
-afterEach(() => {
-  cleanup();
-});
+import { vi } from 'vitest';
+import '@testing-library/react';
 
 Object.defineProperty(window, 'matchMedia', {
   writable: true,

@@ -1,0 +1,24 @@
+{
+  "name": "@openunpack/mcp-connector",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Local stdio MCP connector for the OpenUnpack desktop API",
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "bin": { "openunpack-mcp": "dist/index.js" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/index.js",
+    "test": "npm run build && node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.3.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.3.1",
+    "@types/node": "26.6.5",
+    "typescript": "7.0.2"
+  }
+}
