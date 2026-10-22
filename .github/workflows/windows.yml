@@ -38,7 +38,7 @@ jobs:
           global-json-file: global.json
       - name: Pin Rust MSVC toolchain
         run: |
-          rustup toolchain install 1.96.0 --profile minimal --target x86_64-pc-windows-msvc --component rustfmt clippy
+          rustup toolchain install 1.96.0 --profile minimal --target x86_64-pc-windows-msvc --component rustfmt --component clippy
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           rustup override set 1.96.0
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
