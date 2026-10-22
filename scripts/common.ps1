@@ -14,8 +14,8 @@ function Import-OpenUnpackMsvc {
     Assert-OpenUnpackWindows
     # VS2019+ environment discovery works in plain PowerShell as well as CI.
     # Only public build variables are imported; do not print or export all env.
-    $taskCompiler = Get-Command cl.exe -CommandType Application -ErrorAction SilentlyContinue
-    $taskLinker = Get-Command link.exe -CommandType Application -ErrorAction SilentlyContinue
+    $taskCompiler = Get-Command cl.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    $taskLinker = Get-Command link.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (Test-OpenUnpackMsvcReady) {
         return
     }
@@ -50,8 +50,8 @@ function Import-OpenUnpackMsvc {
             [Environment]::SetEnvironmentVariable($taskMatch.Groups[1].Value, $taskMatch.Groups[2].Value, 'Process')
         }
     }
-    $taskCompiler = Get-Command cl.exe -CommandType Application -ErrorAction SilentlyContinue
-    $taskLinker = Get-Command link.exe -CommandType Application -ErrorAction SilentlyContinue
+    $taskCompiler = Get-Command cl.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    $taskLinker = Get-Command link.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not (Test-OpenUnpackMsvcReady)) {
         Import-OpenUnpackProjectSdk -VcvarsPath $taskVcvars
     }
@@ -107,8 +107,8 @@ function Import-OpenUnpackProjectSdk {
 
 function Get-OpenUnpackMsvcDiagnostics {
     $taskParts = [Collections.Generic.List[string]]::new()
-    $taskCompiler = Get-Command cl.exe -CommandType Application -ErrorAction SilentlyContinue
-    $taskLinker = Get-Command link.exe -CommandType Application -ErrorAction SilentlyContinue
+    $taskCompiler = Get-Command cl.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    $taskLinker = Get-Command link.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     $taskParts.Add('cl=' + $(if ($taskCompiler) { $taskCompiler.Source } else { '<none>' }))
     $taskParts.Add('link=' + $(if ($taskLinker) { $taskLinker.Source } else { '<none>' }))
     $taskParts.Add('INCLUDE=' + $(if ($env:INCLUDE) { $env:INCLUDE } else { '<empty>' }))
@@ -135,8 +135,8 @@ function Get-OpenUnpackMsvcDiagnostics {
 }
 
 function Test-OpenUnpackMsvcReady {
-    $taskCompiler = Get-Command cl.exe -CommandType Application -ErrorAction SilentlyContinue
-    $taskLinker = Get-Command link.exe -CommandType Application -ErrorAction SilentlyContinue
+    $taskCompiler = Get-Command cl.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    $taskLinker = Get-Command link.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $taskCompiler -or -not $taskLinker -or -not $env:INCLUDE -or -not $env:LIB -or
         $taskCompiler.Source -notmatch '\\VC\\Tools\\MSVC\\.*\\[xX]64\\cl\.exe$' -or
         $taskLinker.Source -notmatch '\\VC\\Tools\\MSVC\\.*\\[xX]64\\link\.exe$') { return $false }
