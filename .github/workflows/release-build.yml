@@ -43,6 +43,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           rustup override set 1.96.0
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Fetch locked Rust dependencies
+        # Release material collection needs the exact Windows dependency graph
+        # available locally before it can verify licenses and .crate archives.
+        run: |
+          cargo fetch --locked --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install frontend dependencies
         working-directory: apps/desktop-ui
         run: |
