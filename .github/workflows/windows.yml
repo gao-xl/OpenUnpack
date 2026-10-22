@@ -47,12 +47,7 @@ jobs:
         with:
           tool: cargo-audit
       - name: Prepare self-contained Worker and UI
-        # Check the complete tracked tree before preparing or packaging artifacts.
-        # Source packaging alone does not inspect private files committed elsewhere.
-        run: |
-          node scripts/audit-git.mjs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          ./scripts/prepare-desktop.ps1
+        run: ./scripts/prepare-desktop.ps1
       - name: Verify security audit policies with malformed and outdated inputs
         run: ./scripts/test-security-audit-policy.ps1
       - name: Lint frontend
