@@ -131,6 +131,12 @@ pub fn check_identical_content(existing_root: &Path, files: &[CopyFile]) -> bool
     }
     for file in files {
         if file.is_directory {
+            // An empty directory carries no hashes, so skipping these entries
+            // made a target that lacked them look "identical" and suppressed
+            // delivery of the whole result.
+            if !existing_root.join(&file.relative_path).is_dir() {
+                return false;
+            }
             continue;
         }
         let target_file = existing_root.join(&file.relative_path);
@@ -193,6 +199,36 @@ pub fn get_dir_modified_time(root: &Path) -> Option<SystemTime> {
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    #[test]
+    fn missing_empty_directory_is_not_identical_content() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("out");
+        std::fs::create_dir_all(root.join("keep")).unwrap();
+        std::fs::write(root.join("keep/a.txt"), b"abc").unwrap();
+        let hash = openunpack_infrastructure::dedup::compute_file_sha256(&root.join("keep/a.txt"))
+            .unwrap();
+        let file = |relative: &str, size: u64, sha256: String, is_directory: bool| CopyFile {
+            source_path: String::new(),
+            relative_path: relative.into(),
+            size,
+            size_known: true,
+            sha256,
+            is_directory,
+            is_corrupted: false,
+        };
+        let files = vec![
+            file("keep", 0, String::new(), true),
+            file("keep/a.txt", 3, hash, false),
+        ];
+        assert!(check_identical_content(&root, &files));
+        // The archive also carries an empty directory the target never received.
+        let mut with_empty = files.clone();
+        with_empty.push(file("empty", 0, String::new(), true));
+        assert!(!check_identical_content(&root, &with_empty));
+        std::fs::create_dir_all(root.join("empty")).unwrap();
+        assert!(check_identical_content(&root, &with_empty));
+    }
 
     #[test]
     fn test_timestamp_target_format() {
