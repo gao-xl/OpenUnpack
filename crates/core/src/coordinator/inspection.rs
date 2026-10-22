@@ -286,18 +286,25 @@ impl Coordinator {
             .into_iter()
             .enumerate()
             .map(|(idx, f)| {
-                let raw_path = zip_probe
+                // The worker decodes entry names without the archive's legacy
+                // code page, so a GBK/Big5/Shift-JIS archive arrives as CP437
+                // mojibake. Prefer the re-decoded path for display and keep the
+                // worker's raw name as the alternate form.
+                let decoded_path = zip_probe
                     .as_ref()
                     .and_then(|p| p.decoded_paths.get(idx))
-                    .map(|s| s.trim_end_matches(&['/', '\\'][..]).to_string())
-                    .unwrap_or_default();
+                    .map(|s| s.trim_end_matches(&['/', '\\'][..]).to_string());
+                let path = match decoded_path {
+                    Some(value) if !value.is_empty() => value,
+                    _ => f.relative_path.clone(),
+                };
                 ArchiveEntryView {
-                    path: f.relative_path,
+                    path,
                     size: f.size,
                     size_known: f.size_known,
                     is_directory: f.is_directory,
                     is_encrypted: f.is_encrypted,
-                    raw_path,
+                    raw_path: f.relative_path,
                 }
             })
             .collect();
