@@ -37,7 +37,10 @@ function Import-OpenUnpackMsvc {
     # and removals elsewhere in these scripts stay in native PowerShell.
     $taskAllowed = @('PATH', 'INCLUDE', 'LIB', 'LIBPATH', 'VCToolsInstallDir', 'VCINSTALLDIR', 'WindowsSdkDir', 'WindowsSDKVersion', 'WindowsSDKLibVersion', 'UniversalCRTSdkDir', 'UCRTVersion')
     $taskReadVars = ($taskAllowed | ForEach-Object { 'set ' + $_ }) -join ' & '
-    $taskBatchCommand = 'call "' + $taskVcvars + '" >nul && (' + $taskReadVars + ')'
+    # `&&` would skip every `set` when vcvars64.bat returns a nonzero code (a
+    # missing optional variable or a warning is enough). Use `&` so the build
+    # variables are always collected, then validate the real toolchain below.
+    $taskBatchCommand = 'call "' + $taskVcvars + '" >nul & (' + $taskReadVars + ')'
     $taskEnvironmentLines = @(& (Join-Path $env:SystemRoot 'System32/cmd.exe') /d /s /c $taskBatchCommand 2>&1)
     # cmd's `set NAME` returns nonzero for an optional absent variable. Validate
     # the actual compiler/linker/SDK below instead of mistaking that for vcvars failure.
