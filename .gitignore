@@ -10,9 +10,16 @@ tools/7zip/
 *.vault.lock
 test-results/
 target/
+target_test/
 **/node_modules/
 **/dist/
+**/*.tsbuildinfo
 .gemini-subagent-backups/
+OpenUnpack-Archive/
 *.sqlite*
 *.lockfile
 test_*.txt
+/target_*/
+/_workspace/
+/.pi/
+apps/desktop-ui/audit/

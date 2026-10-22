@@ -5,5 +5,8 @@
     <LangVersion>latest</LangVersion>
     <Deterministic>true</Deterministic>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevelSecurity>recommended</AnalysisLevelSecurity>
+    <AnalysisModeSecurity>All</AnalysisModeSecurity>
   </PropertyGroup>
 </Project>

@@ -1,14 +1,19 @@
 [workspace]
 members = [
     "crates/protocol",
+    "crates/domain",
+    "crates/application",
+    "crates/infrastructure",
     "crates/core",
+    "crates/local-api",
+    "crates/cli",
     "apps/desktop-host",
 ]
 resolver = "2"
 
 [workspace.package]
 edition = "2024"
-version = "0.1.0"
+version = "0.2.0"
 license = "MIT"
 
 [profile.release]

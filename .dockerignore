@@ -1,0 +1,10 @@
+target/
+node_modules/
+.git/
+.github/
+.workbuddy/
+artifacts/
+*.log
+*.tmp
+dist/
+build/
