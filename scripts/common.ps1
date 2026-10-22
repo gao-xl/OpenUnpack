@@ -56,7 +56,8 @@ function Import-OpenUnpackMsvc {
         Import-OpenUnpackProjectSdk -VcvarsPath $taskVcvars
     }
     if (-not (Test-OpenUnpackMsvcReady)) {
-        throw '缺少 Microsoft x64 cl/link 或 Windows SDK 实际头文件、库和资源工具。请通过 Visual Studio Installer 安装 C++ 桌面开发及 Windows 10/11 SDK；也可使用项目内已校验的官方 SDK。仅存在SDK目录或环境变量不算就绪。'
+        throw ('缺少 Microsoft x64 cl/link 或 Windows SDK 实际头文件、库和资源工具。请通过 Visual Studio Installer 安装 C++ 桌面开发及 Windows 10/11 SDK；也可使用项目内已校验的官方 SDK。仅存在SDK目录或环境变量不算就绪。诊断：' +
+            (Get-OpenUnpackMsvcDiagnostics))
     }
 }
 
@@ -102,6 +103,35 @@ function Import-OpenUnpackProjectSdk {
     $env:UniversalCRTSdkDir = $taskCpp.TrimEnd('\') + '\'
     $env:UCRTVersion = $taskVersion
     $env:VSCMD_ARG_TGT_ARCH = 'x64'
+}
+
+function Get-OpenUnpackMsvcDiagnostics {
+    $taskParts = [Collections.Generic.List[string]]::new()
+    $taskCompiler = Get-Command cl.exe -CommandType Application -ErrorAction SilentlyContinue
+    $taskLinker = Get-Command link.exe -CommandType Application -ErrorAction SilentlyContinue
+    $taskParts.Add('cl=' + $(if ($taskCompiler) { $taskCompiler.Source } else { '<none>' }))
+    $taskParts.Add('link=' + $(if ($taskLinker) { $taskLinker.Source } else { '<none>' }))
+    $taskParts.Add('INCLUDE=' + $(if ($env:INCLUDE) { $env:INCLUDE } else { '<empty>' }))
+    $taskParts.Add('LIB=' + $(if ($env:LIB) { $env:LIB } else { '<empty>' }))
+    foreach ($taskHeader in @('Windows.h', 'stdio.h')) {
+        $taskFound = $false
+        foreach ($taskDirectory in @($env:INCLUDE.Split(';') | Where-Object { $_ })) {
+            if (Test-Path -LiteralPath (Join-Path $taskDirectory $taskHeader) -PathType Leaf) { $taskFound = $true; break }
+        }
+        $taskParts.Add($taskHeader + '=' + $taskFound)
+    }
+    foreach ($taskLibrary in @('kernel32.lib', 'ucrt.lib')) {
+        $taskFound = $false
+        foreach ($taskDirectory in @($env:LIB.Split(';') | Where-Object { $_ })) {
+            if (Test-Path -LiteralPath (Join-Path $taskDirectory $taskLibrary) -PathType Leaf) { $taskFound = $true; break }
+        }
+        $taskParts.Add($taskLibrary + '=' + $taskFound)
+    }
+    foreach ($taskSdkTool in @('rc.exe', 'mt.exe')) {
+        $taskTool = Get-Command $taskSdkTool -CommandType Application -ErrorAction SilentlyContinue
+        $taskParts.Add($taskSdkTool + '=' + $(if ($taskTool) { $taskTool.Source } else { '<none>' }))
+    }
+    return ($taskParts -join ' | ')
 }
 
 function Test-OpenUnpackMsvcReady {
