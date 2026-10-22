@@ -222,8 +222,19 @@ impl Coordinator {
             return Ok(());
         }
         self.stop_batch.store(false, Ordering::Release);
+        // Admission can arrive from the folder watcher thread, which has no
+        // Tokio context: tokio::spawn would panic there and leave `running`
+        // latched to true, wedging every later job in the queue.
+        let handle = self
+            .runtime
+            .clone()
+            .or_else(|| tokio::runtime::Handle::try_current().ok());
+        let Some(handle) = handle else {
+            self.running.store(false, Ordering::Release);
+            return Err("队列调度需要异步运行时，请在应用宿主内启动。".into());
+        };
         let this = self.clone();
-        tokio::spawn(async move {
+        handle.spawn(async move {
             this.drive().await;
         });
         Ok(())
