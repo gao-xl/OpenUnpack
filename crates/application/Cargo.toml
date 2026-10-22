@@ -1,0 +1,12 @@
+[package]
+name = "openunpack-application"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+openunpack-protocol = { path = "../protocol" }
+openunpack-domain = { path = "../domain" }
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2.0"
+zeroize = "1.9"
