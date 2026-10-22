@@ -264,6 +264,14 @@ function ArchiveBrowserContent({ job, close }: ArchiveBrowserProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const tree = useMemo(() => buildTree(matched), [matched, language]);
   const allKeys = useMemo(() => collectKeys(tree), [tree]);
+  // Archive selectors match directories by prefix, so selecting a synthesized
+  // parent while a search is active would also extract siblings the search
+  // hides. With a query, select exactly the matched entries instead.
+  const selectableKeys = useMemo(() => {
+    if (!query) return allKeys;
+    const keys = matched.map(entry => entry.path.replace(/\\/g, "/").replace(/\/+$/, ""));
+    return Array.from(new Set(keys.filter(Boolean)));
+  }, [query, matched, allKeys]);
   const expanded = useMemo(() => {
     if (expandedKeys !== null) return expandedKeys;
     if (allKeys.length <= 200) return allKeys;
@@ -458,7 +466,9 @@ function ArchiveBrowserContent({ job, close }: ArchiveBrowserProps) {
               />
               <Space wrap size={8} style={{ width: '100%', justifyContent: 'space-between' }}>
                 <Space size={8}>
-                  <Button size="small" onClick={() => setCheckedKeys(allKeys)}>{t("全选")}</Button>
+                  <Button size="small" onClick={() => setCheckedKeys(selectableKeys)}>
+                    {query ? t("全选命中项") : t("全选")}
+                  </Button>
                   <Button size="small" disabled={checkedKeys.length === 0} onClick={() => setCheckedKeys([])}>{t("清空选择")}</Button>
                   {checkedKeys.length > 0 && (
                     <Tag color="blue">{t("已选 {count} 项", { count: checkedKeys.length })}</Tag>

@@ -34,6 +34,19 @@ export default function HistoryPage({ snapshot, refresh, run }: { snapshot: AppS
   const [detailError, setDetailError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const selectedIds = useMemo(() => new Set(selected), [selected]);
+  const filterActive = statusFilter !== 'all' || search.trim().length > 0;
+  // "Delete what is on screen" must mean exactly that: resolve the filtered set
+  // locally instead of clearing every history record the filter hides.
+  const filteredJobs = useMemo(() => {
+    if (!filterActive) return [];
+    const term = deferredSearch.trim().toLowerCase();
+    return snapshot.jobs
+      .filter(terminal)
+      .filter(job => (statusFilter === 'all' || job.status === statusFilter)
+        && (!term || job.source.displayName.toLowerCase().includes(term) || job.source.path.toLowerCase().includes(term)))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+      .slice(0, snapshot.settings.historyLimit);
+  }, [snapshot, statusFilter, deferredSearch, filterActive]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const snapshotRef = useRef(snapshot);
   const queryRef = useRef<HistoryPageQuery>({ offset: 0, limit: 10, status: 'all', search: '' });
@@ -247,14 +260,27 @@ export default function HistoryPage({ snapshot, refresh, run }: { snapshot: AppS
               {t("删除所选任务")}
             </Button>
             <Button icon={<ReloadOutlined aria-hidden />} onClick={() => void loadHistory()}>{t("刷新记录")}</Button>
-            <Popconfirm
-              title={t("清理历史记录")}
-              description={t("仅清除历史任务记录，已提取/生成的文件保留，确定清空吗？")}
-              disabled={disableClear}
-              onConfirm={() => void run(async () => { await api.clearHistory(); await loadHistory(); await refresh(); message.success(t("历史记录已清空")); })}
-            >
-              <Button danger icon={<DeleteOutlined aria-hidden />} disabled={disableClear}>{t("清空历史记录")}</Button>
-            </Popconfirm>
+            {filterActive ? (
+              <Popconfirm
+                title={t("删除当前筛选的 {count} 条记录", { count: filteredJobs.length })}
+                description={t("只删除符合当前筛选条件的记录，被筛选隐藏的任务会保留；已提取的文件不会删除。")}
+                disabled={disableClear || filteredJobs.length === 0}
+                onConfirm={() => deletion.request(filteredJobs)}
+              >
+                <Button danger icon={<DeleteOutlined aria-hidden />} disabled={disableClear || filteredJobs.length === 0}>
+                  {t("删除筛选结果 ({count})", { count: filteredJobs.length })}
+                </Button>
+              </Popconfirm>
+            ) : (
+              <Popconfirm
+                title={t("清理历史记录")}
+                description={t("仅清除历史任务记录，已提取/生成的文件保留，确定清空吗？")}
+                disabled={disableClear}
+                onConfirm={() => void run(async () => { await api.clearHistory(); await loadHistory(); await refresh(); message.success(t("历史记录已清空")); })}
+              >
+                <Button danger icon={<DeleteOutlined aria-hidden />} disabled={disableClear}>{t("清空历史记录")}</Button>
+              </Popconfirm>
+            )}
           </Space>
         </div>
 

@@ -408,41 +408,40 @@ fn router(state: ServerState) -> Router {
         .with_state(state)
 }
 
-fn resolve_web_root() -> Option<std::path::PathBuf> {
-    if let Ok(dir) = std::env::var("OPENUNPACK_WEB_ROOT") {
-        let p = std::path::PathBuf::from(dir.trim());
-        if p.join("index.html").is_file() {
-            return Some(p);
+/// Document roots the daemon may serve. Everything here is either an explicit
+/// operator opt-in or a directory shipped next to the executable; the current
+/// working directory is deliberately excluded so that an HTML file dropped in
+/// the launch directory cannot inherit the API origin and reach the token.
+fn web_root_candidates(
+    env_root: Option<&str>,
+    exe_dir: Option<&std::path::Path>,
+) -> Vec<std::path::PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(dir) = env_root {
+        let trimmed = dir.trim();
+        if !trimmed.is_empty() {
+            candidates.push(std::path::PathBuf::from(trimmed));
         }
     }
-
-    if let Ok(exe) = std::env::current_exe()
-        && let Some(parent) = exe.parent()
+    if let Some(parent) = exe_dir {
+        candidates.push(parent.join("web"));
+    }
+    #[cfg(debug_assertions)]
     {
-        let candidates = [
-            parent.join("web"),
-            parent.join("dist"),
-            parent.join("apps/desktop-ui/dist"),
-        ];
-        for c in &candidates {
-            if c.join("index.html").is_file() {
-                return Some(c.clone());
-            }
-        }
+        let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        candidates.push(manifest_dir.join("../../apps/desktop-ui/dist"));
     }
+    candidates
+}
 
-    let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let dev_dist = manifest_dir.join("../../apps/desktop-ui/dist");
-    if dev_dist.join("index.html").is_file() {
-        return Some(dev_dist);
-    }
-
-    let local_dist = std::path::PathBuf::from("./dist");
-    if local_dist.join("index.html").is_file() {
-        return Some(local_dist);
-    }
-
-    None
+fn resolve_web_root() -> Option<std::path::PathBuf> {
+    let env_root = std::env::var("OPENUNPACK_WEB_ROOT").ok();
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(std::path::Path::to_path_buf));
+    web_root_candidates(env_root.as_deref(), exe_dir.as_deref())
+        .into_iter()
+        .find(|candidate| candidate.join("index.html").is_file())
 }
 
 async fn serve_index() -> Result<Response, ApiError> {
@@ -841,6 +840,31 @@ async fn guard(State(state): State<ServerState>, mut request: Request, next: Nex
     let mut response = next.run(request).await;
     drop(body_budget);
     response_headers(&mut response, origin.as_deref());
+    // The console shares the API origin, so pin what that origin may load. A
+    // planted or injected document can then neither pull remote code nor be
+    // framed by another local page.
+    let is_html = response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.starts_with("text/html"));
+    if is_html {
+        response.headers_mut().insert(
+            header::CONTENT_SECURITY_POLICY,
+            HeaderValue::from_static(
+                "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; \
+                 script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; \
+                 base-uri 'none'; form-action 'none'",
+            ),
+        );
+        response.headers_mut().insert(
+            header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        );
+        response
+            .headers_mut()
+            .insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
+    }
     response
 }
 
@@ -1224,5 +1248,35 @@ mod authorization_tests {
 
         let reader = client_with(&[Scope::JobsRead, Scope::VaultRead, Scope::SettingsRead]);
         assert!(authorize_command(&ApiCommand::Snapshot, &reader).is_ok());
+    }
+}
+
+#[cfg(test)]
+mod web_root_policy {
+    use super::web_root_candidates;
+
+    #[test]
+    fn launch_directory_is_never_a_document_root() {
+        let exe = std::path::Path::new("C:/Program Files/OpenUnpack");
+        let candidates = web_root_candidates(None, Some(exe));
+        assert!(candidates.contains(&exe.join("web")));
+        // A relative "./dist" candidate would let any file dropped in the
+        // process working directory take over the API origin.
+        assert!(candidates.iter().all(|path| path.is_absolute()));
+    }
+
+    #[test]
+    fn explicit_root_outranks_the_install_directory() {
+        let exe = std::path::Path::new("C:/Program Files/OpenUnpack");
+        let candidates = web_root_candidates(Some(" D:/override "), Some(exe));
+        assert_eq!(candidates[0], std::path::Path::new("D:/override"));
+        assert_eq!(candidates[1], exe.join("web"));
+    }
+
+    #[test]
+    fn blank_override_is_ignored() {
+        let exe = std::path::Path::new("C:/Program Files/OpenUnpack");
+        let candidates = web_root_candidates(Some("   "), Some(exe));
+        assert_eq!(candidates[0], exe.join("web"));
     }
 }

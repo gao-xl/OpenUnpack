@@ -617,6 +617,22 @@ export const pageMessages: Record<string, [string, string]> = {
     "Clear history",
     "履歴をすべて削除"
   ],
+  "全选命中项": [
+    "Select all matches",
+    "一致する項目をすべて選択"
+  ],
+  "删除筛选结果 ({count})": [
+    "Delete filtered results ({count})",
+    "絞り込み結果を削除 ({count})"
+  ],
+  "删除当前筛选的 {count} 条记录": [
+    "Delete the {count} filtered records",
+    "絞り込んだ {count} 件の記録を削除"
+  ],
+  "只删除符合当前筛选条件的记录，被筛选隐藏的任务会保留；已提取的文件不会删除。": [
+    "Only records matching the current filter are removed; tasks hidden by the filter stay, and extracted files are never deleted.",
+    "現在の絞り込み条件に一致する記録だけを削除します。絞り込みで隠れているタスクは残り、抽出済みのファイルは削除されません。"
+  ],
   "选择任务 ": [
     "Select task ",
     "タスクを選択 "

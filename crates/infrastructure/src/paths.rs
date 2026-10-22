@@ -1196,7 +1196,21 @@ fn remove_owned_with_hook(
         }
         return Err(failure());
     }
+    prune_empty_cache_container(path);
     Ok(())
+}
+
+/// Jobs share `<cache_root>/OpenUnpack-cache` as their parent, so the container
+/// outlives every workspace and would linger as an empty directory. Removing it
+/// only succeeds while it is empty, which keeps concurrent jobs unaffected.
+fn prune_empty_cache_container(retired: &Path) {
+    let Some(parent) = retired.parent() else {
+        return;
+    };
+    if parent.file_name().and_then(|name| name.to_str()) != Some("OpenUnpack-cache") {
+        return;
+    }
+    let _ = std::fs::remove_dir(parent);
 }
 /// Candidate directories do not each carry an ownership marker. Their only valid
 /// cleanup authority is the enclosing exclusive workspace, with no link traversal.
@@ -1638,6 +1652,32 @@ impl Drop for SleepBlockerGuard {
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
         }
+    }
+}
+
+#[cfg(test)]
+mod cache_container_tests {
+    use super::prune_empty_cache_container;
+
+    #[test]
+    fn empty_cache_container_is_pruned_but_a_shared_one_is_kept() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = root.path().join("cache");
+        let container = cache.join("OpenUnpack-cache");
+        let job = container.join("job-1");
+        std::fs::create_dir_all(&job).unwrap();
+        prune_empty_cache_container(&job);
+        assert!(
+            container.is_dir(),
+            "a container with a live workspace must stay"
+        );
+        std::fs::remove_dir(&job).unwrap();
+        prune_empty_cache_container(&job);
+        assert!(!container.exists(), "the empty container must not linger");
+        assert!(
+            cache.is_dir(),
+            "the user cache root itself is never removed"
+        );
     }
 }
 

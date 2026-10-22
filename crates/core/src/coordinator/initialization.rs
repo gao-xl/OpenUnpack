@@ -139,6 +139,7 @@ impl Coordinator {
             scheduler_scope: Mutex::new(None),
             settings: Mutex::new(settings),
             running: AtomicBool::new(false),
+            runtime: tokio::runtime::Handle::try_current().ok(),
             paused: AtomicBool::new(false),
             api_paused: AtomicBool::new(false),
             stop_batch,

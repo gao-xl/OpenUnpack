@@ -60,26 +60,49 @@ jobs:
       - name: Audit production dependencies (npm)
         working-directory: apps/desktop-ui
         run: |
-          # The advisory endpoint is a network service; retry transient timeouts.
+          # The advisory endpoint is a network service. Retry transient
+          # timeouts, and only downgrade to a warning when the endpoint itself
+          # is unreachable; a real advisory must still fail the gate.
+          $auditLog = Join-Path $env:RUNNER_TEMP 'npm-audit-ui.log'
           for ($attempt = 1; $attempt -le 3; $attempt++) {
-            npm audit --omit=dev --audit-level=low
+            npm audit --omit=dev --audit-level=low *>&1 | Tee-Object -FilePath $auditLog
             if ($LASTEXITCODE -eq 0) { break }
-            Write-Host "npm audit attempt $attempt failed; retrying in 15s"
-            Start-Sleep -Seconds 15
+            if ($attempt -lt 3) { Start-Sleep -Seconds 15 }
           }
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            $text = Get-Content -Raw -LiteralPath $auditLog -ErrorAction SilentlyContinue
+            if ($text -match 'audit endpoint returned an error|network timeout|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENOTFOUND') {
+              Write-Host '::warning::npm advisory endpoint unreachable; no audit signal for this run.'
+              exit 0
+            }
+            exit $LASTEXITCODE
+          }
       - name: Install and audit local MCP connector
         working-directory: apps/mcp-connector
         run: |
           npm ci
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $auditLog = Join-Path $env:RUNNER_TEMP 'npm-audit-mcp.log'
           for ($attempt = 1; $attempt -le 3; $attempt++) {
-            npm audit --audit-level=low
+            npm audit --audit-level=low *>&1 | Tee-Object -FilePath $auditLog
             if ($LASTEXITCODE -eq 0) { break }
-            Write-Host "npm audit attempt $attempt failed; retrying in 15s"
-            Start-Sleep -Seconds 15
+            if ($attempt -lt 3) { Start-Sleep -Seconds 15 }
           }
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            $text = Get-Content -Raw -LiteralPath $auditLog -ErrorAction SilentlyContinue
+            if ($text -match 'audit endpoint returned an error|network timeout|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENOTFOUND') {
+              Write-Host '::warning::npm advisory endpoint unreachable; no audit signal for this run.'
+              exit 0
+            }
+            exit $LASTEXITCODE
+          }
+      - name: Restore release material cache
+        # Upstream licence hosts (gnu.org, api.github.com) intermittently refuse
+        # connections from hosted runners; reuse previously verified materials.
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: artifacts/release-materials
+          key: ${{ runner.os }}-release-materials-${{ hashFiles('Cargo.lock', 'scripts/collect-release-materials.mjs', 'apps/desktop-ui/package-lock.json') }}
       - name: Fetch locked Rust dependencies and collect notices/source
         run: |
           cargo fetch --locked --target x86_64-pc-windows-msvc

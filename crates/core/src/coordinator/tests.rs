@@ -3132,3 +3132,42 @@ fn test_snapshot_update_protocol_delta_and_apply_to() {
         core.queue_snapshot().unwrap()
     );
 }
+
+fn startable_core(directory: &tempfile::TempDir) -> Arc<Coordinator> {
+    let worker = directory.path().join("worker.exe");
+    let engine = directory.path().join("7z.dll");
+    fs::write(&worker, b"synthetic worker").unwrap();
+    fs::write(&engine, b"synthetic engine").unwrap();
+    Coordinator::open(directory.path().join("data"), worker, engine).unwrap()
+}
+
+#[tokio::test]
+async fn queue_start_from_a_watcher_thread_dispatches_to_the_captured_runtime() {
+    let directory = tempfile::tempdir().unwrap();
+    let core = startable_core(&directory);
+    let started = std::thread::spawn({
+        let core = core.clone();
+        move || core.start()
+    })
+    .join()
+    .expect("starting the queue from a plain thread must not panic");
+    assert_eq!(started, Ok(()));
+    for _ in 0..100 {
+        if !core.running.load(Ordering::Acquire) {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    assert!(
+        !core.running.load(Ordering::Acquire),
+        "an idle batch must release the running latch"
+    );
+}
+
+#[test]
+fn queue_start_without_a_runtime_reports_an_error_instead_of_latching_running() {
+    let directory = tempfile::tempdir().unwrap();
+    let core = startable_core(&directory);
+    assert!(core.start().is_err());
+    assert!(!core.running.load(Ordering::Acquire));
+}

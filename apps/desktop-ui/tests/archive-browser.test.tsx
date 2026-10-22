@@ -60,6 +60,21 @@ it('search filters entries and keeps folder context', async () => {
   expect(screen.getByText('命中 1 / 3 项')).toBeTruthy();
 });
 
+it('select-all under a search sends only the matched entries and never their parent folder', async () => {
+  const user = userEvent.setup();
+  bridge.inspectArchive.mockResolvedValue(inspection);
+  bridge.extractSelective.mockResolvedValue({ outputDirectory: 'C:////selected', extractedFiles: ['folder/a.txt'], totalBytes: 1024 });
+  render(wrap(<ArchiveBrowser job={job} close={() => {}} />));
+  await screen.findByText('a.txt');
+  await user.type(screen.getByRole('textbox', { name: '搜索归档条目' }), 'a.txt');
+  await waitFor(() => expect(screen.queryByText('b.txt')).toBeNull());
+  await user.click(screen.getByRole('button', { name: '全选命中项' }));
+  await user.click(screen.getByRole('button', { name: /提取所选条目/ }));
+  await waitFor(() => expect(bridge.extractSelective).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ entryPaths: ['folder/a.txt'] }),
+  ));
+});
+
 it('password-protected archives browse and extract with the entered password without saving it', async () => {
   const user = userEvent.setup();
   bridge.inspectArchive.mockRejectedValueOnce(new Error('NeedsPassword')).mockResolvedValueOnce(inspection);

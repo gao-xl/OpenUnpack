@@ -101,6 +101,9 @@ pub struct Coordinator {
     scheduler_scope: Mutex<Option<HashSet<String>>>,
     settings: Mutex<Settings>,
     running: AtomicBool,
+    // Captured so the folder watcher (a plain std thread) can schedule the
+    // queue without calling tokio::spawn outside a runtime context.
+    runtime: Option<tokio::runtime::Handle>,
     paused: AtomicBool,
     api_paused: AtomicBool,
     stop_batch: Arc<AtomicBool>,
