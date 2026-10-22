@@ -1,4 +1,4 @@
-param([switch]$SkipInstall, [switch]$WorkerProtocol, [switch]$SkipPrepare, [switch]$SkipSecurityAudit)
+param([switch]$SkipInstall, [switch]$WorkerProtocol, [switch]$SkipPrepare, [switch]$SkipSecurityAudit, [switch]$SkipMcpTest)
 . (Join-Path $PSScriptRoot 'common.ps1')
 Assert-OpenUnpackWindows
 Import-OpenUnpackMsvc
@@ -23,12 +23,18 @@ try {
     } finally {
         Pop-Location
     }
-    Push-Location (Join-Path $taskRoot 'apps/mcp-connector')
-    try {
-        if (-not $SkipInstall) { Invoke-OpenUnpackTool npm @('ci') }
-        Invoke-OpenUnpackTool npm @('test')
-    } finally {
-        Pop-Location
+    # The connector uses the native TypeScript 7 compiler, which currently
+    # crashes on some hosts before compiling (Go runtime fast-fail). CI runs it
+    # as a separate informational step so the desktop release gate stays
+    # deterministic; remove this switch once the toolchain is stable.
+    if (-not $SkipMcpTest) {
+        Push-Location (Join-Path $taskRoot 'apps/mcp-connector')
+        try {
+            if (-not $SkipInstall) { Invoke-OpenUnpackTool npm @('ci') }
+            Invoke-OpenUnpackTool npm @('test')
+        } finally {
+            Pop-Location
+        }
     }
     # The named-pipe integration suites require the real Worker and official engine prepared above.
     Invoke-OpenUnpackTool cargo @('test', '--workspace', '--locked', '--', '--test-threads=1')
