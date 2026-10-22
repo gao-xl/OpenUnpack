@@ -301,7 +301,25 @@ async fn automatic_cache_with_unknown_contents_uses_direct_workspace_and_exact_o
     let cache_leftovers: Vec<String> = fs::read_dir(&rig.cache)
         .unwrap()
         .filter_map(|entry| entry.ok())
-        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let children: Vec<String> = if entry.path().is_dir() {
+                fs::read_dir(entry.path())
+                    .map(|items| {
+                        items
+                            .filter_map(|item| item.ok())
+                            .map(|item| item.file_name().to_string_lossy().into_owned())
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            format!(
+                "{name} (dir={}, children={children:?})",
+                entry.path().is_dir()
+            )
+        })
         .collect();
     assert!(
         cache_leftovers.is_empty(),
@@ -1549,7 +1567,25 @@ async fn verify_three_layer_source_cleanup(cleanup: &str, cache_enabled: bool) {
     let cache_leftovers: Vec<String> = fs::read_dir(&rig.cache)
         .unwrap()
         .filter_map(|entry| entry.ok())
-        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let children: Vec<String> = if entry.path().is_dir() {
+                fs::read_dir(entry.path())
+                    .map(|items| {
+                        items
+                            .filter_map(|item| item.ok())
+                            .map(|item| item.file_name().to_string_lossy().into_owned())
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            format!(
+                "{name} (dir={}, children={children:?})",
+                entry.path().is_dir()
+            )
+        })
         .collect();
     assert!(
         cache_leftovers.is_empty(),
