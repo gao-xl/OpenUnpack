@@ -35,6 +35,13 @@ Get-FileHash -Algorithm SHA256 .\OpenUnpack-0.1.0-windows-x64-portable.zip | For
 - **智能化**：物理磁盘拓扑感知调度（HDD 排他串行化、引擎线程压制）；损坏归档抢救与部分提取；NTFS 硬链接去重；冲突决策与语义版控（7 种策略 + 内容感知跳过）；归档内选择性提取；智能密码挖掘（文件名特征 + 伴随文件嗅探）；冗余嵌套自动展平；ZIP 多语言编码自愈。
 - **监听与集成**：监听文件夹自动入队，五层防抢读漏斗 + 独立 intake guard（环路自激、云盘占位符、P2P 预分配、磁盘爆盘等防护）；资源管理器右键菜单；下载器集成脚本；浏览器插件与 Python 客户端示例。
 
+## 构建与验证
+
+- 由 GitHub Actions 在干净 Windows 运行器上从本仓库源码构建（`windows-latest`，Rust 1.96.0 + .NET 10 + Node 24），构建日志公开可查。
+- 已通过：`cargo fmt --check`、`cargo clippy --workspace --all-targets -D warnings`、cargo-audit（0 漏洞，5 条白名单）、Roslyn 安全分析、跨栈契约校验（311 字段 + 变异自测）、架构门禁、前端 ESLint + a11y（0 error / 0 warning）、前端单元测试 **217/217**、依赖物料许可审计（625 组件 / 1249 文件）。
+- 集成回归：解压管线 **38/40** 通过；2 项 `source_cleanup` 用例失败，原因是任务完成后缓存目录残留 1 个条目（源包删除与成品校验本身通过），已在 [Issues](https://github.com/gao-xl/OpenUnpack/issues) 跟踪，计划在下个预发布修复。
+- 本版本包含一处构建前修复：GBK 编码 ZIP 的条目名此前在巡检结果里显示为 CP437 乱码，现已优先使用重解码路径（`测试目录/说明文档.txt` 正常显示）。
+
 ## 已知限制（Beta）
 
 - 未做代码签名，SmartScreen 会提示未知发布者（已提供 SHA-256 校验方式）。
