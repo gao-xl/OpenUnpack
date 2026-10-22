@@ -1,6 +1,21 @@
 using System.Runtime.InteropServices;
 
-namespace OpenUnpack.Core.Native;
+namespace OpenUnpack.Engine.Native;
+
+// Public property IDs from the pinned 7-Zip 26.04 CPP/7zip/PropID.h.
+// kpidEncrypted is 15; 19 is kpidCRC and must never be read as a Boolean.
+internal static class ArchiveProperty
+{
+    internal const uint Path = 3, Name = 4, IsDirectory = 6, Size = 7, Attributes = 9,
+        Encrypted = 15, IsAnti = 21, PosixAttributes = 53, SymbolicLink = 54,
+        IsAlternateStream = 63, ErrorFlags = 71, WarningFlags = 72, HardLink = 90;
+}
+
+internal static class ArchiveErrorFlags
+{
+    internal const ulong EncryptedHeadersError = 1UL << 2,
+        UnsupportedMethod = 1UL << 7, UnsupportedFeature = 1UL << 8;
+}
 
 // ABI declarations follow the public 7-Zip SDK interfaces in IArchive.h, IStream.h and IPassword.h.
 [ComVisible(true), Guid("23170F69-40C1-278A-0000-000300010000"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -45,6 +60,11 @@ public interface IArchiveExtractCallback
     [PreserveSig] int PrepareOperation(int askExtractMode);
     [PreserveSig] int SetOperationResult(int result);
 }
+[ComImport, Guid("23170F69-40C1-278A-0000-000600030000"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface ISetProperties
+{
+    [PreserveSig] int SetProperties([MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] names, [In] PropVariant[] values, int numProps);
+}
 [ComImport, Guid("23170F69-40C1-278A-0000-000600600000"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IInArchive
 {
@@ -74,7 +94,10 @@ public struct PropVariant
     public void Clear() => PropVariantClear(ref this);
     public static PropVariant FromText(string text) => new() { Type = 8, Pointer = Marshal.StringToBSTR(text) };
     public static PropVariant FromNumber(ulong number) => new() { Type = 21, Unsigned = number };
-    [DllImport("ole32.dll")] private static extern int PropVariantClear(ref PropVariant value);
+    public static PropVariant FromUInt32(uint number) => new() { Type = 19, Unsigned = number };
+    [DllImport("ole32.dll", ExactSpelling = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    private static extern int PropVariantClear(ref PropVariant value);
 }
 
 internal static class NativeResult

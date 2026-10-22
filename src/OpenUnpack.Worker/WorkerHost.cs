@@ -2,8 +2,10 @@ using System.Buffers;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.Channels;
+using OpenUnpack.Engine;
 
 namespace OpenUnpack.Worker;
 
@@ -15,6 +17,8 @@ internal sealed class WorkerHost(string prefix, int parentPid, string engine)
     private readonly object _state = new();
     private CancellationTokenSource? _activeCancellation;
     private string? _activeId;
+    private WorkerRequest? _activeRequest;
+    private WorkerRequest? _lastRequest;
     private Task? _activeTask;
     private WorkerEvent? _progress;
 
@@ -31,7 +35,8 @@ internal sealed class WorkerHost(string prefix, int parentPid, string engine)
         ValidateClient(control); ValidateClient(events);
         var writer = WriteEventsAsync(events, _lifetime.Token);
         var monitor = MonitorParentAsync(parent, _lifetime.Token);
-        Emit(new() { Kind = "ready", Message = "作业进程已就绪。" });
+        // Keep the v1 envelope for old clients; v2 clients must validate this advertisement.
+        Emit(new() { Kind = "ready", Hello = CreateHello(engine), Message = "解压进程已就绪。" });
         try
         {
             await foreach (var bytes in ReadLinesAsync(control, _lifetime.Token))
@@ -39,24 +44,55 @@ internal sealed class WorkerHost(string prefix, int parentPid, string engine)
                 WorkerRequest? request;
                 try { request = JsonSerializer.Deserialize<WorkerRequest>(bytes, Protocol.Json); }
                 catch (JsonException) { Emit(Error("", "ProtocolError")); continue; }
-                if (request is null || request.ProtocolVersion != Protocol.Version || string.IsNullOrWhiteSpace(request.RequestId)
-                    || request.RequestId.Length > 200 || request.Operation is null)
-                { Emit(Error(request?.RequestId ?? "", "ProtocolError")); continue; }
-                if (request.Operation == "exit") { _lifetime.Cancel(); break; }
+                finally { CryptographicOperations.ZeroMemory(bytes); }
+                if (request is null || request.ProtocolVersion is not (Protocol.VersionV1 or Protocol.VersionV2)
+                    || string.IsNullOrWhiteSpace(request.RequestId) || request.RequestId.Length > 200 || request.Operation is null
+                    || (request.ProtocolVersion == Protocol.VersionV2
+                        && (string.IsNullOrWhiteSpace(request.OperationId) || request.OperationId.Length > 200
+                            || request.Generation is null or 0)))
+                { ZeroizeRequest(request); Emit(Error(request?.RequestId ?? "", "ProtocolError")); continue; }
+                if (request.Operation == "exit")
+                {
+                    lock (_state)
+                    {
+                        if (request.ProtocolVersion == Protocol.VersionV2 && _lastRequest is not null
+                            && !SameOperation(request, _lastRequest))
+                        { ZeroizeRequest(request); Emit(ForRequest(Error(request.RequestId, "ProtocolError"), request)); continue; }
+                    }
+                    ZeroizeRequest(request);
+                    _lifetime.Cancel(); break;
+                }
                 if (request.Operation == "ping")
-                { Emit(new() { RequestId = request.RequestId, Kind = "heartbeat", Message = "作业进程可响应。" }); continue; }
+                {
+                    lock (_state)
+                    {
+                        if (request.ProtocolVersion == Protocol.VersionV2 && _lastRequest is not null
+                            && !SameOperation(request, _lastRequest))
+                        { ZeroizeRequest(request); Emit(ForRequest(Error(request.RequestId, "ProtocolError"), request)); continue; }
+                    }
+                    ZeroizeRequest(request);
+                    Emit(ForRequest(new() { Kind = "heartbeat", Message = "解压进程运行正常。" }, request)); continue;
+                }
                 if (request.Operation == "cancel")
                 {
                     lock (_state)
-                        if (_activeId == request.RequestId) _activeCancellation?.Cancel();
+                    {
+                        if (_activeRequest is not null && SameOperation(request, _activeRequest))
+                            _activeCancellation?.Cancel();
+                        else Emit(ForRequest(Error(request.RequestId, "ProtocolError"), request));
+                    }
+                    ZeroizeRequest(request);
                     continue;
                 }
-                if (request.Operation is not ("extract" or "copy" or "readback" or "probe"))
-                { Emit(Error(request.RequestId, "ProtocolError")); continue; }
+                if (request.Operation is not ("extract" or "copy" or "readback" or "probe" or "inspect"))
+                { ZeroizeRequest(request); Emit(ForRequest(Error(request.RequestId, "ProtocolError"), request)); continue; }
                 lock (_state)
                 {
-                    if (_activeId is not null) { Emit(Error(request.RequestId, "ProtocolError")); continue; }
+                    if (_activeId is not null) { ZeroizeRequest(request); Emit(ForRequest(Error(request.RequestId, "ProtocolError"), request)); continue; }
                     _activeId = request.RequestId;
+                    // Store only operation identity, never retain password-bearing requests.
+                    _activeRequest = IdentityOnly(request);
+                    _lastRequest = _activeRequest;
                     _activeCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
                     var cancellation = _activeCancellation;
                     _activeTask = Task.Run(() => ExecuteAsync(request, cancellation), CancellationToken.None);
@@ -79,30 +115,54 @@ internal sealed class WorkerHost(string prefix, int parentPid, string engine)
 
     private async Task ExecuteAsync(WorkerRequest request, CancellationTokenSource cancellation)
     {
+        ApplyProcessPriority(request.WorkerPriority);
         WorkerEvent result;
         try
         {
             result = await new WorkerOperations(engine).ExecuteAsync(request,
-                value => Interlocked.Exchange(ref _progress, value), cancellation.Token);
+                value => Interlocked.Exchange(ref _progress, ForRequest(value, request)), cancellation.Token);
         }
         catch (OperationCanceledException)
-        { result = new() { RequestId = request.RequestId, Kind = "cancelled", ErrorCode = "Cancelled", Message = "作业已取消。" }; }
-        catch (Exception ex) { result = Error(request.RequestId, WorkerOperations.ErrorCode(ex, request)); }
-        Interlocked.Exchange(ref _progress, null);
-        Emit(result);
-        lock (_state)
+        { result = new() { RequestId = request.RequestId, Kind = "cancelled", ErrorCode = "Cancelled", Message = "解压已取消。" }; }
+        catch (Exception ex)
         {
-            _activeId = null;
-            _activeCancellation = null;
-            cancellation.Dispose();
+            var code = WorkerOperations.ErrorCode(ex, request);
+            SafeDiagnostics.Emit(request.Operation, request.Operation is "inspect" or "probe" ? "metadata"
+                : request.Operation == "extract" ? "decode" : "transfer", code, ex);
+            result = Error(request.RequestId, code);
         }
+        finally
+        {
+            Interlocked.Exchange(ref _progress, null);
+            lock (_state)
+            {
+                _activeId = null;
+                _activeRequest = null;
+                _activeCancellation = null;
+                cancellation.Dispose();
+            }
+        }
+        Emit(ForRequest(result, request));
+        ZeroizeRequest(request, result.MatchedPassword);
     }
 
     private void Emit(WorkerEvent value)
     {
-        // Terminal/control traffic has a separate bounded queue. On flooding, disconnect,
-        // rather than waiting under a state lock or starving cancellation.
-        if (!_events.Writer.TryWrite(value)) _lifetime.Cancel();
+        if (_events.Writer.TryWrite(value)) return;
+
+        // Terminal/control traffic must never be dropped due to transient queue pressure.
+        if (value.Kind is "completed" or "cancelled" or "error" or "ready")
+        {
+            _events.Reader.TryRead(out _);
+            if (_events.Writer.TryWrite(value)) return;
+
+            _ = Task.Run(async () =>
+            {
+                try { await _events.Writer.WriteAsync(value, _lifetime.Token); }
+                catch { _lifetime.Cancel(); }
+            });
+            return;
+        }
     }
 
     private async Task WriteEventsAsync(Stream pipe, CancellationToken token)
@@ -117,9 +177,9 @@ internal sealed class WorkerHost(string prefix, int parentPid, string engine)
                 if (progress is not null) await WriteEventAsync(pipe, progress, token);
                 if (Stopwatch.GetElapsedTime(lastHeartbeat) >= TimeSpan.FromSeconds(2))
                 {
-                    string? active;
-                    lock (_state) active = _activeId;
-                    if (active is not null) await WriteEventAsync(pipe, new() { RequestId = active, Kind = "heartbeat" }, token);
+                    WorkerRequest? active;
+                    lock (_state) active = _activeRequest;
+                    if (active is not null) await WriteEventAsync(pipe, ForRequest(new() { Kind = "heartbeat" }, active), token);
                     lastHeartbeat = Stopwatch.GetTimestamp();
                 }
                 await Task.Delay(100, token);
@@ -130,11 +190,20 @@ internal sealed class WorkerHost(string prefix, int parentPid, string engine)
 
     private static async Task WriteEventAsync(Stream pipe, WorkerEvent value, CancellationToken token)
     {
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(value, Protocol.Json);
-        if (bytes.Length > Protocol.MaxMessageBytes) throw new IOException();
-        await pipe.WriteAsync(bytes, token);
-        await pipe.WriteAsync(new byte[] { (byte)'\n' }, token);
-        await pipe.FlushAsync(token);
+        byte[]? bytes = null;
+        try
+        {
+            bytes = JsonSerializer.SerializeToUtf8Bytes(value, Protocol.Json);
+            if (bytes.Length > Protocol.MaxMessageBytes) throw new IOException();
+            await pipe.WriteAsync(bytes, token);
+            await pipe.WriteAsync(new byte[] { (byte)'\n' }, token);
+            await pipe.FlushAsync(token);
+        }
+        finally
+        {
+            if (bytes is not null) CryptographicOperations.ZeroMemory(bytes);
+            if (value.MatchedPassword is not null) CredentialSecurity.ZeroizeString(value.MatchedPassword);
+        }
     }
 
     private static async IAsyncEnumerable<byte[]> ReadLinesAsync(Stream pipe,
@@ -142,20 +211,40 @@ internal sealed class WorkerHost(string prefix, int parentPid, string engine)
     {
         var chunk = new byte[4096];
         var message = new ArrayBufferWriter<byte>();
-        while (true)
+        try
         {
-            var count = await pipe.ReadAsync(chunk, token);
-            if (count == 0) yield break;
-            var start = 0;
-            for (var i = 0; i < count; i++)
+            while (true)
             {
-                if (chunk[i] != '\n') continue;
-                Append(message, chunk, start, i - start);
-                yield return message.WrittenMemory.ToArray();
-                message.Clear();
-                start = i + 1;
+                var count = await pipe.ReadAsync(chunk, token);
+                if (count == 0) yield break;
+                var start = 0;
+                for (var i = 0; i < count; i++)
+                {
+                    if (chunk[i] != '\n') continue;
+                    Append(message, chunk, start, i - start);
+                    yield return message.WrittenMemory.ToArray();
+                    ZeroWritten(message);
+                    message.Clear();
+                    start = i + 1;
+                }
+                Append(message, chunk, start, count - start);
             }
-            Append(message, chunk, start, count - start);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(chunk);
+            ZeroWritten(message);
+        }
+    }
+
+    private static void ZeroWritten(ArrayBufferWriter<byte> buffer)
+    {
+        if (buffer.WrittenCount > 0)
+        {
+            CryptographicOperations.ZeroMemory(
+                System.Runtime.InteropServices.MemoryMarshal.CreateSpan(
+                    ref System.Runtime.InteropServices.MemoryMarshal.GetReference(buffer.WrittenSpan),
+                    buffer.WrittenCount));
         }
     }
 
@@ -186,9 +275,103 @@ internal sealed class WorkerHost(string prefix, int parentPid, string engine)
     }
 
     [DllImport("kernel32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetNamedPipeClientProcessId(IntPtr pipe, out uint clientProcessId);
 
     private static WorkerEvent Error(string requestId, string code) => new()
     { RequestId = requestId, Kind = "error", ErrorCode = code, Message = WorkerOperations.ErrorMessage(code) };
+
+    internal static WorkerHello CreateHello(string enginePath)
+    {
+        string version = "unknown";
+        try
+        {
+            var info = FileVersionInfo.GetVersionInfo(enginePath);
+            if (info.FileMajorPart > 0) version = $"{info.FileMajorPart}.{info.FileMinorPart:D2}";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        { SafeDiagnostics.Emit("startup", "metadata", "IoError", ex); }
+        return new()
+        {
+            Capabilities = new()
+            {
+                BackendVersion = version,
+                Backends = [
+                    new() { BackendId = "7-Zip", BackendVersion = version,
+                        Formats = ["7z", "zip", "rar", "tar", "gz", "bz2", "xz", "cab", "wim", "lzh", "zstd", "verifiedSfx"],
+                        ReadMetadata = true, EncryptedArchives = true, UnknownExpandedSize = true,
+                        VerificationScopes = ["archiveCrcAndStreamSha256", "salvagedWithCrcWarning"] },
+                    new() { BackendId = "managed-lz4-frame", BackendVersion = "implementation-v1",
+                        Formats = ["lz4IndependentSingleFrame"], ReadMetadata = true,
+                        EncryptedArchives = false, UnknownExpandedSize = true,
+                        VerificationScopes = ["frameValidationAndStreamSha256"] }
+                ]
+            }
+        };
+    }
+
+    private static WorkerRequest IdentityOnly(WorkerRequest request) => new()
+    { ProtocolVersion = request.ProtocolVersion, RequestId = request.RequestId,
+      OperationId = request.OperationId, Generation = request.Generation };
+
+    private static bool SameOperation(WorkerRequest left, WorkerRequest right) =>
+        left.ProtocolVersion == right.ProtocolVersion && left.RequestId == right.RequestId
+        && (left.ProtocolVersion == Protocol.VersionV1
+            || (left.OperationId == right.OperationId && left.Generation == right.Generation));
+
+    private static WorkerEvent ForRequest(WorkerEvent value, WorkerRequest request) => value with
+    { ProtocolVersion = request.ProtocolVersion, RequestId = request.RequestId,
+      OperationId = request.OperationId, Generation = request.Generation };
+
+    private static void ZeroizeRequest(WorkerRequest? request, string? preserve = null)
+    {
+        if (request is null) return;
+        if (request.Password is not null && !ReferenceEquals(request.Password, preserve))
+        {
+            CredentialSecurity.ZeroizeString(request.Password);
+        }
+        if (request.CandidatePasswords is not null)
+        {
+            foreach (var pwd in request.CandidatePasswords)
+            {
+                if (pwd is not null && !ReferenceEquals(pwd, preserve))
+                {
+                    CredentialSecurity.ZeroizeString(pwd);
+                }
+            }
+            request.CandidatePasswords.Clear();
+        }
+        if (request.Candidates is not null)
+        {
+            foreach (var candidate in request.Candidates)
+            {
+                if (candidate?.Secret is not null && !ReferenceEquals(candidate.Secret, preserve))
+                {
+                    CredentialSecurity.ZeroizeString(candidate.Secret);
+                }
+            }
+            request.Candidates.Clear();
+        }
+    }
+
+    private static void ApplyProcessPriority(string? priority)
+    {
+        if (string.IsNullOrWhiteSpace(priority)) return;
+        try
+        {
+            var p = Process.GetCurrentProcess();
+            var target = priority switch
+            {
+                "idle" or "low" => ProcessPriorityClass.Idle,
+                "belowNormal" => ProcessPriorityClass.BelowNormal,
+                "normal" => ProcessPriorityClass.Normal,
+                "aboveNormal" => ProcessPriorityClass.AboveNormal,
+                "high" => ProcessPriorityClass.High,
+                _ => ProcessPriorityClass.BelowNormal
+            };
+            if (p.PriorityClass != target) p.PriorityClass = target;
+        }
+        catch { /* Non-critical if insufficient privilege */ }
+    }
 }
