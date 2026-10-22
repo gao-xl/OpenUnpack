@@ -2,7 +2,10 @@
 identifier = "main-commands"
 description = "本机主窗口的用户操作；文件权限还须经Rust原生选择器授权。"
 commands.allow = [
- "snapshot", "scan_sources", "cancel_scan", "preview_exclusions", "add_jobs", "start_jobs", "pause_jobs", "cancel_jobs", "retry_job", "retry_node", "remove_job", "clear_completed",
+ "set_ui_language",
+ "api_status", "api_configure", "api_create_client", "api_revoke_client", "api_open_docs",
+ "snapshot", "queue_snapshot", "snapshot_update", "history_page", "job_details", "scan_sources", "cancel_scan", "preview_exclusions", "cancel_preview_exclusions", "add_jobs", "start_jobs", "pause_jobs", "cancel_jobs", "retry_job", "retry_node", "remove_job", "clear_completed",
  "passwords", "save_password", "delete_password", "reveal_password", "copy_password", "bulk_password_action", "preview_import", "confirm_import",
- "export_backup", "preview_restore_backup", "confirm_restore_backup", "save_settings", "history", "clear_history", "recover_job", "open_path", "pick_files", "pick_directory", "pick_save_backup", "pick_open_backup", "read_import_file"
+ "export_backup", "preview_restore_backup", "confirm_restore_backup", "save_settings", "history", "clear_history", "recover_job", "inspect_archive", "cancel_inspect_archive", "open_path", "pick_files", "pick_directory", "pick_save_backup", "pick_open_backup", "read_import_file", "preview_toolbox_operation", "execute_toolbox_operation",
+ "extract_selective", "execute_post_action", "get_shell_context_menu_status", "set_shell_context_menu_status"
 ]

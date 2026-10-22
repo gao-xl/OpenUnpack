@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-preview-toolbox-operation"
+description = "Enables the preview_toolbox_operation command without any pre-configured scope."
+commands.allow = ["preview_toolbox_operation"]
+
+[[permission]]
+identifier = "deny-preview-toolbox-operation"
+description = "Denies the preview_toolbox_operation command without any pre-configured scope."
+commands.deny = ["preview_toolbox_operation"]

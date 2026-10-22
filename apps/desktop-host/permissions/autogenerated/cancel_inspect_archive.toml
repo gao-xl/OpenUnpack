@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-cancel-inspect-archive"
+description = "Enables the cancel_inspect_archive command without any pre-configured scope."
+commands.allow = ["cancel_inspect_archive"]
+
+[[permission]]
+identifier = "deny-cancel-inspect-archive"
+description = "Denies the cancel_inspect_archive command without any pre-configured scope."
+commands.deny = ["cancel_inspect_archive"]

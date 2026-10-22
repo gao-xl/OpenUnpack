@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-extract-selective"
+description = "Enables the extract_selective command without any pre-configured scope."
+commands.allow = ["extract_selective"]
+
+[[permission]]
+identifier = "deny-extract-selective"
+description = "Denies the extract_selective command without any pre-configured scope."
+commands.deny = ["extract_selective"]

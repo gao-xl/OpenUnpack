@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-shell-context-menu-status"
+description = "Enables the set_shell_context_menu_status command without any pre-configured scope."
+commands.allow = ["set_shell_context_menu_status"]
+
+[[permission]]
+identifier = "deny-set-shell-context-menu-status"
+description = "Denies the set_shell_context_menu_status command without any pre-configured scope."
+commands.deny = ["set_shell_context_menu_status"]

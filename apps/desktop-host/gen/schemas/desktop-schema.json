@@ -183,16 +183,58 @@
           "markdownDescription": "Enables the add_jobs command without any pre-configured scope."
         },
         {
+          "description": "Enables the api_configure command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-api-configure",
+          "markdownDescription": "Enables the api_configure command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the api_create_client command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-api-create-client",
+          "markdownDescription": "Enables the api_create_client command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the api_open_docs command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-api-open-docs",
+          "markdownDescription": "Enables the api_open_docs command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the api_revoke_client command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-api-revoke-client",
+          "markdownDescription": "Enables the api_revoke_client command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the api_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-api-status",
+          "markdownDescription": "Enables the api_status command without any pre-configured scope."
+        },
+        {
           "description": "Enables the bulk_password_action command without any pre-configured scope.",
           "type": "string",
           "const": "allow-bulk-password-action",
           "markdownDescription": "Enables the bulk_password_action command without any pre-configured scope."
         },
         {
+          "description": "Enables the cancel_inspect_archive command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-cancel-inspect-archive",
+          "markdownDescription": "Enables the cancel_inspect_archive command without any pre-configured scope."
+        },
+        {
           "description": "Enables the cancel_jobs command without any pre-configured scope.",
           "type": "string",
           "const": "allow-cancel-jobs",
           "markdownDescription": "Enables the cancel_jobs command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the cancel_preview_exclusions command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-cancel-preview-exclusions",
+          "markdownDescription": "Enables the cancel_preview_exclusions command without any pre-configured scope."
         },
         {
           "description": "Enables the cancel_scan command without any pre-configured scope.",
@@ -237,16 +279,58 @@
           "markdownDescription": "Enables the delete_password command without any pre-configured scope."
         },
         {
+          "description": "Enables the execute_post_action command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-execute-post-action",
+          "markdownDescription": "Enables the execute_post_action command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the execute_toolbox_operation command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-execute-toolbox-operation",
+          "markdownDescription": "Enables the execute_toolbox_operation command without any pre-configured scope."
+        },
+        {
           "description": "Enables the export_backup command without any pre-configured scope.",
           "type": "string",
           "const": "allow-export-backup",
           "markdownDescription": "Enables the export_backup command without any pre-configured scope."
         },
         {
+          "description": "Enables the extract_selective command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-extract-selective",
+          "markdownDescription": "Enables the extract_selective command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_shell_context_menu_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-shell-context-menu-status",
+          "markdownDescription": "Enables the get_shell_context_menu_status command without any pre-configured scope."
+        },
+        {
           "description": "Enables the history command without any pre-configured scope.",
           "type": "string",
           "const": "allow-history",
           "markdownDescription": "Enables the history command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the history_page command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-history-page",
+          "markdownDescription": "Enables the history_page command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the inspect_archive command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-inspect-archive",
+          "markdownDescription": "Enables the inspect_archive command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the job_details command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-job-details",
+          "markdownDescription": "Enables the job_details command without any pre-configured scope."
         },
         {
           "description": "Enables the open_path command without any pre-configured scope.",
@@ -309,6 +393,18 @@
           "markdownDescription": "Enables the preview_restore_backup command without any pre-configured scope."
         },
         {
+          "description": "Enables the preview_toolbox_operation command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-preview-toolbox-operation",
+          "markdownDescription": "Enables the preview_toolbox_operation command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the queue_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-queue-snapshot",
+          "markdownDescription": "Enables the queue_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Enables the read_import_file command without any pre-configured scope.",
           "type": "string",
           "const": "allow-read-import-file",
@@ -363,10 +459,28 @@
           "markdownDescription": "Enables the scan_sources command without any pre-configured scope."
         },
         {
+          "description": "Enables the set_shell_context_menu_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-shell-context-menu-status",
+          "markdownDescription": "Enables the set_shell_context_menu_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the set_ui_language command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-ui-language",
+          "markdownDescription": "Enables the set_ui_language command without any pre-configured scope."
+        },
+        {
           "description": "Enables the snapshot command without any pre-configured scope.",
           "type": "string",
           "const": "allow-snapshot",
           "markdownDescription": "Enables the snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the snapshot_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-snapshot-update",
+          "markdownDescription": "Enables the snapshot_update command without any pre-configured scope."
         },
         {
           "description": "Enables the start_jobs command without any pre-configured scope.",
@@ -381,16 +495,58 @@
           "markdownDescription": "Denies the add_jobs command without any pre-configured scope."
         },
         {
+          "description": "Denies the api_configure command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-api-configure",
+          "markdownDescription": "Denies the api_configure command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the api_create_client command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-api-create-client",
+          "markdownDescription": "Denies the api_create_client command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the api_open_docs command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-api-open-docs",
+          "markdownDescription": "Denies the api_open_docs command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the api_revoke_client command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-api-revoke-client",
+          "markdownDescription": "Denies the api_revoke_client command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the api_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-api-status",
+          "markdownDescription": "Denies the api_status command without any pre-configured scope."
+        },
+        {
           "description": "Denies the bulk_password_action command without any pre-configured scope.",
           "type": "string",
           "const": "deny-bulk-password-action",
           "markdownDescription": "Denies the bulk_password_action command without any pre-configured scope."
         },
         {
+          "description": "Denies the cancel_inspect_archive command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-cancel-inspect-archive",
+          "markdownDescription": "Denies the cancel_inspect_archive command without any pre-configured scope."
+        },
+        {
           "description": "Denies the cancel_jobs command without any pre-configured scope.",
           "type": "string",
           "const": "deny-cancel-jobs",
           "markdownDescription": "Denies the cancel_jobs command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the cancel_preview_exclusions command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-cancel-preview-exclusions",
+          "markdownDescription": "Denies the cancel_preview_exclusions command without any pre-configured scope."
         },
         {
           "description": "Denies the cancel_scan command without any pre-configured scope.",
@@ -435,16 +591,58 @@
           "markdownDescription": "Denies the delete_password command without any pre-configured scope."
         },
         {
+          "description": "Denies the execute_post_action command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-execute-post-action",
+          "markdownDescription": "Denies the execute_post_action command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the execute_toolbox_operation command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-execute-toolbox-operation",
+          "markdownDescription": "Denies the execute_toolbox_operation command without any pre-configured scope."
+        },
+        {
           "description": "Denies the export_backup command without any pre-configured scope.",
           "type": "string",
           "const": "deny-export-backup",
           "markdownDescription": "Denies the export_backup command without any pre-configured scope."
         },
         {
+          "description": "Denies the extract_selective command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-extract-selective",
+          "markdownDescription": "Denies the extract_selective command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_shell_context_menu_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-shell-context-menu-status",
+          "markdownDescription": "Denies the get_shell_context_menu_status command without any pre-configured scope."
+        },
+        {
           "description": "Denies the history command without any pre-configured scope.",
           "type": "string",
           "const": "deny-history",
           "markdownDescription": "Denies the history command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the history_page command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-history-page",
+          "markdownDescription": "Denies the history_page command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the inspect_archive command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-inspect-archive",
+          "markdownDescription": "Denies the inspect_archive command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the job_details command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-job-details",
+          "markdownDescription": "Denies the job_details command without any pre-configured scope."
         },
         {
           "description": "Denies the open_path command without any pre-configured scope.",
@@ -507,6 +705,18 @@
           "markdownDescription": "Denies the preview_restore_backup command without any pre-configured scope."
         },
         {
+          "description": "Denies the preview_toolbox_operation command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-preview-toolbox-operation",
+          "markdownDescription": "Denies the preview_toolbox_operation command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the queue_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-queue-snapshot",
+          "markdownDescription": "Denies the queue_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Denies the read_import_file command without any pre-configured scope.",
           "type": "string",
           "const": "deny-read-import-file",
@@ -561,10 +771,28 @@
           "markdownDescription": "Denies the scan_sources command without any pre-configured scope."
         },
         {
+          "description": "Denies the set_shell_context_menu_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-shell-context-menu-status",
+          "markdownDescription": "Denies the set_shell_context_menu_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_ui_language command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-ui-language",
+          "markdownDescription": "Denies the set_ui_language command without any pre-configured scope."
+        },
+        {
           "description": "Denies the snapshot command without any pre-configured scope.",
           "type": "string",
           "const": "deny-snapshot",
           "markdownDescription": "Denies the snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the snapshot_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-snapshot-update",
+          "markdownDescription": "Denies the snapshot_update command without any pre-configured scope."
         },
         {
           "description": "Denies the start_jobs command without any pre-configured scope.",

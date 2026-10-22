@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-api-create-client"
+description = "Enables the api_create_client command without any pre-configured scope."
+commands.allow = ["api_create_client"]
+
+[[permission]]
+identifier = "deny-api-create-client"
+description = "Denies the api_create_client command without any pre-configured scope."
+commands.deny = ["api_create_client"]

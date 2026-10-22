@@ -5,25 +5,31 @@ edition.workspace = true
 license.workspace = true
 
 [lib]
-name = "openunpack_desktop"
-crate-type = ["staticlib","cdylib","rlib"]
+name = "openunpack_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
 openunpack-core = { path = "../../crates/core" }
+openunpack-local-api = { path = "../../crates/local-api" }
+openunpack-application = { path = "../../crates/application" }
+openunpack-domain = { path = "../../crates/domain" }
+openunpack-infrastructure = { path = "../../crates/infrastructure" }
+openunpack-protocol = { path = "../../crates/protocol" }
 tauri = { version = "2", features = ["tray-icon"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["rt-multi-thread","time","sync"] }
+tokio = { version = "1", features = ["rt-multi-thread", "time", "sync", "signal"] }
 rfd = "0.15"
 encoding_rs = "0.8"
 zeroize = "1"
-windows-sys = { version = "0.61", features = ["Win32_Foundation","Win32_System_DataExchange","Win32_System_Memory","Win32_UI_WindowsAndMessaging","Win32_System_Diagnostics_Debug"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_UI_WindowsAndMessaging", "Win32_System_Diagnostics_Debug"] }
 
 [dev-dependencies]
 tempfile = "3"
 
 [build-dependencies]
-tauri-build = "2"
+tauri-build = { version = "2", features = [] }
+indexmap = { version = "=1.9.3", features = ["std"] }
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

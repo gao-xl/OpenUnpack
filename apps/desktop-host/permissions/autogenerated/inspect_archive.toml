@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-inspect-archive"
+description = "Enables the inspect_archive command without any pre-configured scope."
+commands.allow = ["inspect_archive"]
+
+[[permission]]
+identifier = "deny-inspect-archive"
+description = "Denies the inspect_archive command without any pre-configured scope."
+commands.deny = ["inspect_archive"]
