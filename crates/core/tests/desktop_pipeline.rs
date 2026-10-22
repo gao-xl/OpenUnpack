@@ -298,7 +298,12 @@ async fn automatic_cache_with_unknown_contents_uses_direct_workspace_and_exact_o
         expected
     );
     assert_eq!(fs::read(&archive).unwrap(), archive_before);
-    assert_eq!(fs::read_dir(&rig.cache).unwrap().count(), 0);
+    let cache_leftovers: Vec<String> = fs::read_dir(&rig.cache)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert!(cache_leftovers.is_empty(), "cache workspace residue: {cache_leftovers:?}");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1538,7 +1543,12 @@ async fn verify_three_layer_source_cleanup(cleanup: &str, cache_enabled: bool) {
         job.workspace.is_none(),
         "completed workspaces must be retired"
     );
-    assert_eq!(fs::read_dir(&rig.cache).unwrap().count(), 0);
+    let cache_leftovers: Vec<String> = fs::read_dir(&rig.cache)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert!(cache_leftovers.is_empty(), "cache workspace residue: {cache_leftovers:?}");
     let direct_work = rig.output.join(".openunpack-work");
     if direct_work.exists() {
         assert_eq!(fs::read_dir(direct_work).unwrap().count(), 0);

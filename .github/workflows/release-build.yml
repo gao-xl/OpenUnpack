@@ -1,0 +1,66 @@
+name: Build release artifacts
+
+# Deterministic packaging path. The verification workflow owns the test gates;
+# this one only produces installable artifacts so a release is not blocked by an
+# unrelated, still-open test failure.
+on:
+  workflow_dispatch:
+    inputs:
+      offline_installer:
+        description: Include Microsoft WebView2 offline installer (larger artifact)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.15.0
+          cache: npm
+          cache-dependency-path: |
+            apps/desktop-ui/package-lock.json
+            apps/mcp-connector/package-lock.json
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          global-json-file: global.json
+      - name: Pin Rust MSVC toolchain
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup override set 1.96.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install frontend dependencies
+        working-directory: apps/desktop-ui
+        run: |
+          npm ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Prepare self-contained Worker and UI
+        run: ./scripts/prepare-desktop.ps1
+      - name: Build portable, source and NSIS installer artifacts
+        run: |
+          $offline = '${{ inputs.offline_installer }}' -eq 'true'
+          ./scripts/build-desktop.ps1 -SkipPrepare -Installer -OfflineInstaller:$offline
+      - name: Show produced artifacts
+        run: Get-ChildItem artifacts/release | Select-Object Name, Length
+      - name: Upload release candidates
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: OpenUnpack-windows-x64-release-candidates
+          path: |
+            artifacts/release/*.zip
+            artifacts/release/*-setup.exe
+            artifacts/release/SHA256SUMS.txt
