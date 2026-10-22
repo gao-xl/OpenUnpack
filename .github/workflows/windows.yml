@@ -104,7 +104,7 @@ jobs:
       - name: Restore release material cache
         # Upstream licence hosts (gnu.org, api.github.com) intermittently refuse
         # connections from hosted runners; reuse previously verified materials.
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: artifacts/release-materials
           key: ${{ runner.os }}-release-materials-${{ hashFiles('Cargo.lock', 'scripts/collect-release-materials.mjs', 'apps/desktop-ui/package-lock.json') }}
