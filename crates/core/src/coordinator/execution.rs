@@ -622,10 +622,44 @@ impl Coordinator {
                     };
                     let _ = self.need_input_broadcaster.send(need_event);
 
-                    if let Ok(Ok(external_pwd)) =
-                        tokio::time::timeout(Duration::from_secs(60), rx).await
-                        && !external_pwd.trim().is_empty()
-                    {
+                    // A plain `timeout` kept the request parked for the whole
+                    // minute even after a cancel. Poll the cancel set alongside
+                    // the reply so cancelling during the wait returns at once.
+                    let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
+                    let mut receiver = rx;
+                    let mut external: Option<String> = None;
+                    loop {
+                        let cancelled = self
+                            .cancelled_jobs
+                            .lock()
+                            .map(|set| set.contains(&job.id))
+                            .unwrap_or(false);
+                        if cancelled {
+                            if let Ok(mut pending) = self.pending_inputs.lock() {
+                                pending.remove(&job.id);
+                            }
+                            return Err("Cancelled".into());
+                        }
+                        let remaining =
+                            deadline.saturating_duration_since(tokio::time::Instant::now());
+                        if remaining.is_zero() {
+                            break;
+                        }
+                        match tokio::time::timeout(
+                            remaining.min(Duration::from_millis(200)),
+                            &mut receiver,
+                        )
+                        .await
+                        {
+                            Ok(Ok(value)) => {
+                                external = Some(value);
+                                break;
+                            }
+                            Ok(Err(_)) => break,
+                            Err(_) => continue,
+                        }
+                    }
+                    if let Some(external_pwd) = external.filter(|value| !value.trim().is_empty()) {
                         if let Ok(mut ephem_map) = self.ephemeral_passwords.lock() {
                             ephem_map
                                 .entry(job.id.clone())
