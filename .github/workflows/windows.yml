@@ -47,7 +47,12 @@ jobs:
         with:
           tool: cargo-audit
       - name: Prepare self-contained Worker and UI
-        run: ./scripts/prepare-desktop.ps1
+        # Check the complete tracked tree before preparing or packaging artifacts.
+        # Source packaging alone does not inspect private files committed elsewhere.
+        run: |
+          node scripts/audit-git.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./scripts/prepare-desktop.ps1
       - name: Verify security audit policies with malformed and outdated inputs
         run: ./scripts/test-security-audit-policy.ps1
       - name: Lint frontend
@@ -96,6 +101,13 @@ jobs:
             }
             exit $LASTEXITCODE
           }
+      - name: Restore release material cache
+        # Upstream licence hosts (gnu.org, api.github.com) intermittently refuse
+        # connections from hosted runners; reuse previously verified materials.
+        uses: actions/cache@v4
+        with:
+          path: artifacts/release-materials
+          key: ${{ runner.os }}-release-materials-${{ hashFiles('Cargo.lock', 'scripts/collect-release-materials.mjs', 'apps/desktop-ui/package-lock.json') }}
       - name: Fetch locked Rust dependencies and collect notices/source
         run: |
           cargo fetch --locked --target x86_64-pc-windows-msvc
