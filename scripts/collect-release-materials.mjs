@@ -74,10 +74,16 @@ if (engine.version !== '26.04' || sha(fs.readFileSync(path.join(root, 'tools/7zi
 // extracted from the pinned MSI; an unverified copy must never enter the notices bundle.
 const engineLicense = fs.readFileSync(path.join(root, 'tools/7zip/License.txt'));
 if (sha(engineLicense) !== engine.licenseSha256) throw new Error('Engine License.txt does not match the pinned MSI provenance.');
+// Preserve the exact GNU text in source: hosted runners cannot reliably reach
+// www.gnu.org. Its bytes were checked against the official URL and the previous
+// release bundle; never substitute an unchecked cached or downloaded license.
+const lgplSource = 'https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt';
+const lgplLicense = fs.readFileSync(path.join(root, 'assets/legal/7zip/COPYING.LESSER-2.1.txt'));
+if (sha(lgplLicense) !== '20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95') throw new Error('Bundled LGPL-2.1 license integrity mismatch.');
 records.push({ component: '7-Zip', version: '26.04', license: 'LGPL-2.1-or-later AND BSD-2-Clause AND BSD-3-Clause AND LicenseRef-unRAR-restriction', files: [
   save('7zip/License.txt', engineLicense),
   await download('https://github.com/ip7z/7zip/releases/download/26.04/7z2604-src.7z', '7zip/7z2604-src.7z', '6bcfd2679d178174df06d09d50147dd7b5980d7beac896136689dfc9d51e0fd9'),
-  await download('https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt', '7zip/COPYING.LESSER-2.1.txt'),
+  { ...save('7zip/COPYING.LESSER-2.1.txt', lgplLicense), source: lgplSource },
   copy(path.join(root, 'tools/7zip/provenance.json'), '7zip/binary-provenance.json'),
 ] });
 // The self-contained publish and its notices must refer to the same runtime release.

@@ -43,6 +43,8 @@ for (const required of ['crates/local-api/Cargo.toml', 'crates/local-api/assets/
 for (const required of ['apps/mcp-connector/package.json', 'apps/mcp-connector/package-lock.json', 'apps/mcp-connector/tsconfig.json', 'apps/mcp-connector/README.md', 'apps/mcp-connector/src/index.ts']) {
   if (!fs.existsSync(path.join(root, required))) throw new Error(`Source release missing MCP connector material ${required}`);
 }
+const lgplLicense = fs.readFileSync(path.join(root, 'assets/legal/7zip/COPYING.LESSER-2.1.txt'));
+if (crypto.createHash('sha256').update(lgplLicense).digest('hex') !== '20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95') throw new Error('Source release LGPL-2.1 license integrity mismatch.');
 const swaggerProvenance = JSON.parse(fs.readFileSync(path.join(root, 'assets/legal/swagger-ui/provenance.json'), 'utf8'));
 for (const asset of swaggerProvenance.assets) {
   if (!['swagger-ui.css', 'swagger-ui-bundle.js', 'swagger-ui-standalone-preset.js'].includes(asset.path)) throw new Error('Unexpected Swagger UI source asset.');
