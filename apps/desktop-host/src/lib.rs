@@ -2524,7 +2524,12 @@ pub fn run() {
                     return Err(err.into());
                 }
             };
-            let coordinator = match Coordinator::open(data_dir, worker_exe, worker_dll) {
+            let coordinator = match open_coordinator_on_runtime(
+                data_dir,
+                worker_exe,
+                worker_dll,
+                tauri::async_runtime::handle().inner(),
+            ) {
                 Ok(coord) => coord,
                 Err(err) => {
                     MessageDialog::new()
@@ -2760,6 +2765,18 @@ fn mask_token(token: &str) -> String {
     format!("{head}…{tail}")
 }
 
+fn open_coordinator_on_runtime(
+    data: PathBuf,
+    worker: PathBuf,
+    engine: PathBuf,
+    runtime: &tokio::runtime::Handle,
+) -> Result<Arc<Coordinator>, String> {
+    // Both host entry points initialize on a plain OS thread. Core captures
+    // this handle so its folder watcher can dispatch without a Tokio context.
+    let _entered = runtime.enter();
+    Coordinator::open(data, worker, engine)
+}
+
 pub fn run_headless() {
     println!("==================================================");
     println!(" OpenUnpack Daemon (Headless Mode)");
@@ -2841,13 +2858,18 @@ pub fn run_headless() {
     };
     println!("Worker engine:  {}", worker_exe.display());
 
-    let coordinator = match Coordinator::open(data_dir.clone(), worker_exe, worker_dll) {
-        Ok(coord) => coord,
-        Err(err) => {
-            eprintln!("[Error] Failed to initialize Coordinator: {err}");
-            std::process::exit(1);
-        }
-    };
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to initialize Tokio runtime");
+    let coordinator =
+        match open_coordinator_on_runtime(data_dir.clone(), worker_exe, worker_dll, rt.handle()) {
+            Ok(coord) => coord,
+            Err(err) => {
+                eprintln!("[Error] Failed to initialize Coordinator: {err}");
+                std::process::exit(1);
+            }
+        };
 
     // `--on-complete` used to be written to an environment variable that nothing
     // read, so headless automation silently had no hook. Persist it into settings
@@ -2876,11 +2898,6 @@ pub fn run_headless() {
             }
         }
     }
-
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("Failed to initialize Tokio runtime");
 
     rt.block_on(async move {
         let mut native_access = NativeAccess::default();
@@ -3038,6 +3055,47 @@ pub fn run_headless() {
 mod tests {
     use super::*;
     use openunpack_protocol::{ConflictStrategy, ToolboxKind};
+
+    fn assert_host_captures_watcher_runtime(runtime: &tokio::runtime::Handle) {
+        assert!(tokio::runtime::Handle::try_current().is_err());
+        let directory = tempfile::tempdir().unwrap();
+        let worker = directory.path().join("OpenUnpack.Worker.exe");
+        let engine = directory.path().join("7z.dll");
+        fs::write(&worker, b"synthetic worker, no jobs are executed").unwrap();
+        fs::write(&engine, b"synthetic engine, no jobs are executed").unwrap();
+        let core =
+            open_coordinator_on_runtime(directory.path().join("data"), worker, engine, runtime)
+                .unwrap();
+        assert!(tokio::runtime::Handle::try_current().is_err());
+        let started = std::thread::spawn({
+            let core = core.clone();
+            move || core.start()
+        })
+        .join()
+        .expect("the watcher thread must not panic");
+        assert_eq!(started, Ok(()));
+        runtime.block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(3), async {
+                while core.snapshot().unwrap().running {
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .expect("the idle batch must release its running latch");
+        });
+    }
+
+    #[test]
+    fn desktop_initialization_captures_the_framework_runtime_for_watcher_threads() {
+        let runtime = tauri::async_runtime::handle();
+        assert_host_captures_watcher_runtime(runtime.inner());
+    }
+
+    #[test]
+    fn headless_initialization_captures_its_runtime_for_watcher_threads() {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        assert_host_captures_watcher_runtime(runtime.handle());
+    }
 
     #[test]
     fn import_encodings_preserve_unicode_and_reject_invalid_bytes() {
