@@ -1,9 +1,9 @@
 [CmdletBinding()]
-param()
+param([string]$WorkerExecutable, [string]$EnginePath)
 $ErrorActionPreference = 'Stop'
 $taskProjectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-$taskWorker = Join-Path $PSScriptRoot 'bin\Release\net10.0-windows\OpenUnpack.Worker.exe'
-$taskEngine = Join-Path $taskProjectRoot 'tools\7zip\7z.dll'
+$taskWorker = if ($WorkerExecutable) { $WorkerExecutable } else { Join-Path $PSScriptRoot 'bin\Release\net10.0-windows\OpenUnpack.Worker.exe' }
+$taskEngine = if ($EnginePath) { $EnginePath } else { Join-Path $taskProjectRoot 'tools\7zip\7z.dll' }
 $taskFixture = Join-Path $taskProjectRoot ('artifacts\worker-verification-' + [guid]::NewGuid().ToString('N'))
 [IO.Directory]::CreateDirectory($taskFixture) | Out-Null
 $taskResults = [Collections.Generic.List[object]]::new()
@@ -61,6 +61,31 @@ function New-ExtractRequest([string]$Archive, [string]$Name) {
 function Assert-Result([bool]$Condition, [string]$Name) {
     if (-not $Condition) { throw ('Failed: ' + $Name) }
     $script:taskResults.Add(@{ check = $Name; passed = $true })
+}
+
+function Test-SafeDiagnostic([string]$Line, [string]$ExpectedIdentity) {
+    if ([Text.Encoding]::UTF8.GetByteCount($Line) -gt 512) { return $false }
+    $document = $null
+    try {
+        $document = [Text.Json.JsonDocument]::Parse($Line)
+        # Enumerating raw JSON fields also rejects duplicate keys.
+        if ($document.RootElement.ValueKind -ne [Text.Json.JsonValueKind]::Object -or
+            @($document.RootElement.EnumerateObject()).Count -ne 8) { return $false }
+        $record = $Line | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+        $fields = @('kind', 'version', 'operation', 'phase', 'errorCode', 'exceptionType', 'hResult', 'nativeCode')
+        if ($record.Count -ne 8 -or @($record.Keys | Where-Object { $_ -cnotin $fields }).Count -ne 0) { return $false }
+        foreach ($field in @('kind', 'operation', 'phase', 'errorCode', 'exceptionType')) {
+            if ($record[$field] -isnot [string]) { return $false }
+        }
+        $identity = '{0}:{1}:{2}' -f $record.operation, $record.phase, $record.errorCode
+        return $identity -ceq $ExpectedIdentity -and $record.kind -ceq 'openunpackDiagnostic' -and
+            ($record.version -is [long] -or $record.version -is [int]) -and $record.version -eq 1 -and
+            $record.exceptionType -ceq 'ArchiveException' -and
+            ($record.hResult -is [long] -or $record.hResult -is [int]) -and
+            $record.hResult -ge [int]::MinValue -and $record.hResult -le [int]::MaxValue -and
+            $null -eq $record.nativeCode
+    } catch { return $false }
+    finally { if ($document) { $document.Dispose() } }
 }
 
 try {
@@ -184,7 +209,38 @@ try {
     $script:taskWriter.WriteLine('{"protocolVersion":1,"requestId":"shutdown","operation":"exit"}')
     $script:taskWriter.Flush()
     if (-not $taskProcess.WaitForExit(10000)) { throw 'Worker exit deadline failed.' }
-    Assert-Result ($taskProcess.StandardOutput.ReadToEnd().Length -eq 0 -and $taskProcess.StandardError.ReadToEnd().Length -eq 0) 'stdout stderr contain no requests or secrets'
+    $taskStdout = $taskProcess.StandardOutput.ReadToEnd()
+    $taskStderr = $taskProcess.StandardError.ReadToEnd()
+    Assert-Result ($taskStdout.Length -eq 0) 'stdout contains no requests or secrets'
+    # SafeDiagnostics intentionally reports these negative fixtures on stderr.
+    # Accept only their exact bounded schema and expected enum values: arbitrary
+    # text, extra fields, paths, request identifiers and passwords still fail.
+    $taskExpectedDiagnostics = @(
+        'readback:transfer:Corrupt', 'extract:decode:UnsafePath',
+        'extract:decode:ResourceLimit', 'copy:transfer:Corrupt',
+        'extract:decode:NeedsPassword', 'extract:decode:PasswordMismatchOrCorrupt',
+        'extract:decode:MissingVolume', 'extract:decode:UnsafePath'
+    )
+    $taskDiagnosticLines = @($taskStderr -split '\r?\n' | Where-Object { $_ })
+    Assert-Result ($taskDiagnosticLines.Count -eq $taskExpectedDiagnostics.Count) 'stderr reports exactly eight bounded negative-fixture diagnostics'
+    for ($taskDiagnosticIndex = 0; $taskDiagnosticIndex -lt $taskDiagnosticLines.Count; $taskDiagnosticIndex++) {
+        $taskLine = $taskDiagnosticLines[$taskDiagnosticIndex]
+        Assert-Result (Test-SafeDiagnostic $taskLine $taskExpectedDiagnostics[$taskDiagnosticIndex]) "stderr diagnostic $taskDiagnosticIndex contains only bounded expected safe fields and values"
+    }
+    foreach ($taskMutation in @(
+        @{ field = 'password'; value = 'SYNTHETIC-LEAK' },
+        @{ field = 'operation'; value = 'C:\private\SYNTHETIC-LEAK' },
+        @{ field = 'kind'; value = @('openunpackDiagnostic', 'SYNTHETIC-LEAK') },
+        @{ field = 'version'; value = 2 }
+    )) {
+        $taskMutant = $taskDiagnosticLines[0] | ConvertFrom-Json -AsHashtable
+        $taskMutant[$taskMutation.field] = $taskMutation.value
+        Assert-Result (-not (Test-SafeDiagnostic ($taskMutant | ConvertTo-Json -Depth 5 -Compress) $taskExpectedDiagnostics[0])) "stderr validator rejects mutated $($taskMutation.field)"
+    }
+    Assert-Result (-not (Test-SafeDiagnostic 'unstructured SYNTHETIC-LEAK' $taskExpectedDiagnostics[0])) 'stderr validator rejects unstructured text'
+    Assert-Result (-not (Test-SafeDiagnostic ('x' * 513) $taskExpectedDiagnostics[0])) 'stderr validator rejects oversized output'
+    $taskDuplicateKey = $taskDiagnosticLines[0].Replace('{', '{"kind":"SYNTHETIC-LEAK",')
+    Assert-Result (-not (Test-SafeDiagnostic $taskDuplicateKey $taskExpectedDiagnostics[0])) 'stderr validator rejects duplicate keys'
     $taskResults | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $taskFixture 'results.json') -Encoding utf8
     Write-Output ($taskResults | ConvertTo-Json -Depth 4)
 } finally {

@@ -174,6 +174,34 @@ async fn test_native_engine_zip_slip_prevention() {
     let result = execute_native_worker(request, progress, cancel).await;
     assert!(result.is_err(), "Zip Slip attack must be rejected!");
     assert!(result.unwrap_err().contains("UnsafePath"));
+    assert!(!dest.join("evil.txt").exists());
+    assert!(!dir.path().parent().unwrap().join("evil.txt").exists());
+}
+
+#[tokio::test]
+async fn zip_safety_and_entry_budget_errors_are_not_retried_by_another_engine() {
+    let dir = TestDir::new();
+    let zip_path = dir.path().join("sample.zip");
+    create_sample_zip(&zip_path);
+    let dest = dir.path().join("out");
+    for operation in ["inspect", "extract"] {
+        let mut request = make_request(
+            operation,
+            &zip_path.to_string_lossy(),
+            &dest.to_string_lossy(),
+        );
+        request.max_entries = 1;
+        let error = execute_native_worker(
+            request,
+            Arc::new(|_: &WorkerEvent| {}),
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await
+        .unwrap_err();
+        assert!(error.starts_with("ResourceLimit"), "{operation}: {error}");
+        assert!(!dest.join("sub/nested.txt").exists());
+        assert!(!dest.join("sub/skip.tmp").exists());
+    }
 }
 
 #[tokio::test]

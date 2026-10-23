@@ -18,6 +18,24 @@ pub use cli_engine::*;
 pub use path_safety::*;
 pub use zip_engine::*;
 
+// Only decoding/format failures may try another ZIP implementation. Safety,
+// cancellation, budget and filesystem failures must remain terminal, even if
+// a locally installed 7-Zip would sanitize the entry name or ignore a limit.
+fn permits_zip_cli_fallback(error: &str) -> bool {
+    matches!(
+        error.split(':').next(),
+        Some(
+            "CorruptArchive"
+                | "ZipReadError"
+                | "ZipError"
+                | "ZipEntryError"
+                | "NeedsPassword"
+                | "PasswordMismatch"
+                | "PasswordMismatchOrCorrupt"
+        )
+    )
+}
+
 pub(crate) fn make_event(request: &WorkerRequest, kind: &str) -> WorkerEvent {
     let mut ev = WorkerEvent::default();
     ev.protocol_version = request.protocol_version;
@@ -63,7 +81,7 @@ async fn inspect_archive(request: &WorkerRequest) -> Result<WorkerEvent, String>
             request.max_total_bytes,
         ) {
             Ok(records) => records,
-            Err(e) if cli_engine::has_7z_cli() => {
+            Err(e) if permits_zip_cli_fallback(&e) && cli_engine::has_7z_cli() => {
                 cli_engine::inspect_cli(archive_path, request.password.as_deref())
                     .await
                     .map_err(|_| e)?
@@ -114,7 +132,7 @@ async fn probe_archive(
     let matched = if is_zip {
         match zip_engine::probe_zip(archive_path, &candidates, &cancel) {
             Ok(res) => res,
-            Err(e) if cli_engine::has_7z_cli() => {
+            Err(e) if permits_zip_cli_fallback(&e) && cli_engine::has_7z_cli() => {
                 cli_engine::probe_cli(archive_path, &candidates, &cancel)
                     .await
                     .map_err(|_| e)?
@@ -164,7 +182,7 @@ async fn extract_archive(
     let extracted_files = if is_zip {
         match zip_engine::extract_zip(request, destination, progress.clone(), cancel.clone()) {
             Ok(files) => files,
-            Err(e) if cli_engine::has_7z_cli() => {
+            Err(e) if permits_zip_cli_fallback(&e) && cli_engine::has_7z_cli() => {
                 cli_engine::extract_cli(request, destination, progress.clone(), cancel)
                     .await
                     .map_err(|_| e)?
@@ -306,4 +324,29 @@ pub fn is_zip_file(path: &Path) -> bool {
         }
     }
     false
+}
+
+#[cfg(test)]
+mod fallback_tests {
+    use super::permits_zip_cli_fallback;
+
+    #[test]
+    fn zip_cli_fallback_preserves_safety_cancellation_and_write_failures() {
+        for error in [
+            "UnsafePath: Path traversal detected",
+            "ResourceLimit: Exceeds maxEntries",
+            "ResourceLimit: Exceeds maxWrittenBytes",
+            "Cancelled",
+            "IoError: access denied",
+            "SinkError: access denied",
+            "SinkDidNotProvideWriter",
+            "MkdirError: access denied",
+            "WriteError: disk full",
+            "FutureUnknownFailure",
+        ] {
+            assert!(!permits_zip_cli_fallback(error), "{error}");
+        }
+        assert!(permits_zip_cli_fallback("ZipEntryError: unsupported codec"));
+        assert!(permits_zip_cli_fallback("NeedsPassword"));
+    }
 }
