@@ -1133,16 +1133,83 @@ fn read_owner_file(file: &fs::File) -> Result<Owner, String> {
     serde_json::from_slice(&bytes).map_err(|_| "工作目录标记损坏。".into())
 }
 pub fn remove_owned(path: &Path, id: &str) -> Result<(), String> {
-    remove_owned_with_hook(path, id, |_| {})
+    remove_owned_with_hook(path, id, |_| {}).map_err(|error| error.message)
+}
+
+#[derive(Debug)]
+struct RetirementError {
+    message: String,
+    retryable: bool,
+}
+
+impl From<String> for RetirementError {
+    fn from(message: String) -> Self {
+        Self {
+            message,
+            retryable: false,
+        }
+    }
+}
+
+impl From<&str> for RetirementError {
+    fn from(message: &str) -> Self {
+        message.to_owned().into()
+    }
+}
+
+impl RetirementError {
+    fn from_io(error: io::Error) -> Self {
+        use windows_sys::Win32::Foundation::{
+            ERROR_ACCESS_DENIED, ERROR_DELETE_PENDING, ERROR_DIR_NOT_EMPTY, ERROR_LOCK_VIOLATION,
+            ERROR_SHARING_VIOLATION,
+        };
+        let code = error.raw_os_error().map(|code| code as u32);
+        Self {
+            // Keep diagnostics useful without including archive names or paths.
+            message: format!("工作目录清理失败，可稍后重试。OS={code:?}"),
+            retryable: matches!(
+                code,
+                Some(
+                    ERROR_ACCESS_DENIED
+                        | ERROR_DELETE_PENDING
+                        | ERROR_DIR_NOT_EMPTY
+                        | ERROR_LOCK_VIOLATION
+                        | ERROR_SHARING_VIOLATION
+                )
+            ),
+        }
+    }
+}
+
+/// Background readers and antivirus scanners can briefly deny deletion on
+/// Windows. Each attempt reopens the tree and revalidates ownership and ACLs;
+/// authority/safety failures remain terminal. All file leases close before sleep.
+pub async fn remove_owned_with_retry(path: &Path, id: &str) -> Result<(), String> {
+    retry_retirement(|| remove_owned_with_hook(path, id, |_| {})).await
+}
+
+async fn retry_retirement(
+    mut attempt: impl FnMut() -> Result<(), RetirementError>,
+) -> Result<(), String> {
+    let delays = [50, 150, 400];
+    for index in 0..=delays.len() {
+        match attempt() {
+            Ok(()) => return Ok(()),
+            Err(error) if error.retryable && index < delays.len() => {
+                tokio::time::sleep(std::time::Duration::from_millis(delays[index])).await;
+            }
+            Err(error) => return Err(error.message),
+        }
+    }
+    unreachable!()
 }
 
 fn remove_owned_with_hook(
     path: &Path,
     id: &str,
     before_root_delete: impl FnOnce(&Path),
-) -> Result<(), String> {
-    let mut tree = LockedTree::open(path)
-        .map_err(|_| "工作目录清理失败：目录或文件正被占用，或无法确认安全身份。可稍后重试。")?;
+) -> Result<(), RetirementError> {
+    let mut tree = LockedTree::open(path).map_err(RetirementError::from_io)?;
     tree.verify_owned(id, None)?;
     crate::saferecycle::verify_private_directory(
         &tree
@@ -1165,26 +1232,28 @@ fn remove_owned_with_hook(
         .ok_or("工作目录缺少独占标记。")?;
     let marker = tree.entries.remove(index);
     let saved_owner = read_owner_file(marker.file())?;
-    let failure = || "工作目录清理失败，可稍后重试。".to_string();
     // All current descendants were locked and checked before the first delete.
     // Pop children first and close their handles before deleting parent objects.
     while let Some(entry) = tree.entries.pop() {
-        entry.delete().map_err(|_| failure())?;
+        entry.delete().map_err(RetirementError::from_io)?;
     }
     let remaining = tree
         .root
         .directory_guard()
-        .map_err(|_| failure())?
+        .map_err(RetirementError::from_io)?
         .entries()
-        .map_err(|_| failure())?;
+        .map_err(RetirementError::from_io)?;
     if remaining.len() != 1 || remaining[0] != OWNER_FILE {
-        return Err(failure());
+        return Err("工作目录内容在清理期间发生变化，已停止清理。".into());
     }
-    marker.delete().map_err(|_| failure())?;
+    marker.delete().map_err(RetirementError::from_io)?;
     drop(marker);
     before_root_delete(path);
-    if tree.root.delete().is_err() {
-        let root = tree.root.directory_guard().map_err(|_| failure())?;
+    if let Err(error) = tree.root.delete() {
+        let root = tree
+            .root
+            .directory_guard()
+            .map_err(|_| "清理失败且独占标记无法恢复；目录已保留。")?;
         // If the final directory deletion fails (for example a child was
         // inserted concurrently), restore authority in the same pinned root.
         // Never overwrite a newly introduced marker owned by someone else.
@@ -1194,7 +1263,7 @@ fn remove_owned_with_hook(
                 .map_err(|_| "清理失败且独占标记无法恢复；目录已保留。")?;
             verify_owner_file(&marker, &saved_owner.id, Some(&saved_owner.manifest))?;
         }
-        return Err(failure());
+        return Err(RetirementError::from_io(error));
     }
     // Windows only removes the delete-pending workspace after its last handle
     // closes. The tree also pins the parent without FILE_SHARE_DELETE, so it
@@ -1730,6 +1799,89 @@ mod cache_container_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn retirement_retries_transient_handles_without_blocking_the_runtime() {
+        let temp = tempfile::tempdir().unwrap();
+        let work = temp.path().join("work");
+        mark_owned(&work, "job", "manifest").unwrap();
+        fs::write(work.join("payload"), b"preserved until unlocked").unwrap();
+        let blocker = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+            .open(&work)
+            .unwrap();
+        assert!(remove_owned(&work, "job").is_err());
+        assert_eq!(
+            fs::read(work.join("payload")).unwrap(),
+            b"preserved until unlocked"
+        );
+        let (result, ()) = tokio::join!(remove_owned_with_retry(&work, "job"), async {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            drop(blocker);
+        });
+        result.unwrap();
+        assert!(!work.exists());
+    }
+
+    #[tokio::test]
+    async fn retirement_revalidates_ownership_after_a_transient_failure() {
+        let temp = tempfile::tempdir().unwrap();
+        let work = temp.path().join("work");
+        mark_owned(&work, "job", "manifest").unwrap();
+        let payload = work.join("payload");
+        fs::write(&payload, b"must stay").unwrap();
+        let blocker = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ)
+            .open(&payload)
+            .unwrap();
+        let (result, ()) = tokio::join!(remove_owned_with_retry(&work, "job"), async {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            let marker = work.join(OWNER_FILE);
+            let mut owner: serde_json::Value =
+                serde_json::from_slice(&fs::read(&marker).unwrap()).unwrap();
+            owner["id"] = "different-owner".into();
+            fs::write(marker, serde_json::to_vec(&owner).unwrap()).unwrap();
+            drop(blocker);
+        });
+        assert!(result.is_err());
+        assert_eq!(fs::read(&payload).unwrap(), b"must stay");
+        owned(&work, "different-owner", Some("manifest")).unwrap();
+        remove_owned(&work, "different-owner").unwrap();
+    }
+
+    #[tokio::test]
+    async fn retirement_retry_budget_is_bounded_and_authority_errors_are_terminal() {
+        let mut attempts = 0;
+        assert!(
+            retry_retirement(|| {
+                attempts += 1;
+                Err(RetirementError::from_io(io::Error::from_raw_os_error(32)))
+            })
+            .await
+            .is_err()
+        );
+        assert_eq!(attempts, 4);
+        for reason in [
+            "UnsafePath",
+            "WorkerExitUnconfirmed",
+            "工作目录缺少独占标记。",
+        ] {
+            let mut attempts = 0;
+            assert_eq!(
+                retry_retirement(|| {
+                    attempts += 1;
+                    Err(reason.into())
+                })
+                .await
+                .unwrap_err(),
+                reason
+            );
+            assert_eq!(attempts, 1);
+        }
+    }
 
     #[test]
     fn excessive_path_depth_is_rejected_before_creating_any_directory() {

@@ -144,7 +144,7 @@ impl Coordinator {
                 drop(workspace_lease.take());
                 // Keep the workspace association until removal actually succeeds: a
                 // partial cleanup must stay retryable and keep its UI cleanup entry.
-                if let Err(code) = paths::remove_owned(Path::new(&old), &job.id) {
+                if let Err(code) = paths::remove_owned_with_retry(Path::new(&old), &job.id).await {
                     job.message = message(&code);
                     self.put(job)?;
                     return Err(code);
@@ -902,7 +902,7 @@ impl Coordinator {
             }
             job.finished_at = Some(now());
             drop(workspace_lease.take());
-            paths::remove_owned(&work, &job.id)?;
+            paths::remove_owned_with_retry(&work, &job.id).await?;
             job.workspace = None;
             return self.put(job);
         };
@@ -933,7 +933,7 @@ impl Coordinator {
             }
             job.finished_at = Some(now());
             drop(workspace_lease.take());
-            paths::remove_owned(&work, &job.id)?;
+            paths::remove_owned_with_retry(&work, &job.id).await?;
             job.workspace = None;
             self.put(job)?;
             return self.refresh_usage();
@@ -981,9 +981,10 @@ impl Coordinator {
         job.message = msg;
         self.put(job)?;
         self.apply_outbox();
-        match paths::remove_owned(&work, &job.id) {
+        match paths::remove_owned_with_retry(&work, &job.id).await {
             Ok(()) => job.workspace = None,
-            Err(_) => {
+            Err(reason) => {
+                eprintln!("[cache_retirement_failed] {reason}");
                 job.status = "cleanupPending".into();
                 job.message = "文件已解压完成，缓存清理失败待重试。".into();
             }
