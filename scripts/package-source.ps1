@@ -12,7 +12,7 @@ Reset-OpenUnpackBuildDirectory -Path $taskStage -Parent $taskRelease
 
 # An explicit allowlist prevents local credentials, the Gemini gateway project, data,
 # downloaded engines and build outputs from entering the application source release.
-$taskFiles = @('Cargo.toml', 'Cargo.lock', 'Directory.Build.props', 'global.json', 'OpenUnpack.sln', 'LICENSE', '.gitignore', '.gitattributes', '.editorconfig', 'AGENTS.md', 'README.md', 'CONTRIBUTING.md', 'CODE_OF_CONDUCT.md', 'SECURITY.md', 'CHANGELOG.md', 'THIRD_PARTY_NOTICES.md')
+$taskFiles = @('Cargo.toml', 'Cargo.lock', 'LICENSE', '.gitignore', '.gitattributes', '.editorconfig', 'AGENTS.md', 'README.md', 'CONTRIBUTING.md', 'CODE_OF_CONDUCT.md', 'SECURITY.md', 'CHANGELOG.md', 'THIRD_PARTY_NOTICES.md')
 $taskFiles += @('assets/legal/swagger-ui/LICENSE', 'assets/legal/swagger-ui/NOTICE', 'assets/legal/swagger-ui/provenance.json', 'assets/legal/7zip/COPYING.LESSER-2.1.txt', 'examples/local-api.py', 'examples/local-api.ps1', 'apps/desktop-ui/eslint.config.js')
 foreach ($relative in $taskFiles) {
     $source = Join-Path $taskRoot $relative

@@ -41,13 +41,19 @@ try {
         # SkipPrepare skips dependency preparation, never fresh frontend compilation.
         Invoke-OpenUnpackTool npm @('--prefix', (Join-Path $taskRoot 'apps/desktop-ui'), 'run', 'build')
         Invoke-OpenUnpackTool cargo @('build', '-p', 'openunpack-desktop', '--release', '--features', 'custom-protocol', '--locked')
+        Invoke-OpenUnpackTool cargo @('build', '-p', 'openunpack-cli', '--release', '--locked')
     }
     # Tauri can rebuild the Host for the installer config and patch its bundle type.
     # Freeze the portable payload only after that final Host has been produced.
     $portable = Join-Path $taskRoot 'artifacts/OpenUnpack-portable'
     Reset-OpenUnpackBuildDirectory -Path $portable -Parent (Join-Path $taskRoot 'artifacts')
     Copy-Item -LiteralPath (Join-Path $taskTarget 'release/openunpack-desktop.exe') -Destination (Join-Path $portable 'OpenUnpack.exe')
-    Copy-Item -LiteralPath (Join-Path $taskRoot 'artifacts/worker') -Destination $portable -Recurse -Force
+    if (Test-Path -LiteralPath (Join-Path $taskTarget 'release/openunpack.exe') -PathType Leaf) {
+        Copy-Item -LiteralPath (Join-Path $taskTarget 'release/openunpack.exe') -Destination (Join-Path $portable 'openunpack-cli.exe')
+    }
+    if (Test-Path -LiteralPath (Join-Path $taskRoot 'tools') -PathType Container) {
+        Copy-Item -LiteralPath (Join-Path $taskRoot 'tools') -Destination $portable -Recurse -Force
+    }
     Copy-Item -LiteralPath (Join-Path $taskRoot 'LICENSE') -Destination $portable
     Copy-Item -LiteralPath (Join-Path $taskRoot 'THIRD_PARTY_NOTICES.md') -Destination $portable
     Copy-Item -LiteralPath (Join-Path $taskRoot 'apps/desktop-host/installer-LICENSE-MIT.txt') -Destination $portable

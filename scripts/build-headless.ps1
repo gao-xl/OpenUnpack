@@ -61,7 +61,9 @@ try {
     Reset-OpenUnpackBuildDirectory -Path $taskOutput -Parent (Join-Path $taskRoot 'artifacts')
     Copy-Item -LiteralPath $taskDaemon -Destination (Join-Path $taskOutput 'openunpack-daemon.exe')
     Copy-Item -LiteralPath $taskCli -Destination (Join-Path $taskOutput 'openunpack.exe')
-    Copy-Item -LiteralPath $taskWorker -Destination $taskOutput -Recurse
+    if (Test-Path -LiteralPath (Join-Path $taskRoot 'tools') -PathType Container) {
+        Copy-Item -LiteralPath (Join-Path $taskRoot 'tools') -Destination $taskOutput -Recurse -Force
+    }
     foreach ($taskDocument in @('LICENSE', 'THIRD_PARTY_NOTICES.md', 'README.md')) {
         Copy-Item -LiteralPath (Join-Path $taskRoot $taskDocument) -Destination $taskOutput
     }
