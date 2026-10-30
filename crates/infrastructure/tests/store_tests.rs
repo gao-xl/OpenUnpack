@@ -18,7 +18,7 @@ fn test_dpapi_vault_store_lifecycle() {
     assert_eq!(list[0].id, view.id);
 
     let revealed = store.reveal_entry(&view.id).expect("reveal");
-    assert_eq!(revealed, "Secret123!");
+    assert_eq!(revealed.as_str(), "Secret123!");
 
     let candidates = store.load_decrypt_candidates().expect("load candidates");
     assert_eq!(candidates.len(), 1);

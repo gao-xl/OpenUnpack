@@ -303,7 +303,7 @@ pub fn probe_zip_encoding_from_reader<R: Read + Seek>(
         };
 
         let raw_str = String::from_utf8_lossy(&entry.raw_bytes).into_owned();
-        let raw_trimmed = raw_str.trim_end_matches(&['/', '\\'][..]);
+        let raw_trimmed = raw_str.trim_end_matches(&['/', '\\'][..]).to_string();
         let raw_normalized = raw_trimmed.replace('\\', "/");
         let raw_stripped = raw_normalized.trim_start_matches("./").to_string();
 
@@ -312,10 +312,10 @@ pub fn probe_zip_encoding_from_reader<R: Read + Seek>(
             .replace('\\', "/");
         let decoded_final = decoded_clean.trim_start_matches("./").to_string();
 
-        decoded_map.insert(raw_str, decoded_final.clone());
-        decoded_map.insert(raw_trimmed.to_string(), decoded_final.clone());
+        decoded_map.insert(raw_trimmed.clone(), decoded_final.clone());
         decoded_map.insert(raw_normalized, decoded_final.clone());
         decoded_map.insert(raw_stripped, decoded_final.clone());
+        decoded_map.insert(raw_str, decoded_final);
 
         // Skip root directory entries from decoded_paths list to maintain alignment with zip_engine
         if entry.is_directory {

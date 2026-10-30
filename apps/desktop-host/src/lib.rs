@@ -3224,7 +3224,8 @@ mod tests {
 
 #[cfg(test)]
 mod headless_args_tests {
-    use super::{collect_flag_values, mask_token};
+    use super::{canonicalize_for_save, collect_flag_values, mask_token};
+    use std::path::Path;
 
     #[test]
     fn collects_repeated_flag_values_and_skips_blanks() {

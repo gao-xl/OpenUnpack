@@ -2248,7 +2248,10 @@ mod tests {
         drop(vault);
         let reopened = Vault::open(&path).unwrap();
         assert_eq!(reopened.views().unwrap().len(), 1);
-        assert_eq!(reopened.reveal(&existing.id).unwrap(), "synthetic-existing");
+        assert_eq!(
+            reopened.reveal(&existing.id).unwrap().as_str(),
+            "synthetic-existing"
+        );
         let csv = "name,password,notes\nValid,\"  a\"\"b,🔑  \",\"line 1\nline 2\"";
         let preview = reopened.preview_import(csv, "csv", "").unwrap();
         assert_eq!(preview.error_count, 0);
@@ -2267,7 +2270,7 @@ mod tests {
             .into_iter()
             .find(|i| i.name == "Valid")
             .unwrap();
-        assert_eq!(reopened.reveal(&added.id).unwrap(), "  a\"b,🔑  ");
+        assert_eq!(reopened.reveal(&added.id).unwrap().as_str(), "  a\"b,🔑  ");
         assert_eq!(added.notes, "line 1\nline 2");
     }
 
@@ -2701,7 +2704,7 @@ mod tests {
         let reopened = Vault::open(&path).unwrap();
         assert_eq!(reopened.views().unwrap()[0].groups.len(), 101);
         assert_eq!(
-            reopened.reveal(&item.id).unwrap(),
+            reopened.reveal(&item.id).unwrap().as_str(),
             "  synthetic-旧库保留🔑  "
         );
         let memory = release_audit_state(&reopened);
@@ -2739,7 +2742,7 @@ mod tests {
         assert_eq!(reopened.views().unwrap()[0].groups, item.groups);
         assert_eq!(reopened.views().unwrap()[0].notes, item.notes);
         assert_eq!(
-            reopened.reveal(&item.id).unwrap(),
+            reopened.reveal(&item.id).unwrap().as_str(),
             "  synthetic-旧库保留🔑  "
         );
         reopened
@@ -2850,7 +2853,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(vault.views().unwrap().len(), 1);
-        assert_eq!(vault.reveal(&item.id).unwrap(), "MySecretUnicode🔑");
+        assert_eq!(
+            vault.reveal(&item.id).unwrap().as_str(),
+            "MySecretUnicode🔑"
+        );
 
         let candidates = vault.candidates(Some("Work"), None).unwrap();
         assert_eq!(candidates.len(), 1);

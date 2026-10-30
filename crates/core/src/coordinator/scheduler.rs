@@ -372,7 +372,7 @@ impl Coordinator {
                                 "failed"
                             }
                             .into();
-                            if !(job.options.in_place() && !job.message.is_empty()) {
+                            if !job.options.in_place() || job.message.is_empty() {
                                 job.message = message(&code);
                             }
                             job.finished_at = Some(now());
