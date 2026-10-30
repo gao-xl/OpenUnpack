@@ -8,13 +8,89 @@ use openunpack_protocol::SelectiveExtractRequest;
 use std::{
     fs,
     path::{Path, PathBuf},
-    process::Command,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
 };
+
+fn write_zip(path: &Path, entries: &[(&str, &[u8])]) {
+    use std::io::Write;
+    fn n16(bytes: &mut Vec<u8>, value: u16) {
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+    fn n32(bytes: &mut Vec<u8>, value: u32) {
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+    fn crc32(payload: &[u8]) -> u32 {
+        let mut crc = 0xffff_ffffu32;
+        for byte in payload {
+            crc ^= u32::from(*byte);
+            for _ in 0..8 {
+                crc = (crc >> 1) ^ (0xedb8_8320 & 0u32.wrapping_sub(crc & 1));
+            }
+        }
+        !crc
+    }
+
+    let mut archive = fs::File::create(path).unwrap();
+    let mut central = Vec::new();
+    let mut offset = 0u32;
+
+    for (name, payload) in entries {
+        let crc = crc32(payload);
+        let mut local = Vec::new();
+        n32(&mut local, 0x0403_4b50);
+        n16(&mut local, 20);
+        n16(&mut local, 0x800);
+        for _ in 0..3 {
+            n16(&mut local, 0);
+        }
+        n32(&mut local, crc);
+        n32(&mut local, payload.len() as u32);
+        n32(&mut local, payload.len() as u32);
+        n16(&mut local, name.len() as u16);
+        n16(&mut local, 0);
+        local.extend_from_slice(name.as_bytes());
+        local.extend_from_slice(payload);
+        archive.write_all(&local).unwrap();
+
+        n32(&mut central, 0x0201_4b50);
+        n16(&mut central, 20);
+        n16(&mut central, 20);
+        n16(&mut central, 0x800);
+        for _ in 0..3 {
+            n16(&mut central, 0);
+        }
+        n32(&mut central, crc);
+        n32(&mut central, payload.len() as u32);
+        n32(&mut central, payload.len() as u32);
+        n16(&mut central, name.len() as u16);
+        for _ in 0..4 {
+            n16(&mut central, 0);
+        }
+        n32(&mut central, 0);
+        n32(&mut central, offset);
+        central.extend_from_slice(name.as_bytes());
+
+        offset += local.len() as u32;
+    }
+
+    let central_len = central.len() as u32;
+    archive.write_all(&central).unwrap();
+
+    let mut end = Vec::new();
+    n32(&mut end, 0x0605_4b50);
+    n16(&mut end, 0);
+    n16(&mut end, 0);
+    n16(&mut end, entries.len() as u16);
+    n16(&mut end, entries.len() as u16);
+    n32(&mut end, central_len);
+    n32(&mut end, offset);
+    n16(&mut end, 0);
+    archive.write_all(&end).unwrap();
+}
 
 struct Rig {
     core: Arc<Coordinator>,
@@ -52,24 +128,21 @@ impl Rig {
             b"a second colliding basename",
         )
         .unwrap();
-        let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let archive = root.join("fixture.zip");
-        assert!(
-            Command::new(workspace.join("tools/7zip/7z.exe"))
-                .current_dir(&payload)
-                .args(["a", "-tzip", "-mx=0", "-y", "-bso0", "-bsp0", "-bse0"])
-                .arg(&archive)
-                .arg(".")
-                .status()
-                .unwrap()
-                .success()
+        write_zip(
+            &archive,
+            &[
+                ("root.txt", b"selected root"),
+                ("nested/root.txt", b"must not be selected by root basename"),
+                ("other/root.txt", b"a second colliding basename"),
+            ],
         );
         let worker = std::env::var_os("OPENUNPACK_TEST_WORKER")
             .map(PathBuf::from)
-            .expect("build and set the current Worker");
+            .unwrap_or_else(|| PathBuf::from("native-worker"));
         let engine = std::env::var_os("OPENUNPACK_TEST_ENGINE")
             .map(PathBuf::from)
-            .unwrap_or(workspace.join("tools/7zip/7z.dll"));
+            .unwrap_or_else(|| PathBuf::from("native-engine"));
         let core = Coordinator::open(root.join("data"), worker, engine).unwrap();
         core.save_settings(Settings {
             min_free_bytes: 0,

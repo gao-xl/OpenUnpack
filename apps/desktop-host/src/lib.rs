@@ -320,7 +320,10 @@ impl openunpack_application::VaultStore for CoordinatorVaultStore {
             .map_err(openunpack_application::ApplicationError::VaultError)
     }
 
-    fn reveal_entry(&self, id: &str) -> Result<String, openunpack_application::ApplicationError> {
+    fn reveal_entry(
+        &self,
+        id: &str,
+    ) -> Result<zeroize::Zeroizing<String>, openunpack_application::ApplicationError> {
         self.0
             .vault()
             .map_err(openunpack_application::ApplicationError::VaultError)?
@@ -396,24 +399,51 @@ fn canonicalize_for_save(raw: &str) -> Result<PathBuf, String> {
     if path.exists() {
         return canonicalize_existing(raw);
     }
-    let parent = path
-        .parent()
-        .ok_or_else(|| "Target file must have a parent directory".to_string())?;
     let file_name = path
         .file_name()
         .ok_or_else(|| "Target path must have a valid file name".to_string())?;
-    if !parent.exists() {
-        return Err(format!(
-            "Parent directory does not exist: {}",
-            parent.display()
-        ));
-    }
-    verify_no_reparse_ancestors(parent)?;
-    let canonical_parent = parent
+
+    let mut current = path.parent();
+    let mut uncreated_segments = Vec::new();
+
+    let existing_ancestor = loop {
+        match current {
+            Some(dir) => {
+                if dir.as_os_str().is_empty() {
+                    return Err(format!(
+                        "No existing ancestor directory found for path: {}",
+                        path.display()
+                    ));
+                }
+                if dir.exists() {
+                    break dir;
+                }
+                if let Some(name) = dir.file_name() {
+                    uncreated_segments.push(name);
+                }
+                current = dir.parent();
+            }
+            None => {
+                return Err(format!(
+                    "No existing ancestor directory found for path: {}",
+                    path.display()
+                ));
+            }
+        }
+    };
+
+    verify_no_reparse_ancestors(existing_ancestor)?;
+    let canonical_ancestor = existing_ancestor
         .canonicalize()
         .map_err(|_| "Native operation failed".to_string())?;
-    verify_no_reparse_ancestors(&canonical_parent)?;
-    Ok(canonical_parent.join(file_name))
+    verify_no_reparse_ancestors(&canonical_ancestor)?;
+
+    let mut result = canonical_ancestor;
+    for seg in uncreated_segments.into_iter().rev() {
+        result.push(seg);
+    }
+    result.push(file_name);
+    Ok(result)
 }
 
 pub fn is_trusted_origin_url(url_str: &str) -> bool {
@@ -524,78 +554,15 @@ fn verify_frontend_window(window: &WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 
-fn canonicalize_worker_pair(exe: &Path, dll: &Path) -> Option<(PathBuf, PathBuf)> {
-    if !exe.is_file() || !dll.is_file() {
-        return None;
-    }
-    verify_no_reparse_ancestors(exe).ok()?;
-    verify_no_reparse_ancestors(dll).ok()?;
-    let canon_exe = exe.canonicalize().ok()?;
-    let canon_dll = dll.canonicalize().ok()?;
-    verify_no_reparse_ancestors(&canon_exe).ok()?;
-    verify_no_reparse_ancestors(&canon_dll).ok()?;
-    let clean_exe = strip_verbatim_prefix(&canon_exe);
-    let clean_dll = strip_verbatim_prefix(&canon_dll);
-    if !clean_exe.is_absolute() || !clean_dll.is_absolute() {
-        return None;
-    }
-    Some((clean_exe, clean_dll))
-}
-
 fn resolve_worker_paths_standalone() -> Result<(PathBuf, PathBuf), String> {
-    if let Some(dir) = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(Path::to_path_buf))
-    {
-        let pair = (
-            dir.join("worker/OpenUnpack.Worker.exe"),
-            dir.join("worker/7z.dll"),
-        );
-        if let Some(valid_pair) = canonicalize_worker_pair(&pair.0, &pair.1) {
-            return Ok(valid_pair);
-        }
-        let pair2 = (dir.join("OpenUnpack.Worker.exe"), dir.join("7z.dll"));
-        if let Some(valid_pair) = canonicalize_worker_pair(&pair2.0, &pair2.1) {
-            return Ok(valid_pair);
-        }
-    }
-    #[cfg(debug_assertions)]
-    {
-        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let dev_root = manifest_dir.join("../../artifacts/worker");
-        let dev_exe = dev_root.join("OpenUnpack.Worker.exe");
-        let dev_dll = dev_root.join("7z.dll");
-        if let Some(pair) = canonicalize_worker_pair(&dev_exe, &dev_dll) {
-            return Ok(pair);
-        }
-
-        let source_exe = manifest_dir
-            .join("../../src/OpenUnpack.Worker/bin/Release/net10.0-windows/OpenUnpack.Worker.exe");
-        let source_dll = manifest_dir.join("../../tools/7zip/7z.dll");
-        if let Some(pair) = canonicalize_worker_pair(&source_exe, &source_dll) {
-            return Ok(pair);
-        }
-    }
-    let default_dir = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(Path::to_path_buf))
-        .unwrap_or_else(|| PathBuf::from("."));
+    // Single-stack native Rust microkernel
     Ok((
-        default_dir.join("worker/OpenUnpack.Worker.exe"),
-        default_dir.join("worker/7z.dll"),
+        PathBuf::from(openunpack_protocol::worker::INPROCESS_WORKER_MARKER),
+        PathBuf::from(openunpack_protocol::worker::INPROCESS_ENGINE_MARKER),
     ))
 }
 
-fn resolve_worker_paths(app: &tauri::AppHandle) -> Result<(PathBuf, PathBuf), String> {
-    if let Ok(resource) = app.path().resource_dir() {
-        let packaged = (
-            resource.join("worker/OpenUnpack.Worker.exe"),
-            resource.join("worker/7z.dll"),
-        );
-        if let Some(pair) = canonicalize_worker_pair(&packaged.0, &packaged.1) {
-            return Ok(pair);
-        }
-    }
+fn resolve_worker_paths(_app: &tauri::AppHandle) -> Result<(PathBuf, PathBuf), String> {
     resolve_worker_paths_standalone()
 }
 
@@ -1051,8 +1018,7 @@ pub(crate) async fn core_copy_password(
     let vault = state.vault_use_cases.clone();
     let id_str = id.to_string();
     let sequence = spawn_blocking(move || {
-        let text =
-            zeroize::Zeroizing::new(vault.reveal_password(&id_str).map_err(|e| e.to_string())?);
+        let text = vault.reveal_password(&id_str).map_err(|e| e.to_string())?;
         clipboard::copy(owner, &text)
     })
     .await
@@ -1267,9 +1233,12 @@ pub(crate) async fn core_delete_password(state: &AppState, id: &str) -> Result<(
 pub(crate) async fn core_reveal_password(state: &AppState, id: &str) -> Result<String, String> {
     let vault = state.vault_use_cases.clone();
     let id_str = id.to_string();
-    spawn_blocking(move || vault.reveal_password(&id_str).map_err(|e| e.to_string()))
-        .await
-        .map_err(|_| "Background operation failed".to_string())?
+    spawn_blocking(move || {
+        let secret = vault.reveal_password(&id_str).map_err(|e| e.to_string())?;
+        Ok((*secret).clone())
+    })
+    .await
+    .map_err(|_| "Background operation failed".to_string())?
 }
 
 pub(crate) async fn core_preview_import(
@@ -3284,5 +3253,14 @@ mod headless_args_tests {
         assert!(masked.ends_with(&token[token.len() - 4..]));
         assert!(!masked.contains(&token[10..50]));
         assert_eq!(mask_token("short"), "***");
+    }
+
+    #[test]
+    fn canonicalize_for_save_supports_multilevel_uncreated_directories() {
+        let dir = tempfile::tempdir().unwrap();
+        let target_path = dir.path().join("sub1").join("sub2").join("backup.opbak");
+        let result = canonicalize_for_save(&target_path.to_string_lossy()).unwrap();
+        assert!(result.ends_with(Path::new("sub1").join("sub2").join("backup.opbak")));
+        assert!(result.is_absolute());
     }
 }

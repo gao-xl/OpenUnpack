@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "privateDirectoryNames": [".workbuddy", ".pi", ".codex", ".agents", "gemini-subagent", "apf_analysis"],
+  "excludedPaths": [
+    "PLAN.md", ".dockerignore", "Dockerfile", "docker-compose.yml",
+    "scripts/build-crossplatform.sh", "scripts/run-cargo.sh",
+    "examples/browser-extension", "examples/third-party-client",
+    "apps/desktop-ui/audit",
+    "apps/desktop-host/icons/android", "apps/desktop-host/icons/ios"
+  ],
+  "documentationFiles": [
+    "docs/README.md",
+    "docs/acceptance-checklist.md",
+    "docs/architecture-current.md",
+    "docs/audit-fix-log-2026-10-21.md",
+    "docs/decisions/OPEN-DECISIONS.md",
+    "docs/functional-design.md",
+    "docs/load-optimization-plan-2026-10-15.md",
+    "docs/local-api.md",
+    "docs/plans/2026-10-19-full-functional-testing.cases.json",
+    "docs/plans/2026-10-19-full-functional-testing.manifest.json",
+    "docs/plans/2026-10-19-full-functional-testing.md",
+    "docs/plans/2026-10-19-full-functional-testing.result-template.json",
+    "docs/plans/2026-10-20-architecture-convergence.md",
+    "docs/release-notes-0.1.0-beta.1.md",
+    "docs/reports/architecture-convergence-2026-10-20.md",
+    "docs/reports/coordinator-components-2026-10-20.md",
+    "docs/s06-directory-identity-plan-2026-10-14.md",
+    "docs/software-spec.md"
+  ]
+}

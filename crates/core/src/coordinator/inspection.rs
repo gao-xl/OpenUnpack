@@ -149,7 +149,10 @@ impl Coordinator {
             request_id: request_id.clone(),
             cancel: cancel.clone(),
         };
-        if !self.worker.executable.is_file() || !self.worker.engine.is_file() {
+        if !(self.worker.executable.as_os_str()
+            == openunpack_protocol::worker::INPROCESS_WORKER_MARKER
+            || (self.worker.executable.is_file() && self.worker.engine.is_file()))
+        {
             return Err("WorkerUnavailable".into());
         }
         let archive_p = Path::new(path);
@@ -292,7 +295,16 @@ impl Coordinator {
                 // worker's raw name as the alternate form.
                 let decoded_path = zip_probe
                     .as_ref()
-                    .and_then(|p| p.decoded_paths.get(idx))
+                    .and_then(|p| {
+                        p.decoded_map
+                            .get(&f.relative_path)
+                            .or_else(|| {
+                                p.decoded_map
+                                    .get(f.relative_path.trim_end_matches(&['/', '\\'][..]))
+                            })
+                            .cloned()
+                            .or_else(|| p.decoded_paths.get(idx).cloned())
+                    })
                     .map(|s| s.trim_end_matches(&['/', '\\'][..]).to_string());
                 let path = match decoded_path {
                     Some(value) if !value.is_empty() => value,

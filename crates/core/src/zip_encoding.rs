@@ -13,6 +13,7 @@ pub struct ZipRawEntry {
 pub struct ZipProbeResult {
     pub detected_encoding: String,
     pub decoded_paths: Vec<String>,
+    pub decoded_map: std::collections::HashMap<String, String>,
 }
 
 pub fn probe_zip_encoding(archive_path: &Path) -> Result<ZipProbeResult, String> {
@@ -290,21 +291,47 @@ pub fn probe_zip_encoding_from_reader<R: Read + Seek>(
         _ => encoding_rs::UTF_8,
     };
 
-    let decoded_paths = entries
-        .iter()
-        .map(|entry| {
-            if entry.is_utf8_flag {
-                String::from_utf8_lossy(&entry.raw_bytes).into_owned()
-            } else {
-                let (cow, _, _) = encoding.decode(&entry.raw_bytes);
-                cow.into_owned()
+    let mut decoded_paths = Vec::with_capacity(entries.len());
+    let mut decoded_map = std::collections::HashMap::new();
+
+    for entry in &entries {
+        let decoded = if entry.is_utf8_flag {
+            String::from_utf8_lossy(&entry.raw_bytes).into_owned()
+        } else {
+            let (cow, _, _) = encoding.decode(&entry.raw_bytes);
+            cow.into_owned()
+        };
+
+        let raw_str = String::from_utf8_lossy(&entry.raw_bytes).into_owned();
+        let raw_trimmed = raw_str.trim_end_matches(&['/', '\\'][..]);
+        let raw_normalized = raw_trimmed.replace('\\', "/");
+        let raw_stripped = raw_normalized.trim_start_matches("./").to_string();
+
+        let decoded_clean = decoded
+            .trim_end_matches(&['/', '\\'][..])
+            .replace('\\', "/");
+        let decoded_final = decoded_clean.trim_start_matches("./").to_string();
+
+        decoded_map.insert(raw_str, decoded_final.clone());
+        decoded_map.insert(raw_trimmed.to_string(), decoded_final.clone());
+        decoded_map.insert(raw_normalized, decoded_final.clone());
+        decoded_map.insert(raw_stripped, decoded_final.clone());
+
+        // Skip root directory entries from decoded_paths list to maintain alignment with zip_engine
+        if entry.is_directory {
+            let norm = raw_trimmed.replace('\\', "/");
+            if norm.trim_start_matches("./").is_empty() {
+                continue;
             }
-        })
-        .collect();
+        }
+
+        decoded_paths.push(decoded);
+    }
 
     Ok(ZipProbeResult {
         detected_encoding,
         decoded_paths,
+        decoded_map,
     })
 }
 

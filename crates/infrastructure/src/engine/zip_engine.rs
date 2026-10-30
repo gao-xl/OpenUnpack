@@ -3,12 +3,13 @@ use openunpack_protocol::worker::{FileRecord, WorkerEvent, WorkerRequest};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File},
-    io::{Read, Write},
+    io::{BufWriter, Read, Write},
     path::Path,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
+    time::{Duration, Instant},
 };
 use zip::ZipArchive;
 
@@ -73,25 +74,30 @@ pub fn probe_zip(
     archive_path: &Path,
     candidates: &[(String, Option<String>)],
     cancel: &AtomicBool,
-) -> Result<Option<(String, Option<String>)>, String> {
+) -> Result<super::ProbeOutcome, String> {
     let file = File::open(archive_path).map_err(|e| format!("IoError: {e}"))?;
-    let mut archive = ZipArchive::new(file).map_err(|e| format!("CorruptArchive: {e}"))?;
+    let mut archive = match ZipArchive::new(file) {
+        Ok(a) => a,
+        Err(e) => return Err(format!("CorruptArchive: {e}")),
+    };
 
     // Find the first encrypted file entry
     let mut encrypted_index = None;
     for i in 0..archive.len() {
-        if let Ok(entry) = archive.by_index_raw(i)
-            && entry.encrypted()
-            && !entry.is_dir()
-        {
-            encrypted_index = Some(i);
-            break;
+        match archive.by_index_raw(i) {
+            Ok(entry) => {
+                if entry.encrypted() && !entry.is_dir() {
+                    encrypted_index = Some(i);
+                    break;
+                }
+            }
+            Err(e) => return Err(format!("ZipReadError: {e}")),
         }
     }
 
     let Some(target_idx) = encrypted_index else {
         // No encrypted entry found; no password needed
-        return Ok(None);
+        return Ok(super::ProbeOutcome::NoPasswordNeeded);
     };
 
     let mut probe_buf = [0u8; 64];
@@ -110,7 +116,10 @@ pub fn probe_zip(
                         // proves the stream decrypted; the count itself is not
                         // needed beyond validating the buffer contract.
                         debug_assert!(read <= probe_buf.len());
-                        return Ok(Some((candidate_secret.clone(), candidate_id.clone())));
+                        return Ok(super::ProbeOutcome::Success(
+                            candidate_secret.clone(),
+                            candidate_id.clone(),
+                        ));
                     }
                     Err(_) => {
                         // Password mismatch or CRC failure
@@ -122,7 +131,7 @@ pub fn probe_zip(
         }
     }
 
-    Ok(None)
+    Ok(super::ProbeOutcome::WrongPassword)
 }
 
 pub fn extract_zip(
@@ -146,7 +155,7 @@ pub fn extract_zip(
                 fs::create_dir_all(parent)?;
             }
             let file = File::create(&target_path)?;
-            Ok(Some(Box::new(file)))
+            Ok(Some(Box::new(BufWriter::with_capacity(64 * 1024, file))))
         }
     })
 }
@@ -165,6 +174,7 @@ where
     let count = archive.len();
     let mut completed_bytes: u64 = 0;
     let mut total_bytes: u64 = 0;
+    let mut last_progress = Instant::now();
 
     // Calculate total bytes
     for i in 0..count {
@@ -311,12 +321,16 @@ where
                 completed_bytes += read_bytes as u64;
                 actual_written += read_bytes as u64;
 
-                let mut prog_ev = super::make_event(request, "progress");
-                prog_ev.completed_bytes = completed_bytes;
-                prog_ev.total_bytes = total_bytes;
-                prog_ev.total_bytes_known = true;
-                progress(&prog_ev);
+                if last_progress.elapsed() >= Duration::from_millis(50) {
+                    let mut prog_ev = super::make_event(request, "progress");
+                    prog_ev.completed_bytes = completed_bytes;
+                    prog_ev.total_bytes = total_bytes;
+                    prog_ev.total_bytes_known = true;
+                    progress(&prog_ev);
+                    last_progress = Instant::now();
+                }
             }
+            out_file.flush().map_err(|e| format!("IoError: {e}"))?;
             sha256_hex = hex::encode(hasher.finalize());
         }
 

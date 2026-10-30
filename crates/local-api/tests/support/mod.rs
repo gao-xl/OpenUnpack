@@ -221,7 +221,10 @@ pub async fn exchange(port: u16, request: Vec<u8>) -> Response {
                 Ok(0) => break,
                 Ok(count) => bytes.extend_from_slice(&buffer[..count]),
                 Err(error)
-                    if error.kind() == io::ErrorKind::ConnectionReset && !bytes.is_empty() =>
+                    if matches!(
+                        error.kind(),
+                        io::ErrorKind::ConnectionReset | io::ErrorKind::ConnectionAborted
+                    ) && !bytes.is_empty() =>
                 {
                     break;
                 }

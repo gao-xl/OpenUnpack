@@ -12,7 +12,7 @@
 
 ## 实施范围
 
-1. 保存本轮文件副本及 Git 状态于 `_workspace/architecture-transition-20261020/`，保留所有既有修改。
+1. 将文件副本及 Git 状态保存到独立的 `<EVIDENCE_DIR>/architecture-transition/<runId>/`，保留所有既有修改。
 2. Infrastructure 单源承接生产版 WorkerClient、Vault、database lease、manifest，整体下沉生产版 paths / saferecycle / recycle_shell / route，保留完整的父链固定、相对句柄和私有 ACL 保护。Core 仅兼容再导出，绝不以较弱的旧 Infrastructure manifest 辅助函数替代现役安全 IO。
 3. Coordinator 拆为声明、初始化、快照、命令、检查、调度、Worker 请求、资源管理、执行、恢复、纯辅助及测试模块。保留同一 Coordinator、同一状态与写入权威，方法体以机械迁移为主。
 4. 移除未装配的第二任务/存储管线及其专属测试；将有价值的版本拒绝、租约、原格式恢复回归保留在唯一生产 Repository 测试中。保留 VaultUseCases / SystemEnvironment 及其现役适配器。

@@ -1,5 +1,7 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 
 function Get-OpenUnpackRoot {
     [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))

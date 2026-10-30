@@ -71,6 +71,9 @@ OpenUnpack 是一个跨 Rust、TypeScript/React 与 C#/.NET 的复合桌面项�
 
 在项目根目录下完成前端与原生依赖安装：
 ```powershell
+# 0. 检查所有受 Git 跟踪的公开内容
+node scripts/audit-git.mjs
+
 # 1. 准备桌面依赖与物料
 ./scripts/prepare-desktop.ps1
 
@@ -80,6 +83,8 @@ cargo fetch --locked --target x86_64-pc-windows-msvc
 # 3. 收集发布物料与许可信息
 ./scripts/collect-release-materials.ps1
 ```
+
+公开文档入口见 [docs/README.md](docs/README.md)。公开文档清单在 `scripts/source-release-policy.json`；新增文档时同步清单和 `.gitignore`。本地会话笔记、凭据、编译缓存、独立个人插件及第三方逆向分析材料不得加入 Git。需要留存的内部现场放在已忽略目录，不能以源码包审计代替对完整 Git 树的核查。
 
 ---
 

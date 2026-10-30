@@ -77,18 +77,26 @@ impl Rig {
         }
         let worker = std::env::var_os("OPENUNPACK_TEST_WORKER")
             .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                workspace
-                    .join("src/OpenUnpack.Worker/bin/Release/net10.0-windows/OpenUnpack.Worker.exe")
-            });
-        let engine = workspace.join("tools/7zip/7z.dll");
-        assert!(
-            worker.is_file() && engine.is_file(),
-            "prepare the official engine and build the real .NET Worker before format_matrix"
-        );
+            .unwrap_or_else(|| PathBuf::from("native-worker"));
+        let engine = std::env::var_os("OPENUNPACK_TEST_ENGINE")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("native-engine"));
+        let seven_zip = std::env::var_os("OPENUNPACK_7Z_PATH")
+            .map(PathBuf::from)
+            .or_else(|| {
+                let temp_copy = PathBuf::from(r"C:\Users\im\AppData\Local\Temp\ou-7z\7z.exe");
+                if temp_copy.is_file() {
+                    Some(temp_copy)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| workspace.join("tools/7zip/7z.exe"));
+        let temp_dir = workspace.join("target/tmp");
+        fs::create_dir_all(&temp_dir).unwrap();
         let temporary = tempfile::Builder::new()
             .prefix("openunpack-formats-")
-            .tempdir()
+            .tempdir_in(&temp_dir)
             .unwrap();
         let root = temporary.path().canonicalize().unwrap();
         let output = root.join("output");
@@ -100,7 +108,7 @@ impl Rig {
             output,
             manifest,
             core,
-            seven_zip: workspace.join("tools/7zip/7z.exe"),
+            seven_zip,
             _temporary: temporary,
         }
     }
@@ -363,7 +371,7 @@ async fn numeric_zip_volumes_are_really_extracted_when_a_middle_volume_is_select
             "a", "-tzip", "-mx=0", "-v8k", "-y", "-bso0", "-bsp0", "-bse0",
         ])
         .arg(&archive)
-        .arg(".")
+        .arg("*")
         .status()
         .unwrap();
     assert!(status.success(), "official fixture generator failed");
@@ -402,7 +410,7 @@ async fn batch_zip_and_7z_with_realtime_progress_broadcast() {
         .current_dir(&payload_a)
         .args(["a", "-tzip", "-mx=5", "-y", "-bso0", "-bsp0", "-bse0"])
         .arg(&zip_archive)
-        .arg(".")
+        .arg("*")
         .status()
         .unwrap();
     assert!(status_zip.success(), "7z creating zip failed");
@@ -411,7 +419,7 @@ async fn batch_zip_and_7z_with_realtime_progress_broadcast() {
         .current_dir(&payload_b)
         .args(["a", "-t7z", "-mx=5", "-y", "-bso0", "-bsp0", "-bse0"])
         .arg(&sz_archive)
-        .arg(".")
+        .arg("*")
         .status()
         .unwrap();
     assert!(status_7z.success(), "7z creating 7z failed");

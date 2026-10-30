@@ -692,6 +692,15 @@ impl ApiCommand {
                 if !settings.cache_root.trim().is_empty() {
                     check_abs_path(&settings.cache_root, "cacheRoot", &mut errors);
                 }
+                if !matches!(
+                    settings.extraction_engine.as_str(),
+                    "" | "standard" | "inPlace"
+                ) {
+                    errors.push(FieldError::new(
+                        "extractionEngine",
+                        "解压引擎必须是 standard 或 inPlace。",
+                    ));
+                }
             }
             Self::AddArchive {
                 path, output_dir, ..

@@ -1,6 +1,6 @@
 # Coordinator 私有状态组件改造
 
-日期：2026-10-20。范围：现役 Rust Coordinator 内部职责提取；保留原有脏工作区。组件实现完成，库/编译/静态门禁通过；完整原生回归仍有未核销项。验证表记录本轮结果，不能用此前报告代替。
+日期：2026-10-20。范围：Rust Coordinator 内部职责提取。本文保留当时的实现和验证范围；历史原始日志已归档且未随公开仓库提供。库/编译/静态检查的当时结果与未核销的原生失败分开记录，不代表当前候选已通过。
 
 ## 实现与边界
 
@@ -50,7 +50,7 @@ Coordinator 的生产字段从 43 个降至 41 个，直接 Mutex 字段从 30 �
 | 并行更新后的当前 Core 复核 | `cargo check -p openunpack-core --all-targets --locked --offline` 再次通过，2m21s；发布 4 项重新编译并全部通过 |
 | 其他工作区库回归 | 额外编译在内存压力下中止，未取得测试汇总，不计为通过；未以放宽资源保护来换取测试结果 |
 
-首次完整原生测试在系统 TEMP 下出现 7-Zip 夹具生成失败和 Worker IoError。独立 ZIP/7z 命令复现：同一程序写系统 TEMP 返回拒绝访问，写工作区目录成功。只对本轮测试进程设置 TEMP/TMP 为 `_workspace/cc-native-temp-20261020` 后，真实 Worker 单归档解压/验证/发布通过；完整原生重跑使用同一个已编译、已哈希的测试二进制，不修改或跳过测试断言，不改变系统权限或安全设置。失败及重跑记录均保留。
+首次完整原生测试在系统 TEMP 下出现 7-Zip 夹具生成失败和 Worker IoError。独立 ZIP/7z 命令复现：同一程序写系统 TEMP 返回拒绝访问，写工作区目录成功。只对本轮测试进程设置 TEMP/TMP 为 独立测试 TEMP 目录 后，真实 Worker 单归档解压/验证/发布通过；完整原生重跑使用同一个已编译、已哈希的测试二进制，不修改或跳过测试断言，不改变系统权限或安全设置。失败及重跑记录均保留。
 
 隔离 TEMP 后仍有两类未核销问题：
 
@@ -59,11 +59,11 @@ Coordinator 的生产字段从 43 个降至 41 个，直接 Mutex 字段从 30 �
 
 为减少争用，已停止本轮额外库测试编译和未完成的重负载原生批次；没有停止其他会话或用户程序。缓存竞争和完整 resource_recovery 批次因此不记为通过。部分桌面测试的通过不能替代完整原生验收。
 
-可在资源允许时执行 `_workspace/coordinator-components-20261020/run-native-binaries.ps1` 复核。脚本使用隔离 TEMP，并先核对本轮 Coordinator 源码、实际测试二进制及 Worker/7-Zip 哈希；若源码或物料变化则拒绝使用旧结果，需重新构建并固定。`baseline-source/` 仅保存了修改前 Coordinator 的独立对照来源，未运行其原生测试，不作为“修改前已通过/已失败”的证据。
+历史专用运行脚本未随公开仓库提供。复核时从当前冻结源码重新构建，使用独立 TEMP 与 `CARGO_TARGET_DIR`，固定 Worker/Engine/7-Zip 哈希后执行 Core 库、`architecture_convergence` 与相关真实 Worker 集成用例；记录原配置忽略项和失败项，不能使用旧二进制替代。修改前对照源码只用于静态比较，不证明原生基线通过。
 
 ## 证据、回退与验收范围
 
-本轮副本、命令脚本、日志、源码/测试二进制/固定 Worker/7-Zip 哈希保留于 `_workspace/coordinator-components-20261020/`。固定 Worker 复制自本日架构收敛的物料，本轮未改 C#/TS 协议；集成用例通过 `OPENUNPACK_TEST_WORKER` 使用固定路径。
+历史副本、脚本、日志与源码/测试二进制/Worker/7-Zip 哈希已归档，未随公开仓库提供。真实集成复验通过 `OPENUNPACK_TEST_WORKER` 和 `OPENUNPACK_TEST_ENGINE` 指定本轮冻结载荷，并保留完整来源清单。
 
 同时有其他会话修改 watcher、hook、CLI 和工作区清单；均保留。首次 `--locked` 曾在 CLI 清单与锁文件写入间隙失败，锁文件就绪后检查恢复；没有替其他会话改写 Cargo.lock。最终以源码指纹与日志记录的目标为验证范围。
 

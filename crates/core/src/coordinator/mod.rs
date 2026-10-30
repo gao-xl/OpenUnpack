@@ -7,6 +7,7 @@ mod commands;
 pub mod conflict_resolver;
 mod execution;
 mod initialization;
+mod inplace;
 mod inspection;
 mod integrity;
 mod pipeline_helpers;
@@ -127,6 +128,7 @@ pub struct Coordinator {
     // root and holds independent budget reservations.
     cache_usage_by_job: Mutex<HashMap<String, CacheUsage>>,
     cache_budget: cache_budget::CacheBudgetManager,
+    inplace_reservations: Arc<Mutex<HashMap<PathBuf, u64>>>,
     session_id: String,
     revision: AtomicU64,
     // Snapshot readers and visible-state writers acquire this before field locks.

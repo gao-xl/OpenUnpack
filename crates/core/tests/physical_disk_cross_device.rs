@@ -154,21 +154,21 @@ async fn cross_disk_hdd_source_ssd_cache_roundtrip() {
     let workspace = workspace_root();
     let worker = std::env::var_os("OPENUNPACK_TEST_WORKER")
         .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            workspace
-                .join("src/OpenUnpack.Worker/bin/Release/net10.0-windows/OpenUnpack.Worker.exe")
-        });
-    let engine = workspace.join("tools/7zip/7z.dll");
-    let seven_zip = workspace.join("tools/7zip/7z.exe");
-    assert!(
-        worker.is_file(),
-        "build the .NET Worker first: {}",
-        worker.display()
-    );
-    assert!(
-        engine.is_file() && seven_zip.is_file(),
-        "official 7-Zip tools required"
-    );
+        .unwrap_or_else(|| PathBuf::from("native-worker"));
+    let engine = std::env::var_os("OPENUNPACK_TEST_ENGINE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("native-engine"));
+    let seven_zip = std::env::var_os("OPENUNPACK_7Z_PATH")
+        .map(PathBuf::from)
+        .or_else(|| {
+            let temp_copy = PathBuf::from(r"C:\Users\im\AppData\Local\Temp\ou-7z\7z.exe");
+            if temp_copy.is_file() {
+                Some(temp_copy)
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| workspace.join("tools/7zip/7z.exe"));
 
     // Never remove/reuse fixed children of a user-selected root. Each run creates
     // an exclusive private UUID directory and removes only that owned identity.

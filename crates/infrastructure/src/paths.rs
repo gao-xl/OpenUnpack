@@ -1029,26 +1029,30 @@ pub fn read_json_limited<T: DeserializeOwned>(path: &Path, max_bytes: u64) -> Re
     serde_json::from_reader(std::io::BufReader::with_capacity(64 * 1024, file))
         .map_err(|_| "数据文件损坏；原文件已保留。".into())
 }
+pub fn volume_root(path: &Path) -> Result<PathBuf, String> {
+    let ancestor = path.ancestors().find(|p| p.exists()).unwrap_or(path);
+    check_path(ancestor)?;
+    let p: Vec<u16> = ancestor.as_os_str().encode_wide().chain(Some(0)).collect();
+    let mut root = vec![0u16; 32768];
+    if unsafe {
+        windows_sys::Win32::Storage::FileSystem::GetVolumePathNameW(
+            p.as_ptr(),
+            root.as_mut_ptr(),
+            root.len() as u32,
+        )
+    } == 0
+    {
+        return Err("无法确认磁盘卷根路径。".into());
+    }
+    root.truncate(root.iter().position(|u| *u == 0).unwrap_or(root.len()));
+    Ok(PathBuf::from(std::ffi::OsString::from_wide(&root)))
+}
 pub fn same_volume(a: &Path, b: &Path) -> Result<bool, String> {
-    let volume = |path: &Path| -> Result<Vec<u16>, String> {
-        check_path(path)?;
-        let p: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
-        let mut root = vec![0u16; 32768];
-        if unsafe {
-            windows_sys::Win32::Storage::FileSystem::GetVolumePathNameW(
-                p.as_ptr(),
-                root.as_mut_ptr(),
-                root.len() as u32,
-            )
-        } == 0
-        {
-            return Err("无法确认输出卷，已停止直接发布。".into());
-        }
-        root.truncate(root.iter().position(|u| *u == 0).unwrap_or(root.len()));
-        Ok(root)
-    };
-    Ok(String::from_utf16_lossy(&volume(a)?)
-        .eq_ignore_ascii_case(&String::from_utf16_lossy(&volume(b)?)))
+    let root_a = volume_root(a)?;
+    let root_b = volume_root(b)?;
+    Ok(root_a
+        .to_string_lossy()
+        .eq_ignore_ascii_case(&root_b.to_string_lossy()))
 }
 /// Atomic target-volume commit, with replacement explicitly disabled. A concurrent
 /// creator of the selected final name is never overwritten, even if it is empty.
@@ -1132,76 +1136,107 @@ fn read_owner_file(file: &fs::File) -> Result<Owner, String> {
     }
     serde_json::from_slice(&bytes).map_err(|_| "工作目录标记损坏。".into())
 }
-pub fn remove_owned(path: &Path, id: &str) -> Result<(), String> {
-    remove_owned_with_hook(path, id, |_| {}).map_err(|error| error.message)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetirementError {
+    pub message: String,
+    pub retryable: bool,
 }
 
-#[derive(Debug)]
-struct RetirementError {
-    message: String,
-    retryable: bool,
-}
-
-impl From<String> for RetirementError {
-    fn from(message: String) -> Self {
+impl RetirementError {
+    pub fn retryable(message: impl Into<String>) -> Self {
         Self {
-            message,
+            message: message.into(),
+            retryable: true,
+        }
+    }
+
+    pub fn terminal(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
             retryable: false,
         }
     }
 }
 
-impl From<&str> for RetirementError {
-    fn from(message: &str) -> Self {
-        message.to_owned().into()
+impl std::fmt::Display for RetirementError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
     }
 }
 
-impl RetirementError {
-    fn from_io(error: io::Error) -> Self {
-        use windows_sys::Win32::Foundation::{
-            ERROR_ACCESS_DENIED, ERROR_DELETE_PENDING, ERROR_DIR_NOT_EMPTY, ERROR_LOCK_VIOLATION,
-            ERROR_SHARING_VIOLATION,
-        };
-        let code = error.raw_os_error().map(|code| code as u32);
+impl std::error::Error for RetirementError {}
+
+impl From<String> for RetirementError {
+    fn from(s: String) -> Self {
+        let retryable = transient_retirement(&s);
         Self {
-            // Keep diagnostics useful without including archive names or paths.
-            message: format!("工作目录清理失败，可稍后重试。OS={code:?}"),
-            retryable: matches!(
-                code,
-                Some(
-                    ERROR_ACCESS_DENIED
-                        | ERROR_DELETE_PENDING
-                        | ERROR_DIR_NOT_EMPTY
-                        | ERROR_LOCK_VIOLATION
-                        | ERROR_SHARING_VIOLATION
-                )
-            ),
+            message: s,
+            retryable,
         }
     }
 }
 
-/// Background readers and antivirus scanners can briefly deny deletion on
-/// Windows. Each attempt reopens the tree and revalidates ownership and ACLs;
-/// authority/safety failures remain terminal. All file leases close before sleep.
-pub async fn remove_owned_with_retry(path: &Path, id: &str) -> Result<(), String> {
-    retry_retirement(|| remove_owned_with_hook(path, id, |_| {})).await
+impl From<&str> for RetirementError {
+    fn from(s: &str) -> Self {
+        let retryable = transient_retirement(s);
+        Self {
+            message: s.to_string(),
+            retryable,
+        }
+    }
 }
 
-async fn retry_retirement(
+pub fn remove_owned(path: &Path, id: &str) -> Result<(), String> {
+    remove_owned_with_hook(path, id, |_| {}).map_err(|err| err.message)
+}
+
+/// Post-delivery retirement runs after the cache lease is released, so the next
+/// quota waiter is admitted while this workspace is still being torn down. That
+/// leaves a short window where a sibling, the Worker or an on-access scanner can
+/// hold a handle or a delete-pending child. Retry only those transient reasons;
+/// ownership markers, private-ACL refusals, unsafe namespaces and unconfirmed
+/// Worker exits remain terminal so a retry can never publish over a foreign tree.
+pub fn remove_owned_retrying(path: &Path, id: &str) -> Result<(), String> {
+    retry_retirement(|| remove_owned_with_hook(path, id, |_| {}))
+}
+
+pub fn retry_retirement(
     mut attempt: impl FnMut() -> Result<(), RetirementError>,
 ) -> Result<(), String> {
-    let delays = [50, 150, 400];
-    for index in 0..=delays.len() {
+    // Three bounded retries (four attempts total) ride out a handle that is
+    // released moments later: a sibling job's walker, the Worker exiting, or an
+    // on-access scanner finishing a pass.
+    const RETRY_DELAYS_MS: [u64; 3] = [50, 150, 400];
+    for delay in RETRY_DELAYS_MS {
         match attempt() {
             Ok(()) => return Ok(()),
-            Err(error) if error.retryable && index < delays.len() => {
-                tokio::time::sleep(std::time::Duration::from_millis(delays[index])).await;
+            Err(err) if err.retryable => {
+                std::thread::sleep(std::time::Duration::from_millis(delay));
             }
-            Err(error) => return Err(error.message),
+            Err(err) => return Err(err.message),
         }
     }
-    unreachable!()
+    attempt().map_err(|err| err.message)
+}
+
+/// The two "try again later" messages raised by the delete path. Anything else
+/// is a durable refusal and must not be looped on.
+pub fn transient_retirement(reason: &str) -> bool {
+    if reason.contains("并发变动")
+        || reason.contains("已停止清理")
+        || reason.contains("WorkerExitUnconfirmed")
+        || reason.contains("缺少独占标记")
+    {
+        return false;
+    }
+    if reason.contains("os error 32")
+        || reason.contains("os error 33")
+        || reason.contains("os error 5")
+        || reason.contains("os error 145")
+    {
+        return true;
+    }
+    reason.contains("正被占用") || reason.contains("可稍后重试")
 }
 
 fn remove_owned_with_hook(
@@ -1209,61 +1244,83 @@ fn remove_owned_with_hook(
     id: &str,
     before_root_delete: impl FnOnce(&Path),
 ) -> Result<(), RetirementError> {
-    let mut tree = LockedTree::open(path).map_err(RetirementError::from_io)?;
-    tree.verify_owned(id, None)?;
-    crate::saferecycle::verify_private_directory(
-        &tree
-            .directory_guard()
-            .map_err(|_| "工作目录权限无法核对。")?,
-    )
-    .map_err(|_| "工作目录允许其他账号修改或无法确认权限，已停止清理。")?;
+    let mut tree = LockedTree::open(path).map_err(|err| {
+        let os = err
+            .raw_os_error()
+            .map(|code| format!(" (os error {code})"))
+            .unwrap_or_default();
+        RetirementError::retryable(format!(
+            "工作目录清理失败：目录或文件正被占用，或无法确认安全身份{os}。可稍后重试。"
+        ))
+    })?;
+    tree.verify_owned(id, None)
+        .map_err(RetirementError::terminal)?;
+    {
+        let guard = tree.directory_guard().map_err(|err| {
+            let os = err
+                .raw_os_error()
+                .map(|code| format!(" (os error {code})"))
+                .unwrap_or_default();
+            RetirementError::retryable(format!("工作目录权限无法核对{os}。"))
+        })?;
+        crate::saferecycle::verify_private_directory(&guard).map_err(|_| {
+            RetirementError::terminal("工作目录允许其他账号修改或无法确认权限，已停止清理。")
+        })?;
+    }
     if tree
         .entries
         .iter()
         .any(|entry| entry.path() == path.join(".openunpack-exit-unconfirmed.json"))
     {
-        return Err("WorkerExitUnconfirmed".into());
+        return Err(RetirementError::terminal("WorkerExitUnconfirmed"));
     }
     let owner_path = path.join(OWNER_FILE);
     let index = tree
         .entries
         .iter()
         .position(|entry| entry.path() == owner_path)
-        .ok_or("工作目录缺少独占标记。")?;
+        .ok_or_else(|| RetirementError::terminal("工作目录缺少独占标记。"))?;
     let marker = tree.entries.remove(index);
-    let saved_owner = read_owner_file(marker.file())?;
+    let saved_owner = read_owner_file(marker.file()).map_err(RetirementError::terminal)?;
+    let retryable_failure = |err: std::io::Error| {
+        let os = err
+            .raw_os_error()
+            .map(|code| format!(" (os error {code})"))
+            .unwrap_or_default();
+        RetirementError::retryable(format!("工作目录清理失败{os}，可稍后重试。"))
+    };
     // All current descendants were locked and checked before the first delete.
     // Pop children first and close their handles before deleting parent objects.
     while let Some(entry) = tree.entries.pop() {
-        entry.delete().map_err(RetirementError::from_io)?;
+        entry.delete().map_err(retryable_failure)?;
     }
     let remaining = tree
         .root
         .directory_guard()
-        .map_err(RetirementError::from_io)?
+        .map_err(retryable_failure)?
         .entries()
-        .map_err(RetirementError::from_io)?;
+        .map_err(retryable_failure)?;
     if remaining.len() != 1 || remaining[0] != OWNER_FILE {
-        return Err("工作目录内容在清理期间发生变化，已停止清理。".into());
+        return Err(RetirementError::terminal(
+            "工作目录在清理过程中发生并发变动，已停止清理。",
+        ));
     }
-    marker.delete().map_err(RetirementError::from_io)?;
+    marker.delete().map_err(retryable_failure)?;
     drop(marker);
     before_root_delete(path);
-    if let Err(error) = tree.root.delete() {
-        let root = tree
-            .root
-            .directory_guard()
-            .map_err(|_| "清理失败且独占标记无法恢复；目录已保留。")?;
+    if tree.root.delete().is_err() {
+        let root = tree.root.directory_guard().map_err(retryable_failure)?;
         // If the final directory deletion fails (for example a child was
         // inserted concurrently), restore authority in the same pinned root.
         // Never overwrite a newly introduced marker owned by someone else.
         if atomic_json_guarded(&root, &owner_path, &saved_owner, false).is_err() {
-            let marker = root
-                .open_read_file(Path::new(OWNER_FILE))
-                .map_err(|_| "清理失败且独占标记无法恢复；目录已保留。")?;
-            verify_owner_file(&marker, &saved_owner.id, Some(&saved_owner.manifest))?;
+            let marker = root.open_read_file(Path::new(OWNER_FILE)).map_err(|_| {
+                RetirementError::terminal("清理失败且独占标记无法恢复；目录已保留。")
+            })?;
+            verify_owner_file(&marker, &saved_owner.id, Some(&saved_owner.manifest))
+                .map_err(RetirementError::terminal)?;
         }
-        return Err(RetirementError::from_io(error));
+        return Err(RetirementError::retryable("工作目录清理失败，可稍后重试。"));
     }
     // Windows only removes the delete-pending workspace after its last handle
     // closes. The tree also pins the parent without FILE_SHARE_DELETE, so it
@@ -1370,7 +1427,16 @@ pub fn free_bytes(path: &Path) -> Result<u64, String> {
         .find(|p| p.exists())
         .ok_or("磁盘路径不可用。")?;
     check_path(ancestor)?;
-    let p: Vec<u16> = ancestor.as_os_str().encode_wide().chain(Some(0)).collect();
+    let target_dir = if ancestor.is_file() {
+        ancestor.parent().unwrap_or(ancestor)
+    } else {
+        ancestor
+    };
+    let p: Vec<u16> = target_dir
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
     let mut available = 0;
     let mut total = 0;
     let mut free = 0;
@@ -1730,7 +1796,10 @@ impl Drop for SleepBlockerGuard {
 
 #[cfg(test)]
 mod cache_container_tests {
-    use super::{mark_owned, owned, prune_empty_cache_container, remove_owned};
+    use super::{
+        RetirementError, mark_owned, owned, prune_empty_cache_container, remove_owned,
+        remove_owned_retrying, retry_retirement,
+    };
 
     #[test]
     fn owned_workspace_retirement_prunes_cache_only_after_the_last_job() {
@@ -1794,94 +1863,98 @@ mod cache_container_tests {
             "the user cache root itself is never removed"
         );
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+    #[test]
+    fn a_held_workspace_is_retired_once_the_handle_is_released() {
+        use std::os::windows::fs::OpenOptionsExt;
+        use windows_sys::Win32::Storage::FileSystem::{
+            FILE_FLAG_BACKUP_SEMANTICS, FILE_SHARE_READ,
+        };
 
-    #[tokio::test]
-    async fn retirement_retries_transient_handles_without_blocking_the_runtime() {
-        let temp = tempfile::tempdir().unwrap();
-        let work = temp.path().join("work");
-        mark_owned(&work, "job", "manifest").unwrap();
-        fs::write(work.join("payload"), b"preserved until unlocked").unwrap();
-        let blocker = fs::OpenOptions::new()
+        let root = tempfile::tempdir().unwrap();
+        let container = root.path().join("OpenUnpack-cache");
+        let work = container.join("job-1");
+        std::fs::create_dir_all(&container).unwrap();
+        mark_owned(&work, "job", "").unwrap();
+        std::fs::write(work.join("payload.bin"), b"bytes").unwrap();
+
+        // Hold the root without FILE_SHARE_DELETE: the first attempt fails the
+        // way a sibling job or an on-access scanner would make it fail.
+        let blocker = std::fs::OpenOptions::new()
             .read(true)
             .share_mode(FILE_SHARE_READ)
             .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
             .open(&work)
             .unwrap();
-        assert!(remove_owned(&work, "job").is_err());
+        let releaser = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            drop(blocker);
+        });
+
+        remove_owned_retrying(&work, "job").expect("a released handle must not block retirement");
+        releaser.join().unwrap();
+        assert!(!work.exists(), "the retried retirement must finish");
+    }
+
+    #[test]
+    fn transient_retirement_is_retried_and_terminal_reasons_are_not() {
+        let mut calls = 0;
+        let result = retry_retirement(|| {
+            calls += 1;
+            if calls < 3 {
+                Err("工作目录清理失败，可稍后重试。".into())
+            } else {
+                Ok(())
+            }
+        });
+        assert!(result.is_ok(), "a transient conflict must be retried");
+        assert_eq!(calls, 3, "the transient retry budget must be bounded");
+
+        let mut exhausted = 0;
+        let result = retry_retirement(|| {
+            exhausted += 1;
+            Err("工作目录清理失败，可稍后重试。".into())
+        });
+        assert!(result.is_err(), "an exhausted retry budget must surface");
         assert_eq!(
-            fs::read(work.join("payload")).unwrap(),
-            b"preserved until unlocked"
+            exhausted, 4,
+            "the final attempt must run after every bounded retry"
         );
-        let (result, ()) = tokio::join!(remove_owned_with_retry(&work, "job"), async {
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-            drop(blocker);
-        });
-        result.unwrap();
-        assert!(!work.exists());
-    }
 
-    #[tokio::test]
-    async fn retirement_revalidates_ownership_after_a_transient_failure() {
-        let temp = tempfile::tempdir().unwrap();
-        let work = temp.path().join("work");
-        mark_owned(&work, "job", "manifest").unwrap();
-        let payload = work.join("payload");
-        fs::write(&payload, b"must stay").unwrap();
-        let blocker = fs::OpenOptions::new()
-            .read(true)
-            .share_mode(FILE_SHARE_READ)
-            .open(&payload)
-            .unwrap();
-        let (result, ()) = tokio::join!(remove_owned_with_retry(&work, "job"), async {
-            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
-            let marker = work.join(OWNER_FILE);
-            let mut owner: serde_json::Value =
-                serde_json::from_slice(&fs::read(&marker).unwrap()).unwrap();
-            owner["id"] = "different-owner".into();
-            fs::write(marker, serde_json::to_vec(&owner).unwrap()).unwrap();
-            drop(blocker);
+        let mut refusals = 0;
+        let result = retry_retirement(|| {
+            refusals += 1;
+            Err("工作目录标记不匹配，已停止清理。".into())
         });
-        assert!(result.is_err());
-        assert_eq!(fs::read(&payload).unwrap(), b"must stay");
-        owned(&work, "different-owner", Some("manifest")).unwrap();
-        remove_owned(&work, "different-owner").unwrap();
-    }
-
-    #[tokio::test]
-    async fn retirement_retry_budget_is_bounded_and_authority_errors_are_terminal() {
-        let mut attempts = 0;
-        assert!(
-            retry_retirement(|| {
-                attempts += 1;
-                Err(RetirementError::from_io(io::Error::from_raw_os_error(32)))
-            })
-            .await
-            .is_err()
+        assert_eq!(
+            result.unwrap_err(),
+            "工作目录标记不匹配，已停止清理。",
+            "the durable reason must reach the caller"
         );
-        assert_eq!(attempts, 4);
-        for reason in [
-            "UnsafePath",
-            "WorkerExitUnconfirmed",
-            "工作目录缺少独占标记。",
-        ] {
-            let mut attempts = 0;
-            assert_eq!(
-                retry_retirement(|| {
-                    attempts += 1;
-                    Err(reason.into())
-                })
-                .await
-                .unwrap_err(),
-                reason
-            );
-            assert_eq!(attempts, 1);
-        }
+        assert_eq!(refusals, 1, "ownership refusals must never be retried");
+
+        let mut concurrent_attempts = 0;
+        let result = retry_retirement(|| {
+            concurrent_attempts += 1;
+            Err(RetirementError::terminal(
+                "工作目录在清理过程中发生并发变动，已停止清理。",
+            ))
+        });
+        assert_eq!(
+            result.unwrap_err(),
+            "工作目录在清理过程中发生并发变动，已停止清理。",
+            "concurrent modification must never be retried"
+        );
+        assert_eq!(
+            concurrent_attempts, 1,
+            "concurrent modification must stop immediately"
+        );
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
 
     #[test]
     fn excessive_path_depth_is_rejected_before_creating_any_directory() {

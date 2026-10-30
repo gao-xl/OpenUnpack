@@ -78,7 +78,7 @@ fn adapter_reads_and_updates_real_legacy_vault_without_changing_password_text() 
     // The legacy production implementation can still open the adapter's writes.
     let reopened = Vault::open(&path).unwrap();
     assert_eq!(
-        reopened.reveal(&original.id).unwrap(),
+        reopened.reveal(&original.id).unwrap().as_str(),
         " leading and trailing \u{3000}"
     );
     assert_eq!(reopened.views().unwrap().len(), 5);

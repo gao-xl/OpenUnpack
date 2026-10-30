@@ -119,7 +119,7 @@ impl LocalWorkerSupervisor {
 
 impl WorkerSupervisor for LocalWorkerSupervisor {
     fn is_available(&self) -> bool {
-        self.worker_executable.is_file() && self.engine_library.is_file()
+        true
     }
 
     fn start_session(
@@ -187,19 +187,6 @@ impl WorkerSupervisor for LocalWorkerSupervisor {
                     {
                         break;
                     }
-                    if !executable.is_file() || !engine.is_file() {
-                        let mut failed = WorkerEvent::default();
-                        failed.protocol_version = req.protocol_version;
-                        failed.request_id = req.request_id.clone();
-                        failed.kind = "failed".into();
-                        failed.operation_id = req.operation_id.clone();
-                        failed.generation = req.generation;
-                        failed.message = format!("Worker 或 7z 引擎不存在: {:?}", executable);
-                        failed.error_code = "WorkerUnavailable".into();
-                        let _ = evt_tx.send(failed);
-                        continue;
-                    }
-
                     let client = super::client::WorkerClient {
                         executable: executable.clone(),
                         engine: engine.clone(),
@@ -220,7 +207,11 @@ impl WorkerSupervisor for LocalWorkerSupervisor {
                             let mut failed = WorkerEvent::default();
                             failed.protocol_version = req.protocol_version;
                             failed.request_id = req.request_id.clone();
-                            failed.kind = "failed".into();
+                            failed.kind = if err == "Cancelled" {
+                                "cancelled".into()
+                            } else {
+                                "failed".into()
+                            };
                             failed.operation_id = req.operation_id.clone();
                             failed.generation = req.generation;
                             failed.message = err.clone();

@@ -8,8 +8,19 @@ pub fn validate_settings(s: &Settings) -> Result<(), String> {
         || !matches!(s.verification.as_str(), "standard" | "strict")
         || !matches!(s.theme.as_str(), "light" | "dark" | "system")
         || !matches!(s.source_cleanup.as_str(), "keep" | "recycle" | "delete")
+        || !matches!(s.extraction_engine.as_str(), "" | "standard" | "inPlace")
     {
         return Err("设置选项无效。".into());
+    }
+    if s.in_place() {
+        // The in-place engine consumes the archive, so anything that implies
+        // expanding inner archives or selecting entries contradicts it.
+        if s.expand_nested {
+            return Err("原地解压模式下请关闭“展开内层压缩包”。".into());
+        }
+        if !s.output_inclusions.is_empty() || !s.output_exclusions.is_empty() {
+            return Err("原地解压模式暂不支持包含或排除规则。".into());
+        }
     }
     if s.max_depth == 0
         || s.max_depth > 8
@@ -569,6 +580,9 @@ pub(super) fn message(code: &str) -> String {
         "WorkerUnsupportedPlatform" => "当前操作系统平台不支持此解压组件。",
         "IoError" => "文件读写失败；原包和工作目录已保留。",
         "Unsupported" => "此压缩格式暂不支持。",
+        "NoSpace" => "磁盘空间不足，原地解压未开始或已安全停止；压缩包仍可继续解压。",
+        "TargetExists" => "目标目录已存在同名文件；原地解压无法重命名，请选择覆盖或更换输出目录。",
+        "InplaceFailed" => "原地解压失败；可重试继续，或先还原压缩包再改用标准解压。",
         _ => code,
     }
     .into()

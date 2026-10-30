@@ -1,77 +1,56 @@
-# OpenUnpack 下载器自动化集成指南 (Integrations Guide)
+# 下载器完成回调
 
-本目录包含主流 BT / HTTP 下载客户端与 OpenUnpack 自动化联动的标准脚本。当下载客户端完成下载后，自动触发解压，实现 **“下载即解压、无感自动化”**。
+这些脚本把已完成下载的本地文件或目录交给独立 CLI：`openunpack unpack <path>`。脚本直接返回 CLI 退出码；缺少 CLI 时非零退出，不调用 HTTP 回退，也不读取或输出 API 密钥。提交成功只表示已提交任务，不代表后台解压已经完成。
 
----
+当前生产 Worker 仅支持 Windows x64。先按主 README 配置 Windows 无头服务、API 密钥和目录授权，再在下载器运行账户中单独配置 CLI。桌面安装包的 `OpenUnpack.exe` 是 Host；不要将它当成独立 CLI。Windows 文件名不区分大小写，不能靠 `openunpack.exe` 的大小写区分二者。
 
-## 目录结构
+可用 `scripts/build-headless.ps1` 构建本地 Windows 无头目录；其中 `openunpack-daemon.exe` 是 Host，`openunpack.exe` 是 CLI，必须保留同级 `worker/`。不应将该脚本描述为 Linux/macOS 服务构建入口。
 
-| 脚本文件 | 适配下载客户端 | 操作系统 |
-| :--- | :--- | :--- |
+通过下载器继承的 `OPENUNPACK_CLI` 指定独立 CLI 的完整路径，例如 `C:\Tools\OpenUnpackHeadless\openunpack.exe`；也可把实际 CLI 所在目录加入 `PATH`。CLI 与服务的连接和授权遵循主 README 与 CLI 配置，回调脚本不猜测安装目录或端口。
+
+| 脚本 | 下载器 | 运行条件 |
+|---|---|---|
 | `qbittorrent.bat` | qBittorrent | Windows |
-| `qbittorrent.sh` | qBittorrent | Linux / macOS |
 | `aria2-on-complete.bat` | aria2 | Windows |
-| `aria2-on-complete.sh` | aria2 | Linux / macOS |
-| `transmission-done.sh` | Transmission | Linux / macOS |
+| `qbittorrent.sh` | qBittorrent | Bash、可用 CLI、已配置路径映射 |
+| `aria2-on-complete.sh` | aria2 | Bash、可用 CLI、已配置路径映射 |
+| `transmission-done.sh` | Transmission | Bash、可用 CLI、已配置路径映射 |
 
----
+Shell 脚本只是 CLI 调用示例，不提供 Linux/macOS 解压服务。只有下载器、CLI 与 Windows 服务能访问并正确解释同一目标路径时才使用；脚本不自动转换 WSL、容器或远程路径。
 
-## 1. qBittorrent 配置
+## qBittorrent
 
-### Windows
-1. 打开 qBittorrent -> **工具 (Tools)** -> **选项 (Options)** -> **下载 (Downloads)**。
-2. 勾选 **“Torrent 完成时运行外部程序” (Run external program on torrent finished)**。
-3. 填入如下命令（请将路径替换为脚本实际所在绝对路径）：
-   ```bat
-   "C:\path\to\scripts\integrations\qbittorrent.bat" "%F" "%D" "%N" "%L"
-   ```
+在“工具 → 选项 → 下载 → Torrent 完成时运行外部程序”填入实际脚本位置：
 
-### Linux / macOS
-1. 赋予脚本执行权限：
-   ```bash
-   chmod +x /path/to/scripts/integrations/qbittorrent.sh
-   ```
-2. 在 qBittorrent 下载选项中填入：
-   ```bash
-   /path/to/scripts/integrations/qbittorrent.sh "%F" "%D" "%N" "%L"
-   ```
-
----
-
-## 2. aria2 配置
-
-在 `aria2.conf` 配置文件中添加如下选项：
-
-### Windows
-```ini
-on-download-complete=C:\path\to\scripts\integrations\aria2-on-complete.bat
+```bat
+"C:\Tools\OpenUnpackHeadless\integrations\qbittorrent.bat" "%F" "%D" "%N" "%L"
 ```
 
-### Linux / macOS
+具备上述 Bash/CLI/路径条件时，也可使用：
+
 ```bash
-chmod +x /path/to/scripts/integrations/aria2-on-complete.sh
+/path/to/integrations/qbittorrent.sh "%F" "%D" "%N" "%L"
 ```
-在 `aria2.conf` 中填入：
+
+## aria2
+
+在 `aria2.conf` 中设置回调：
+
 ```ini
-on-download-complete=/path/to/scripts/integrations/aria2-on-complete.sh
+on-download-complete=C:\Tools\OpenUnpackHeadless\integrations\aria2-on-complete.bat
 ```
 
----
+具备 Bash/CLI/路径条件时，把值换为 `aria2-on-complete.sh` 的绝对路径。aria2 提供 GID、文件数和第一个文件路径；多文件下载提交其父目录。
 
-## 3. Transmission 配置
+## Transmission
 
-在 Transmission 守护进程配置文件 `settings.json` 中配置：
+具备 Bash/CLI/路径条件时，配置实际脚本位置：
+
 ```json
 {
   "script-torrent-done-enabled": true,
-  "script-torrent-done-filename": "/path/to/scripts/integrations/transmission-done.sh"
+  "script-torrent-done-filename": "/path/to/integrations/transmission-done.sh"
 }
 ```
-保存后重载 Transmission 服务即可。
 
----
-
-## 工作原理与容灾回退
-
-1. **优先 CLI 调度**：若已安装 `openunpack` 命令行工具并在 `PATH` 中（或默认安装目录），脚本直接调用 `openunpack unpack`，享有完整的参数校验与多卷识别。
-2. **REST API 回退**：若未安装 CLI，脚本自动读取 `%LOCALAPPDATA%/OpenUnpack/daemon.info` 或 `$XDG_DATA_HOME/openunpack/daemon.info` 中的端口与授权 Token，通过 `curl` 直接与 OpenUnpack 本地守护进程通信提交解压。
+使用 shell 脚本前赋予执行权限。首次接入请用合成归档检查目标路径和 CLI 退出码，并在 OpenUnpack 队列中核对最终任务状态。不要用唯一副本验证清理行为。

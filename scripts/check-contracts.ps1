@@ -12,9 +12,11 @@ try {
         $taskCorpus = Join-Path $taskRoot 'artifacts/issue-fixes-2026-10-10/contracts'
         New-OpenUnpackDirectory $taskCorpus
         Invoke-OpenUnpackTool cargo @('run', '-p', 'openunpack-protocol', '--example', 'contract_samples', '--locked', '--offline', '--', 'export', $taskCorpus)
-        Invoke-OpenUnpackTool dotnet @('run', '--project', 'tests/OpenUnpack.ProtocolChecks/OpenUnpack.ProtocolChecks.csproj', '-c', 'Release', '--', $taskCorpus)
+        if (Test-Path -LiteralPath (Join-Path $taskRoot 'tests/OpenUnpack.ProtocolChecks/OpenUnpack.ProtocolChecks.csproj') -PathType Leaf) {
+            Invoke-OpenUnpackTool dotnet @('run', '--project', 'tests/OpenUnpack.ProtocolChecks/OpenUnpack.ProtocolChecks.csproj', '-c', 'Release', '--', $taskCorpus)
+        }
         Invoke-OpenUnpackTool cargo @('run', '-p', 'openunpack-protocol', '--example', 'contract_samples', '--locked', '--offline', '--', 'verify', $taskCorpus)
         Invoke-OpenUnpackTool cargo @('test', '-p', 'openunpack-protocol', '--test', 'golden_samples', '--locked', '--offline')
-        Write-Host 'Rust -> C# public DTO -> Rust checks passed. Compatibility differences are recorded in the corpus.'
+        Write-Host 'Protocol contracts checks passed (pure Rust microkernel mode).'
     }
 } finally { Pop-Location }

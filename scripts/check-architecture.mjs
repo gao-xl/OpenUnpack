@@ -134,7 +134,7 @@ function validate(sources, dependencies) {
     'Extracted component state must not return to Coordinator');
   const owners = [
     [/pub struct WorkerClient\b/g, 'crates/infrastructure/src/worker/client.rs'],
-    [/static UNCONFIRMED\b/g, 'crates/infrastructure/src/worker/client.rs'],
+    [/static EXIT_RECEIPTS\b/g, 'crates/infrastructure/src/worker/client.rs'],
     [/pub struct Vault\b/g, 'crates/infrastructure/src/dpapi/vault.rs'],
     [/pub struct DatabaseLease\b/g, 'crates/infrastructure/src/sqlite/database_lease.rs'],
     [/struct BoundedRecords\b/g, 'crates/infrastructure/src/worker/manifest.rs'],

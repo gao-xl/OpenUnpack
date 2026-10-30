@@ -16,63 +16,72 @@ $taskRuntimeStatus = @{ status = 'not_checked'; checked = $false }
 $taskRuntimeIdentity = @{ status = 'not_checked' }
 
 try {
-    Write-Host '=== Published .NET runtime identity and servicing baseline ===' -ForegroundColor Cyan
-    if (-not $WorkerDirectory) { $WorkerDirectory = Join-Path $taskRoot 'artifacts/worker' }
-    $taskRuntimePolicy = Get-OpenUnpackRuntimePolicy
-    $taskRuntimeIdentity = @{ status = 'failed'; workerDirectory = $WorkerDirectory; reason = 'Published runtime identity validation did not complete.' }
-    $taskRuntimeIdentity = Get-OpenUnpackPublishedRuntime -WorkerDirectory $WorkerDirectory -Policy $taskRuntimePolicy
-    $taskRuntimeIdentity | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $taskLogs 'runtime-identity.json') -Encoding utf8NoBOM
-    if ($Offline) {
-        $taskRuntimeStatus = @{ status = 'skipped'; checked = $false; version = $taskRuntimeIdentity.version;
-            reason = 'Offline: local reviewed identity passed; current official servicing metadata was not queried.' }
-    } else {
-        $taskRuntimeStatus = @{ status = 'failed'; checked = $false; version = $taskRuntimeIdentity.version;
-            source = $taskRuntimePolicy.releaseMetadataUrl; reason = 'Official runtime metadata query or validation did not complete.' }
-        $taskRuntimeMetadata = (Invoke-WebRequest -Uri $taskRuntimePolicy.releaseMetadataUrl -TimeoutSec 60 -ErrorAction Stop).Content
-        if ($taskRuntimeMetadata -is [byte[]]) { $taskRuntimeMetadata = [Text.Encoding]::UTF8.GetString($taskRuntimeMetadata) }
-        $taskRuntimeMetadata | Set-Content -LiteralPath (Join-Path $taskLogs 'dotnet-runtime-releases.json') -Encoding utf8NoBOM -NoNewline
-        $taskRuntimeStatus = Get-OpenUnpackRuntimeSecurityStatus -RuntimeVersion $taskRuntimeIdentity.version -MetadataJson $taskRuntimeMetadata -Policy $taskRuntimePolicy
-        if ($taskRuntimeStatus.status -ne 'passed') { throw 'Published runtime is behind a later official security release; review and republish before release.' }
-    }
-
-    Write-Host '=== .NET Roslyn SAST & NuGet package audit (separate from the runtime) ===' -ForegroundColor Cyan
-    
-    # 1. Roslyn SAST Security Analyzer Audit:
-    # Builds with EnableNETAnalyzers=true, AnalysisModeSecurity=All, and TreatWarningsAsErrors=true.
-    Invoke-OpenUnpackTool dotnet @(
-        'build', 'src/OpenUnpack.Worker/OpenUnpack.Worker.csproj',
-        '-c', 'Release',
-        '--no-restore',
-        '-p:UseSharedCompilation=false',
-        '-p:EnableNETAnalyzers=true',
-        '-p:TreatWarningsAsErrors=true',
-        '-p:AnalysisLevelSecurity=recommended',
-        '-p:AnalysisModeSecurity=All'
-    )
-    Write-Host "-> DotNetCliSAST Security Analyzer pass: 0 violations (CA21xx/CA30xx/CA53xx clean)." -ForegroundColor Green
-
-    # NuGet reports describe packages, never the self-contained runtime's servicing status.
-    $dotnetVulnStatus = 'skipped'
-    $taskProjectReports = @()
-    if (-not $Offline) {
-        $dotnetVulnStatus = 'failed'
-        Write-Host '-> Scanning all .NET projects for known package advisories...' -ForegroundColor DarkGray
-        # ProtocolChecks is not in the solution, so discover projects beneath both source roots.
-        $taskProjects = @(Get-ChildItem -LiteralPath (Join-Path $taskRoot 'src'), (Join-Path $taskRoot 'tests') -Recurse -Filter '*.csproj' -File | Sort-Object FullName)
-        if ($taskProjects.Count -eq 0) { throw 'No .NET projects were discovered for the package audit.' }
-        foreach ($taskProject in $taskProjects) {
-            $taskPackageRaw = @(& (Get-Command dotnet).Source list $taskProject.FullName package --vulnerable --include-transitive --format json 2>&1)
-            $taskPackageExit = $LASTEXITCODE
-            $taskPackageText = $taskPackageRaw -join "`n"
-            if ($taskPackageExit -ne 0) { throw "NuGet advisory query failed for $($taskProject.Name) (exit $taskPackageExit)." }
-            $taskAdvisories = @(Get-OpenUnpackDotnetVulnerabilities -JsonText $taskPackageText)
-            $taskProjectReports += @{ project = [IO.Path]::GetRelativePath($taskRoot, $taskProject.FullName); status = $(if ($taskAdvisories.Count) { 'failed' } else { 'passed' }); vulnerabilities = $taskAdvisories.Count }
-            if ($taskAdvisories.Count -gt 0) { throw "Vulnerable NuGet packages detected in $($taskProject.Name)." }
+    $hasDotnet = Test-Path -LiteralPath (Join-Path $taskRoot 'src/OpenUnpack.Worker/OpenUnpack.Worker.csproj') -PathType Leaf
+    if ($hasDotnet) {
+        Write-Host '=== Published .NET runtime identity and servicing baseline ===' -ForegroundColor Cyan
+        if (-not $WorkerDirectory) { $WorkerDirectory = Join-Path $taskRoot 'artifacts/worker' }
+        $taskRuntimePolicy = Get-OpenUnpackRuntimePolicy
+        $taskRuntimeIdentity = @{ status = 'failed'; workerDirectory = $WorkerDirectory; reason = 'Published runtime identity validation did not complete.' }
+        $taskRuntimeIdentity = Get-OpenUnpackPublishedRuntime -WorkerDirectory $WorkerDirectory -Policy $taskRuntimePolicy
+        $taskRuntimeIdentity | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $taskLogs 'runtime-identity.json') -Encoding utf8NoBOM
+        if ($Offline) {
+            $taskRuntimeStatus = @{ status = 'skipped'; checked = $false; version = $taskRuntimeIdentity.version;
+                reason = 'Offline: local reviewed identity passed; current official servicing metadata was not queried.' }
+        } else {
+            $taskRuntimeStatus = @{ status = 'failed'; checked = $false; version = $taskRuntimeIdentity.version;
+                source = $taskRuntimePolicy.releaseMetadataUrl; reason = 'Official runtime metadata query or validation did not complete.' }
+            $taskRuntimeMetadata = (Invoke-WebRequest -Uri $taskRuntimePolicy.releaseMetadataUrl -TimeoutSec 60 -ErrorAction Stop).Content
+            if ($taskRuntimeMetadata -is [byte[]]) { $taskRuntimeMetadata = [Text.Encoding]::UTF8.GetString($taskRuntimeMetadata) }
+            $taskRuntimeMetadata | Set-Content -LiteralPath (Join-Path $taskLogs 'dotnet-runtime-releases.json') -Encoding utf8NoBOM -NoNewline
+            $taskRuntimeStatus = Get-OpenUnpackRuntimeSecurityStatus -RuntimeVersion $taskRuntimeIdentity.version -MetadataJson $taskRuntimeMetadata -Policy $taskRuntimePolicy
+            if ($taskRuntimeStatus.status -ne 'passed') { throw 'Published runtime is behind a later official security release; review and republish before release.' }
         }
-        $dotnetVulnStatus = 'passed'
-        Write-Host '-> NuGet package advisory queries passed for all discovered projects.' -ForegroundColor Green
+
+        Write-Host '=== .NET Roslyn SAST & NuGet package audit (separate from the runtime) ===' -ForegroundColor Cyan
+        
+        # 1. Roslyn SAST Security Analyzer Audit:
+        # Builds with EnableNETAnalyzers=true, AnalysisModeSecurity=All, and TreatWarningsAsErrors=true.
+        Invoke-OpenUnpackTool dotnet @(
+            'build', 'src/OpenUnpack.Worker/OpenUnpack.Worker.csproj',
+            '-c', 'Release',
+            '--no-restore',
+            '-p:UseSharedCompilation=false',
+            '-p:EnableNETAnalyzers=true',
+            '-p:TreatWarningsAsErrors=true',
+            '-p:AnalysisLevelSecurity=recommended',
+            '-p:AnalysisModeSecurity=All'
+        )
+        Write-Host "-> DotNetCliSAST Security Analyzer pass: 0 violations (CA21xx/CA30xx/CA53xx clean)." -ForegroundColor Green
+
+        # NuGet reports describe packages, never the self-contained runtime's servicing status.
+        $dotnetVulnStatus = 'skipped'
+        $taskProjectReports = @()
+        if (-not $Offline) {
+            $dotnetVulnStatus = 'failed'
+            Write-Host '-> Scanning all .NET projects for known package advisories...' -ForegroundColor DarkGray
+            # ProtocolChecks is not in the solution, so discover projects beneath both source roots.
+            $taskProjects = @(Get-ChildItem -LiteralPath (Join-Path $taskRoot 'src'), (Join-Path $taskRoot 'tests') -Recurse -Filter '*.csproj' -File | Sort-Object FullName)
+            if ($taskProjects.Count -eq 0) { throw 'No .NET projects were discovered for the package audit.' }
+            foreach ($taskProject in $taskProjects) {
+                $taskPackageRaw = @(& (Get-Command dotnet).Source list $taskProject.FullName package --vulnerable --include-transitive --format json 2>&1)
+                $taskPackageExit = $LASTEXITCODE
+                $taskPackageText = $taskPackageRaw -join "`n"
+                if ($taskPackageExit -ne 0) { throw "NuGet advisory query failed for $($taskProject.Name) (exit $taskPackageExit)." }
+                $taskAdvisories = @(Get-OpenUnpackDotnetVulnerabilities -JsonText $taskPackageText)
+                $taskProjectReports += @{ project = [IO.Path]::GetRelativePath($taskRoot, $taskProject.FullName); status = $(if ($taskAdvisories.Count) { 'failed' } else { 'passed' }); vulnerabilities = $taskAdvisories.Count }
+                if ($taskAdvisories.Count -gt 0) { throw "Vulnerable NuGet packages detected in $($taskProject.Name)." }
+            }
+            $dotnetVulnStatus = 'passed'
+            Write-Host '-> NuGet package advisory queries passed for all discovered projects.' -ForegroundColor Green
+        } else {
+            Write-Host '-> NuGet advisory queries skipped (-Offline specified).' -ForegroundColor DarkGray
+        }
     } else {
-        Write-Host '-> NuGet advisory queries skipped (-Offline specified).' -ForegroundColor DarkGray
+        Write-Host '=== Pure Rust microkernel mode active: .NET Worker and runtime retired ===' -ForegroundColor Green
+        $taskRuntimeStatus = @{ status = 'retired'; checked = $true; reason = 'Single-stack native Rust microkernel.' }
+        $taskRuntimeIdentity = @{ status = 'retired'; reason = 'Single-stack native Rust microkernel.' }
+        $dotnetVulnStatus = 'retired'
+        $taskProjectReports = @()
     }
     Write-Host "`n=== [2/2] Rust Dependency & Known Vulnerabilities Audit (cargo-audit) ===" -ForegroundColor Cyan
     

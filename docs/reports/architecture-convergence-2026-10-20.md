@@ -1,6 +1,6 @@
 # 7.2 架构过渡债务收敛报告
 
-日期：2026-10-20。实现已完成，运行验证正在执行；最终结果以本文验证表为准。
+日期：2026-10-20。本文保留当时的实现与验证记录，原始日志已归档且未随公开仓库提供；表中通过、失败和未完成均是历史范围，不能作为当前候选通过依据。
 
 ## 收敛结果
 
@@ -41,10 +41,10 @@ Infrastructure 安全 IO 和现役 Core 一样以 Windows 为目标，不提供�
 
 ## 回退与工作区保护
 
-本轮备份和日志位于 `_workspace/architecture-transition-20261020/`。包含修改前文件、初始 Git 状态、固定基线源码、源体比对、独立 scout/rust-dev/qa 报告及构建日志。实际执行为 Codex 可用继承模型，未声称执行 AGENTS 表中的 Haiku/Sonnet。
+历史备份、基线源码、源体比对和构建日志已归档，不在公开仓库内。重新验证请使用 `node scripts/check-architecture.mjs --self-test`、`node scripts/check-contracts.mjs --self-test`，并在独立构建目录执行 Core 的 `architecture_convergence` 集成测试；每次都固定源码及实际 Worker 载荷，不复用本表通过数。
 
 为避免与其他 Rust 进程争用包缓存及目标目录，本轮使用独立 Cargo 状态目录、离线既有 registry 和 `target_architecture_transition`，构建串行并限制并发。修改前基线与修改后源代码分离。保留工作区所有既有未提交改动，未进行 reset、clean、批量暂存、部署或发布。
 
-原有全树 `git diff --check` 报告 `.workbuddy/memory/2026-10-10.md` 与 UI `styles.css` 的既有空白问题，未改动这些无关文件；本次变更范围单独核对。
+历史全树空白检查曾包含内部笔记与 UI 样式的既有问题；本次架构修改范围另行核对，没有据此宣称全树检查通过。
 
 若需回退，按本轮副本逐文件恢复本次范围，同时保留副本后新增的其他修改。数据库没有格式升级，无需降级。

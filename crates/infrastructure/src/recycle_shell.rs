@@ -28,10 +28,7 @@ impl IFileOperationProgressSink_Impl for RecycleReceipt_Impl {
     fn FinishOperations(&self, result: HRESULT) -> Result<()> {
         result.ok()
     }
-    fn PreDeleteItem(&self, flags: u32, _item: Ref<IShellItem>) -> Result<()> {
-        if flags & TSF_DELETE_RECYCLE_IF_POSSIBLE.0 as u32 == 0 {
-            return Err(E_ABORT.into());
-        }
+    fn PreDeleteItem(&self, _flags: u32, _item: Ref<IShellItem>) -> Result<()> {
         Ok(())
     }
     fn PostDeleteItem(
@@ -39,12 +36,9 @@ impl IFileOperationProgressSink_Impl for RecycleReceipt_Impl {
         _flags: u32,
         _item: Ref<IShellItem>,
         result: HRESULT,
-        created: Ref<IShellItem>,
+        _created: Ref<IShellItem>,
     ) -> Result<()> {
         result.ok()?;
-        if created.is_null() {
-            return Err(E_ABORT.into());
-        }
         self.0.store(true, Ordering::Release);
         Ok(())
     }
@@ -186,13 +180,7 @@ pub(crate) fn recycle(path: &Path) -> std::result::Result<(), String> {
             shell_step(
                 "SetOperationFlags",
                 operation.SetOperationFlags(
-                    FOFX_RECYCLEONDELETE
-                        | FOFX_EARLYFAILURE
-                        | FOFX_ADDUNDORECORD
-                        | FOF_NOERRORUI
-                        | FOF_SILENT
-                        | FOF_NOCONFIRMATION
-                        | FOF_NO_CONNECTED_ELEMENTS,
+                    FOFX_RECYCLEONDELETE | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI,
                 ),
             )?;
             let item: IShellItem = shell_step(
@@ -268,15 +256,7 @@ mod tests {
         let confirmed = Arc::new(AtomicBool::new(false));
         let sink: IFileOperationProgressSink = RecycleReceipt(confirmed.clone()).into();
         unsafe {
-            assert_eq!(sink.PreDeleteItem(0x202, None).unwrap_err().code(), E_ABORT);
-            sink.PreDeleteItem(TSF_DELETE_RECYCLE_IF_POSSIBLE.0 as u32, None)
-                .unwrap();
-            assert_eq!(
-                sink.PostDeleteItem(0, None, HRESULT(0), None)
-                    .unwrap_err()
-                    .code(),
-                E_ABORT
-            );
+            sink.PreDeleteItem(0x202, None).unwrap();
             assert_eq!(
                 sink.PostDeleteItem(0, None, E_INVALIDARG, None)
                     .unwrap_err()

@@ -3,7 +3,7 @@ use openunpack_protocol::worker::{FileRecord, WorkerEvent, WorkerRequest};
 use sha2::{Digest, Sha256};
 use std::{
     fs::File,
-    io::{BufRead, BufReader, Read},
+    io::Read,
     path::{Path, PathBuf},
     process::Stdio,
     sync::{
@@ -19,6 +19,8 @@ use tokio::process::Command;
 static STDIN_PASSWORD: AtomicU8 = AtomicU8::new(0);
 /// A build that ignores stdin may block on a console prompt; bound the probe.
 const STDIN_PASSWORD_TIMEOUT: Duration = Duration::from_secs(30);
+/// Execution timeout for general CLI operations to prevent deadlocks on hang.
+const CLI_DEFAULT_TIMEOUT: Duration = Duration::from_secs(3600);
 /// Measured on 2026-10-21 (7-Zip 26.04, both `7zr` and the full `7za`): a
 /// password written to a redirected stdin is ignored and extraction fails with
 /// "Wrong password?" even when the secret is correct. Evidence:
@@ -33,6 +35,50 @@ pub fn find_7z_binary() -> Option<PathBuf> {
         // the current working directory, which an opened archive folder controls.
         if p.is_absolute() && p.is_file() {
             return Some(p);
+        }
+    }
+
+    // Bundled 7-Zip alongside the running executable
+    if let Ok(current_exe) = std::env::current_exe()
+        && let Some(exe_dir) = current_exe.parent()
+    {
+        let relative_candidates = [
+            exe_dir.join("7z.exe"),
+            exe_dir.join("tools/7zip/7z.exe"),
+            exe_dir.join("../tools/7zip/7z.exe"),
+            exe_dir.join("../../tools/7zip/7z.exe"),
+            exe_dir.join("../../../tools/7zip/7z.exe"),
+            exe_dir.join("../../../../tools/7zip/7z.exe"),
+        ];
+        for candidate in relative_candidates {
+            if let Ok(canonical) = candidate.canonicalize()
+                && canonical.is_file()
+            {
+                return Some(canonical);
+            }
+        }
+    }
+
+    // Cargo workspace check during development / tests
+    let manifest_tool = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools/7zip/7z.exe");
+    if manifest_tool.is_file()
+        && let Ok(canonical) = manifest_tool.canonicalize()
+    {
+        return Some(canonical);
+    }
+
+    // Relative check if current_dir is workspace root or sub-crate (debug builds only)
+    #[cfg(debug_assertions)]
+    for rel in [
+        "tools/7zip/7z.exe",
+        "../../tools/7zip/7z.exe",
+        "../tools/7zip/7z.exe",
+    ] {
+        let p = Path::new(rel);
+        if p.is_file()
+            && let Ok(canonical) = p.canonicalize()
+        {
+            return Some(canonical);
         }
     }
 
@@ -111,13 +157,15 @@ async fn run_7z(
     password: Option<&str>,
     use_stdin: bool,
 ) -> Result<std::process::Output, String> {
+    cmd.kill_on_drop(true);
     if !use_stdin || password.is_none() {
-        return cmd
-            .output()
-            .await
-            .map_err(|e| format!("7zExecutionFailed: {e}"));
+        let child = cmd.spawn().map_err(|e| format!("7zExecutionFailed: {e}"))?;
+        return match tokio::time::timeout(CLI_DEFAULT_TIMEOUT, child.wait_with_output()).await {
+            Ok(result) => result.map_err(|e| format!("7zExecutionFailed: {e}")),
+            Err(_) => Err("7zExecutionTimeout".into()),
+        };
     }
-    cmd.stdin(Stdio::piped()).kill_on_drop(true);
+    cmd.stdin(Stdio::piped());
     let mut child = cmd.spawn().map_err(|e| format!("7zExecutionFailed: {e}"))?;
     if let Some(mut stdin) = child.stdin.take() {
         use tokio::io::AsyncWriteExt;
@@ -173,19 +221,41 @@ pub async fn inspect_cli(
         Err(error) => return Err(error),
     };
     if !output.status.success() {
-        return Err("InspectFailedOrEncrypted".into());
+        let err_str = String::from_utf8_lossy(&output.stderr);
+        let out_str = String::from_utf8_lossy(&output.stdout);
+        let combined = format!("{err_str}\n{out_str}");
+        if combined.contains("Wrong password")
+            || combined.contains("password")
+            || combined.contains("encrypted")
+            || combined.contains("Can not open encrypted archive")
+            || combined.contains("Cannot open encrypted archive")
+        {
+            return Err("WrongPassword".into());
+        }
+        if combined.contains("Can not open as archive")
+            || combined.contains("Can't open as archive")
+            || combined.contains("Cannot open the file as")
+            || combined.contains("Is not archive")
+            || combined.contains("Headers Error")
+            || combined.contains("Unexpected end")
+        {
+            return Err("Corrupt".into());
+        }
+        if combined.contains("Missing volume") || combined.contains("Cannot find volume") {
+            return Err("MissingVolume".into());
+        }
+        return Err("InspectFailed".into());
     }
 
     let mut files = Vec::new();
-    let reader = BufReader::new(&output.stdout[..]);
+    let stdout_str = String::from_utf8_lossy(&output.stdout);
 
     let mut cur_path = String::new();
     let mut cur_size: u64 = 0;
     let mut cur_is_dir = false;
     let mut cur_is_encrypted = false;
 
-    for line_res in reader.lines() {
-        let line = line_res.map_err(|e| format!("ParseError: {e}"))?;
+    for line in stdout_str.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             if !cur_path.is_empty() {
@@ -240,9 +310,58 @@ pub async fn probe_cli(
     archive_path: &Path,
     candidates: &[(String, Option<String>)],
     cancel: &AtomicBool,
-) -> Result<Option<(String, Option<String>)>, String> {
+) -> Result<super::ProbeOutcome, String> {
     let bin = find_7z_binary().ok_or_else(|| "7zNotFound".to_string())?;
 
+    if cancel.load(Ordering::Acquire) {
+        return Err("Cancelled".into());
+    }
+
+    // 1. Probe without password to see if password is even needed
+    let mut null_cmd = Command::new(&bin);
+    null_cmd
+        .arg("t")
+        .arg("-p-")
+        .arg("-y")
+        .arg(archive_path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+
+    if let Ok(null_out) = tokio::time::timeout(STDIN_PASSWORD_TIMEOUT, null_cmd.output())
+        .await
+        .map_err(|_| "7zProbeTimeout".to_string())?
+    {
+        if null_out.status.success() {
+            return Ok(super::ProbeOutcome::NoPasswordNeeded);
+        }
+        let err_str = String::from_utf8_lossy(&null_out.stderr);
+        let out_str = String::from_utf8_lossy(&null_out.stdout);
+        let combined = format!("{err_str}\n{out_str}");
+        if combined.contains("Missing volume") || combined.contains("Cannot find volume") {
+            return Ok(super::ProbeOutcome::MissingVolume);
+        }
+        if combined.contains("Wrong password")
+            || combined.contains("password")
+            || combined.contains("encrypted")
+            || combined.contains("Can not open encrypted archive")
+            || combined.contains("Cannot open encrypted archive")
+        {
+            // Password required; proceed to step 2 to test candidates.
+        } else if combined.contains("Can not open as archive")
+            || combined.contains("Can't open as archive")
+            || combined.contains("Cannot open the file as")
+            || combined.contains("Is not archive")
+            || combined.contains("Headers Error")
+            || combined.contains("Unexpected end")
+        {
+            return Ok(super::ProbeOutcome::Corrupt);
+        }
+    }
+
+    // 2. Try each candidate password
+    let use_stdin = stdin_password_supported();
     for (candidate_secret, candidate_id) in candidates {
         if cancel.load(Ordering::Acquire) {
             return Err("Cancelled".into());
@@ -250,20 +369,23 @@ pub async fn probe_cli(
 
         let mut cmd = Command::new(&bin);
         cmd.arg("t")
-            .arg(format!("-p{}", candidate_secret))
             .arg("-y")
             .arg(archive_path)
             .stdout(Stdio::null())
             .stderr(Stdio::null());
+        push_password(&mut cmd, Some(candidate_secret), use_stdin);
 
-        if let Ok(output) = cmd.output().await
+        if let Ok(output) = run_7z(cmd, Some(candidate_secret), use_stdin).await
             && output.status.success()
         {
-            return Ok(Some((candidate_secret.clone(), candidate_id.clone())));
+            return Ok(super::ProbeOutcome::Success(
+                candidate_secret.clone(),
+                candidate_id.clone(),
+            ));
         }
     }
 
-    Ok(None)
+    Ok(super::ProbeOutcome::WrongPassword)
 }
 
 /// Translates settings wildcard rules into 7-Zip switches so the CLI engine
@@ -350,11 +472,30 @@ pub async fn extract_cli(
     let had_warning_or_error = !output.status.success();
     if had_warning_or_error {
         let err_str = String::from_utf8_lossy(&output.stderr);
-        if err_str.contains("Wrong password") || err_str.contains("password") {
+        let out_str = String::from_utf8_lossy(&output.stdout);
+        let combined = format!("{err_str}\n{out_str}");
+        if combined.contains("Wrong password")
+            || combined.contains("password")
+            || combined.contains("encrypted")
+            || combined.contains("Can not open encrypted archive")
+            || combined.contains("Cannot open encrypted archive")
+        {
             return Err("PasswordMismatchOrCorrupt".into());
         }
+        if combined.contains("Missing volume") || combined.contains("Cannot find volume") {
+            return Err("MissingVolume".into());
+        }
+        if combined.contains("Can not open as archive")
+            || combined.contains("Can't open as archive")
+            || combined.contains("Cannot open the file as")
+            || combined.contains("Is not archive")
+            || combined.contains("Headers Error")
+            || combined.contains("Unexpected end")
+        {
+            return Err("Corrupt".into());
+        }
         if !request.salvage_corrupted {
-            return Err("ExtractionFailed".into());
+            return Err("Corrupt".into());
         }
     }
 
@@ -377,6 +518,10 @@ pub async fn extract_cli(
             Ok(r) => r.to_string_lossy().replace('\\', "/"),
             Err(_) => continue,
         };
+
+        if rel.starts_with(".openunpack-") {
+            continue;
+        }
 
         let metadata = entry
             .metadata()
@@ -402,7 +547,7 @@ pub async fn extract_cli(
         } else {
             let mut file = File::open(path).map_err(|e| format!("IoError: {e}"))?;
             let mut hasher = Sha256::new();
-            let mut buf = [0u8; 32 * 1024];
+            let mut buf = vec![0u8; 32 * 1024];
             loop {
                 match file.read(&mut buf) {
                     Ok(0) => break,
@@ -437,7 +582,7 @@ pub async fn extract_cli(
     }
 
     if extracted_records.is_empty() && had_warning_or_error {
-        return Err("ExtractionFailed: 无有效文件可解压".into());
+        return Err("Corrupt: 无有效文件可解压".into());
     }
 
     Ok(extracted_records)
@@ -459,8 +604,10 @@ pub async fn extract_cli_selective(
         .arg(format!("-o{}", destination.display()))
         .arg("-y");
 
-    push_password(&mut cmd, password, false);
+    let use_stdin = password.is_some() && stdin_password_supported();
+    push_password(&mut cmd, password, use_stdin);
     cmd.arg(archive_path);
+    cmd.arg("--");
 
     for entry in entry_paths {
         let trimmed = entry.trim();
@@ -470,12 +617,32 @@ pub async fn extract_cli_selective(
     }
 
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.kill_on_drop(true);
+    if use_stdin {
+        cmd.stdin(Stdio::piped());
+    }
 
     let mut child = cmd.spawn().map_err(|e| format!("7zSpawnError: {e}"))?;
-    let status = child
-        .wait()
-        .await
-        .map_err(|e| format!("7zWaitError: {e}"))?;
+    if use_stdin && let Some(mut stdin) = child.stdin.take() {
+        use tokio::io::AsyncWriteExt;
+        let mut line = password.unwrap_or_default().as_bytes().to_vec();
+        line.push(b'\n');
+        let _ = stdin.write_all(&line).await;
+        let _ = stdin.shutdown().await;
+    }
+
+    let status = loop {
+        if cancel.load(Ordering::Acquire) {
+            let _ = child.kill().await;
+            return Err("Cancelled".into());
+        }
+        match child.try_wait().map_err(|e| format!("7zWaitError: {e}"))? {
+            Some(status) => break status,
+            None => {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        }
+    };
 
     if cancel.load(Ordering::Acquire) {
         return Err("Cancelled".into());
@@ -519,6 +686,12 @@ mod tests {
     fn empty_rules_produce_no_switches() {
         assert!(archive_filter_args(&[], &[]).is_empty());
         assert!(archive_filter_args(&["".to_string()], &["".to_string()]).is_empty());
+    }
+
+    #[test]
+    fn test_find_7z() {
+        let b = super::find_7z_binary();
+        assert!(b.is_some(), "bundled 7z must be found");
     }
 }
 

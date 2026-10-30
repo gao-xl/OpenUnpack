@@ -40,7 +40,9 @@
       "REL": 14,
       "REG": 8
     },
-    "note": "方案仅设计；历史36/36单列；API分支是主项子场景，计数不得相加；参数/环境执行前展开。"
+    "note": "方案仅设计；历史36/36单列；API分支是主项子场景，计数不得相加；参数/环境执行前展开。",
+    "referenceSnapshotDate": "2026-10-19",
+    "publicMaintenanceNote": "2026-10-22: source hashes and command/setting counts describe the original plan snapshot. Refresh against the actual candidate before execution. Archived evidence and display exports are not public dependencies; test cases and initial not_run statuses are unchanged."
   },
   "environments": [
     {
@@ -615,31 +617,6 @@
       "path": "docs/local-api.md",
       "reason": "共享队列、目录授权、预览确认和调用约定",
       "sha256": "52f7103c2104746b9c3ae35ef61c9483aa733cce362e406cffe24deac6cd597d"
-    },
-    {
-      "path": "docs/local-api-implementation-report-2026-10-19.md",
-      "reason": "已有自动与真实API证据范围",
-      "sha256": "adc68dbc4a42cda27da4a00ddeeb3e4afff261aa93944f9ce427baccecb58f31"
-    },
-    {
-      "path": "_workspace/api-real-test-20261019/run-ebc42aaa/report.md",
-      "reason": "上次实际36/36及三文件SHA256，不等于本方案执行",
-      "sha256": "fdcfede137ed17857acd5801b8fc6ad2b2cea382d0cd989c3407052fe7d35f21"
-    },
-    {
-      "path": "docs/system-fixes-report-2026-10-19.md",
-      "reason": "F01-F04与运行时修复及保留验收项",
-      "sha256": "d56934475ae0c7b674556f9a107a04553c591c27cec11c092958ad037da32e5c"
-    },
-    {
-      "path": "docs/release-readiness-report-2026-10-15.md",
-      "reason": "原生/安装历史证据与正式发行缺口",
-      "sha256": "2a7ac690da3adeef9e1814e1b97764ae183a842266b7b16bc45ebb77eca484e9"
-    },
-    {
-      "path": "docs/plans/2026-10-17-system-detection.md",
-      "reason": "原检测56任务与已有真值/环境边界",
-      "sha256": "6966421320d3ec8d9eaaac08a28d6edd6ea154d64d6ad9386932b0376d906b5c"
     },
     {
       "path": "scripts/verify.ps1",
@@ -11389,6 +11366,38 @@
         "原始日志和必要的请求时序、PID+创建时间、真实窗口截图或视频（按本项适用）"
       ],
       "stopCondition": "非预期原包/成品损坏、外部写入、秘密泄漏、越权或假成功：停止相关危险批次并保全现场。"
+    }
+  ],
+  "archivedReferenceEvidence": [
+    {
+      "description": "历史 API 实现记录（已归档）",
+      "reason": "已有自动与真实API证据范围",
+      "sha256": "adc68dbc4a42cda27da4a00ddeeb3e4afff261aa93944f9ce427baccecb58f31",
+      "availability": "not_distributed"
+    },
+    {
+      "description": "历史真实 HTTP 探针（已归档）",
+      "reason": "上次实际36/36及三文件SHA256，不等于本方案执行",
+      "sha256": "fdcfede137ed17857acd5801b8fc6ad2b2cea382d0cd989c3407052fe7d35f21",
+      "availability": "not_distributed"
+    },
+    {
+      "description": "历史 F01–F04 修复记录（已归档）",
+      "reason": "F01-F04与运行时修复及保留验收项",
+      "sha256": "d56934475ae0c7b674556f9a107a04553c591c27cec11c092958ad037da32e5c",
+      "availability": "not_distributed"
+    },
+    {
+      "description": "历史候选验收记录（已归档）",
+      "reason": "原生/安装历史证据与正式发行缺口",
+      "sha256": "2a7ac690da3adeef9e1814e1b97764ae183a842266b7b16bc45ebb77eca484e9",
+      "availability": "not_distributed"
+    },
+    {
+      "description": "历史检测任务设计（已归档）",
+      "reason": "原检测56任务与已有真值/环境边界",
+      "sha256": "6966421320d3ec8d9eaaac08a28d6edd6ea154d64d6ad9386932b0376d906b5c",
+      "availability": "not_distributed"
     }
   ]
 }

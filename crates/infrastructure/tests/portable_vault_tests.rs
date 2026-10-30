@@ -77,7 +77,7 @@ fn test_portable_vault_roundtrip_with_explicit_key() {
     let secret = reopened
         .reveal(&views[0].id)
         .expect("failed to reveal secret");
-    assert_eq!(secret, "SecretPass123!🔑");
+    assert_eq!(secret.as_str(), "SecretPass123!🔑");
     drop(reopened);
 
     // Test with wrong key -> must fail to decrypt

@@ -13,13 +13,66 @@ impl Coordinator {
             0
         };
         let topology = paths::probe_disk_topology(Path::new(&source.path), &target_dir);
+        let archive_path = Path::new(&source.path);
+
+        // Try a fast, lightweight header probe if possible to establish entry count
+        // and nested archive presence for intelligent routing decisions.
+        let mut entry_count = 0u64;
+        let mut estimated_extracted_bytes = source.size.saturating_mul(2);
+        let mut has_nested_archives = false;
+
+        let records = if openunpack_infrastructure::engine::is_zip_file(archive_path) {
+            openunpack_infrastructure::engine::inspect_zip(
+                archive_path,
+                None,
+                s.max_entries,
+                s.max_expanded_bytes,
+            )
+            .ok()
+        } else if openunpack_infrastructure::engine::tar_engine::is_tar_file(archive_path) {
+            openunpack_infrastructure::engine::inspect_tar(
+                archive_path,
+                s.max_entries,
+                s.max_expanded_bytes,
+            )
+            .ok()
+        } else if openunpack_infrastructure::engine::lz4_engine::is_lz4_file(archive_path) {
+            openunpack_infrastructure::engine::inspect_lz4(
+                archive_path,
+                s.max_entries,
+                s.max_expanded_bytes,
+            )
+            .ok()
+        } else {
+            None
+        };
+
+        if let Some(files) = records {
+            let substantive: Vec<_> = files.iter().filter(|f| !f.is_directory).collect();
+            entry_count = substantive.len() as u64;
+            let sum_bytes: u64 = substantive.iter().map(|f| f.size).sum();
+            if sum_bytes > 0 {
+                estimated_extracted_bytes = sum_bytes;
+            }
+            has_nested_archives = substantive.iter().any(|f| {
+                let lower = f.relative_path.to_ascii_lowercase();
+                lower.ends_with(".zip")
+                    || lower.ends_with(".rar")
+                    || lower.ends_with(".7z")
+                    || lower.ends_with(".tar")
+                    || lower.ends_with(".tar.gz")
+                    || lower.ends_with(".tgz")
+                    || lower.ends_with(".tar.bz2")
+                    || lower.ends_with(".tar.xz")
+                    || lower.ends_with(".lz4")
+            });
+        }
+
         let probe = ArchiveProbeSummary {
             total_size_bytes: source.size,
-            estimated_extracted_bytes: source.size.saturating_mul(2),
-            // No header inspection has run yet. Neither archive size nor the
-            // user's nesting preference establishes its actual contents.
-            entry_count: 0,
-            has_nested_archives: false,
+            estimated_extracted_bytes,
+            entry_count,
+            has_nested_archives,
             is_source_on_hdd: topology.source_is_hdd,
             is_target_on_hdd: topology.target_is_hdd,
             is_same_physical_disk: topology.is_same_physical_disk,

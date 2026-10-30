@@ -3,6 +3,13 @@ param([switch]$SkipInstall, [switch]$WorkerProtocol, [switch]$SkipPrepare, [swit
 Assert-OpenUnpackWindows
 Import-OpenUnpackMsvc
 $taskRoot = Get-OpenUnpackRoot
+# 7-Zip 26.x loads its codec DLL through an ANSI path while packing fixtures, so
+# a checkout under a non-ASCII directory fails with "Codec Load Error: ... 80070005"
+# and "Unsupported archive type" while CI (ASCII path) stays green. Warn loudly
+# instead of letting the failure look like a product defect.
+if ($taskRoot -match '[^\x00-\x7F]') {
+    Write-Warning "Non-ASCII checkout path: $taskRoot. The bundled 7-Zip fixture packer may fail to load 7z.dll from this path; prefer an ASCII path or point OPENUNPACK_TEST_ENGINE / OPENUNPACK_7Z_PATH at ASCII copies."
+}
 $taskLogs = Join-Path $taskRoot 'artifacts/verification'
 New-OpenUnpackDirectory $taskLogs
 $taskPreviousWorker = [Environment]::GetEnvironmentVariable('OPENUNPACK_TEST_WORKER', 'Process')
@@ -18,20 +25,6 @@ try {
     if (-not $SkipSecurityAudit) {
         & (Join-Path $PSScriptRoot 'audit-security.ps1') -Offline:$SkipInstall -DenyWarnings
     }
-    Invoke-OpenUnpackTool dotnet @('build', 'src/OpenUnpack.Worker/OpenUnpack.Worker.csproj', '-c', 'Release', '--no-restore')
-    # Every native suite must use the prepared candidate, including suites
-    # which deliberately require an explicit Worker instead of a dev fallback.
-    # Preserve explicit caller overrides and restore the process environment.
-    $taskTestWorker = if ([string]::IsNullOrWhiteSpace($taskPreviousWorker)) { Join-Path $taskRoot 'artifacts/worker/OpenUnpack.Worker.exe' } else { $taskPreviousWorker }
-    $taskTestEngine = if ([string]::IsNullOrWhiteSpace($taskPreviousEngine)) { Join-Path $taskRoot 'tools/7zip/7z.dll' } else { $taskPreviousEngine }
-    $taskTestCli = if ([string]::IsNullOrWhiteSpace($taskPreviousCli)) { Join-Path $taskRoot 'tools/7zip/7z.exe' } else { $taskPreviousCli }
-    foreach ($taskPayload in @($taskTestWorker, $taskTestEngine, $taskTestCli)) {
-        if (-not (Test-Path -LiteralPath $taskPayload -PathType Leaf)) { throw "Native test payload missing: $taskPayload. Run scripts/prepare-desktop.ps1 first or set the explicit test payload override." }
-    }
-    $env:OPENUNPACK_TEST_WORKER = [IO.Path]::GetFullPath($taskTestWorker)
-    $env:OPENUNPACK_TEST_ENGINE = [IO.Path]::GetFullPath($taskTestEngine)
-    $env:OPENUNPACK_7Z_PATH = [IO.Path]::GetFullPath($taskTestCli)
-    Invoke-OpenUnpackTool dotnet @('run', '--project', 'tests/OpenUnpack.Tests/OpenUnpack.Tests.csproj', '-c', 'Release')
     Push-Location (Join-Path $taskRoot 'apps/desktop-ui')
     try {
         Invoke-OpenUnpackTool npm @('test')
@@ -49,13 +42,9 @@ try {
             Pop-Location
         }
     }
-    # The named-pipe integration suites require the real Worker and official engine prepared above.
+    # Single-stack native Rust integration suites.
     Invoke-OpenUnpackTool cargo @('test', '--workspace', '--locked', '--no-fail-fast', '--', '--test-threads=1')
-    if ($WorkerProtocol) {
-        & (Join-Path $taskRoot 'src/OpenUnpack.Worker/verify-worker.ps1') -WorkerExecutable $env:OPENUNPACK_TEST_WORKER -EnginePath $env:OPENUNPACK_TEST_ENGINE
-        & (Join-Path $PSScriptRoot 'verify-worker-v2.ps1') -WorkerExecutable $env:OPENUNPACK_TEST_WORKER -EnginePath $env:OPENUNPACK_TEST_ENGINE
-    }
-    @{ status = 'passed'; at = [DateTimeOffset]::UtcNow.ToString('o'); scope = 'Synthetic archives, current-user DPAPI, native named pipes, frontend unit tests. No physical HDD/SSD or clean-machine installation acceptance.' } |
+    @{ status = 'passed'; at = [DateTimeOffset]::UtcNow.ToString('o'); scope = 'Synthetic archives, current-user DPAPI, native Rust microkernel, frontend unit tests. No physical HDD/SSD or clean-machine installation acceptance.' } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskLogs 'summary.json') -Encoding utf8NoBOM
 } finally {
     [Environment]::SetEnvironmentVariable('OPENUNPACK_TEST_WORKER', $taskPreviousWorker, 'Process')

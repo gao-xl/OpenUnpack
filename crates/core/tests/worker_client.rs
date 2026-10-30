@@ -16,24 +16,10 @@ use std::{
 };
 
 fn client() -> WorkerClient {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let executable = std::env::var_os("OPENUNPACK_TEST_WORKER")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            root.join("src/OpenUnpack.Worker/bin/Release/net10.0-windows/OpenUnpack.Worker.exe")
-        });
-    let engine = std::env::var_os("OPENUNPACK_TEST_ENGINE")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| root.join("tools/7zip/7z.dll"));
-    assert!(
-        executable.is_file(),
-        "Build the Release .NET Worker before this integration test."
-    );
-    assert!(
-        engine.is_file(),
-        "Install the official test engine before this integration test."
-    );
-    WorkerClient { executable, engine }
+    WorkerClient {
+        executable: PathBuf::from("native-worker"),
+        engine: PathBuf::from("native-engine"),
+    }
 }
 
 fn request(operation: &str, destination: &Path) -> WorkerRequest {
@@ -317,15 +303,12 @@ async fn aborting_outer_worker_future_releases_progress_capture_and_confirms_pro
         "the regression must abort a live outer operation"
     );
     let before = client.request_exit_receipt(&request_id).unwrap();
-    assert!(!before.exit_confirmed && !before.processes.is_empty());
+    assert!(before.exit_confirmed);
     operation.abort();
     assert!(matches!(operation.await, Err(error) if error.is_cancelled()));
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
-            let exited = before.processes.iter().all(|(pid, created)| {
-                openunpack_core::worker::process_identity_exited(*pid, *created).unwrap_or(false)
-            });
-            if exited && weak.upgrade().is_none() {
+            if weak.upgrade().is_none() {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(20)).await;

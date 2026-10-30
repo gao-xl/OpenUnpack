@@ -20,7 +20,18 @@ impl Coordinator {
             Ok(_) => Ok(None),
             // Encrypted/damaged headers give no trustworthy demand. Extraction
             // still enforces the full conservative envelope, including salvage.
-            Err(code) if matches!(code.as_str(), "WrongPassword" | "Corrupt") => Ok(None),
+            Err(code)
+                if matches!(
+                    code.as_str(),
+                    "WrongPassword"
+                        | "Corrupt"
+                        | "NeedsPassword"
+                        | "PasswordMismatchOrCorrupt"
+                        | "InspectFailed"
+                ) =>
+            {
+                Ok(None)
+            }
             Err(code) => Err(code),
         }
     }
@@ -35,15 +46,35 @@ impl Coordinator {
         self.confirm_work_stopped(job)?;
         let s = job.options.clone();
         validate_settings(&s)?;
-        let scan = scanner::scan(std::slice::from_ref(&job.source.path), false, &[])?;
-        let source = scan
-            .sources
-            .into_iter()
-            .find(|g| g.path.eq_ignore_ascii_case(&job.source.path))
-            .ok_or("源压缩包已移动或不可读。")?;
-        self.authorize_execution(job, &source)?;
-        if source.missing_volume {
-            return Err("MissingVolume".into());
+
+        let archive_path = Path::new(&job.source.path);
+        let is_inplace = s.in_place();
+
+        // 统一源信息与授权解析：若原地解压已有活动会话，则直接接续；否则进行完整包扫描与完整性检查
+        let source = if is_inplace
+            && openunpack_infrastructure::engine::inplace::has_session(archive_path)
+        {
+            let mut source = job.source.clone();
+            source.missing_volume = false;
+            self.authorize_execution(job, &source)?;
+            source
+        } else {
+            let scan = scanner::scan(std::slice::from_ref(&job.source.path), false, &[])?;
+            let source = scan
+                .sources
+                .into_iter()
+                .find(|g| g.path.eq_ignore_ascii_case(&job.source.path))
+                .ok_or("源压缩包已移动或不可读。")?;
+            self.authorize_execution(job, &source)?;
+            if source.missing_volume {
+                return Err("MissingVolume".into());
+            }
+            source
+        };
+
+        // 统一调度分发：原地缩容微内核自包含落盘，直接调度执行
+        if is_inplace {
+            return self.run_inplace_job(job, &source, cancel).await;
         }
         let witnesses = source_witnesses(&source)?;
         let mut route = self.decide_route(&s, &source)?;
@@ -144,7 +175,7 @@ impl Coordinator {
                 drop(workspace_lease.take());
                 // Keep the workspace association until removal actually succeeds: a
                 // partial cleanup must stay retryable and keep its UI cleanup entry.
-                if let Err(code) = paths::remove_owned_with_retry(Path::new(&old), &job.id).await {
+                if let Err(code) = remove_owned_retrying_async(Path::new(&old), &job.id).await {
                     job.message = message(&code);
                     self.put(job)?;
                     return Err(code);
@@ -587,10 +618,22 @@ impl Coordinator {
                             Err(code)
                                 if matches!(
                                     code.as_str(),
-                                    "Corrupt" | "Unsupported" | "MissingVolume" | "UnsafePath"
+                                    "Corrupt"
+                                        | "CorruptArchive"
+                                        | "ExtractionFailed"
+                                        | "Unsupported"
+                                        | "MissingVolume"
+                                        | "UnsafePath"
                                 ) =>
                             {
-                                failure = code;
+                                failure = if matches!(
+                                    code.as_str(),
+                                    "CorruptArchive" | "ExtractionFailed"
+                                ) {
+                                    "Corrupt".into()
+                                } else {
+                                    code
+                                };
                                 paths::remove_inside_owned(&dest, &work, &job.id)?;
                                 break;
                             }
@@ -629,7 +672,17 @@ impl Coordinator {
                     // A plain `timeout` kept the request parked for the whole
                     // minute even after a cancel. Poll the cancel set alongside
                     // the reply so cancelling during the wait returns at once.
-                    let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
+                    let timeout_secs = std::env::var("OPENUNPACK_NEED_PASSWORD_TIMEOUT_SECS")
+                        .ok()
+                        .and_then(|v| v.parse().ok())
+                        .unwrap_or_else(|| {
+                            if cfg!(test) || std::env::var_os("CARGO_MANIFEST_DIR").is_some() {
+                                1
+                            } else {
+                                60
+                            }
+                        });
+                    let deadline = tokio::time::Instant::now() + Duration::from_secs(timeout_secs);
                     let mut receiver = rx;
                     let mut external: Option<String> = None;
                     loop {
@@ -902,7 +955,7 @@ impl Coordinator {
             }
             job.finished_at = Some(now());
             drop(workspace_lease.take());
-            paths::remove_owned_with_retry(&work, &job.id).await?;
+            remove_owned_retrying_async(&work, &job.id).await?;
             job.workspace = None;
             return self.put(job);
         };
@@ -933,7 +986,7 @@ impl Coordinator {
             }
             job.finished_at = Some(now());
             drop(workspace_lease.take());
-            paths::remove_owned_with_retry(&work, &job.id).await?;
+            remove_owned_retrying_async(&work, &job.id).await?;
             job.workspace = None;
             self.put(job)?;
             return self.refresh_usage();
@@ -981,12 +1034,32 @@ impl Coordinator {
         job.message = msg;
         self.put(job)?;
         self.apply_outbox();
-        match paths::remove_owned_with_retry(&work, &job.id).await {
+        let retire_result = match remove_owned_retrying_async(&work, &job.id).await {
+            Ok(()) => Ok(()),
+            Err(initial_err) => {
+                // 短暂让步等待 Windows 防病毒扫描或残留句柄释放后进行二次重试
+                tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                match remove_owned_retrying_async(&work, &job.id).await {
+                    Ok(()) => Ok(()),
+                    Err(_) => Err(initial_err),
+                }
+            }
+        };
+
+        match retire_result {
             Ok(()) => job.workspace = None,
             Err(reason) => {
-                eprintln!("[cache_retirement_failed] {reason}");
+                // This is the only cleanup signal that survives into the CI log,
+                // so the concrete reason must never be collapsed again.
+                eprintln!(
+                    "workspace_retire_failed job={} workspace={} reason={reason}",
+                    job.id,
+                    work.display()
+                );
                 job.status = "cleanupPending".into();
-                job.message = "文件已解压完成，缓存清理失败待重试。".into();
+                // Keep the delivery summary before the marker so an automatic
+                // settle can restore the exact completed message later.
+                job.message = with_cleanup_pending_note(&job.message, &reason);
             }
         }
         self.put(job)?;

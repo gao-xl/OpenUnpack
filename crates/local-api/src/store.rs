@@ -314,17 +314,31 @@ impl ApiStore {
             return None;
         }
         let actual = digest(token);
-        let difference = stored
-            .token_hash
-            .bytes()
-            .zip(actual.bytes())
-            .fold(0u8, |all, (left, right)| all | (left ^ right));
+        let difference = if stored.token_hash.len() == actual.len() {
+            stored
+                .token_hash
+                .bytes()
+                .zip(actual.bytes())
+                .fold(0u8, |all, (left, right)| all | (left ^ right))
+        } else {
+            1u8
+        };
         if difference == 0 {
             if let Ok(mut th) = self.throttle.lock() {
                 th.failed_attempts = 0;
             }
+            let prev_used_sec = stored
+                .client
+                .last_used_at
+                .as_deref()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(0);
             stored.client.last_used_at = Some(now_sec.to_string());
-            Some(stored.client.clone())
+            let result_client = stored.client.clone();
+            if now_sec.saturating_sub(prev_used_sec) >= 60 {
+                let _ = self.persist(&guard);
+            }
+            Some(result_client)
         } else {
             record_failure();
             None

@@ -119,8 +119,24 @@ export default function QueuePage({ snapshot, run, openHistory }: SharedProps & 
   const startDisabled = !connected || deletion.busy || !snapshot.engineAvailable || (snapshot.running && !snapshot.paused) || (daemon ? !selectedStartIds.length : !snapshot.jobs.some(job => ['queued', 'paused'].includes(job.status)));
   const startQueue = () => void run(() => daemon ? api.startSelected(selectedStartIds) : api.start());
   const completedJobs = snapshot.jobs.filter(job => ['completed', 'partial', 'salvaged', 'skipped', 'cleanupPending'].includes(job.status));
-  const operateSelected = (operation: (job: JobView) => Promise<unknown>) => void run(async () => { for (const job of selectJobs) await operation(job); setSelected([]); });
-  const cancel = (ids: string[]) => modal.confirm({ title: t("停止所选任务？"), content: t("将请求停止当前作业。原始压缩包始终保留，现有输出会按恢复规则处理。"), okText: t("停止任务"), cancelText: t("返回"), onOk: () => run(async () => { for (const id of ids) await api.cancel(id); setSelected([]); }) });
+  const operateSelected = (operation: (job: JobView) => Promise<unknown>) => void run(async () => { await Promise.all(selectJobs.map(job => operation(job))); setSelected([]); });
+  const cancel = (ids: string[]) => modal.confirm({ title: t("停止所选任务？"), content: t("将请求停止当前作业。原始压缩包始终保留，现有输出会按恢复规则处理。"), okText: t("停止任务"), cancelText: t("返回"), onOk: () => run(async () => { await Promise.all(ids.map(id => api.cancel(id))); setSelected([]); }) });
+
+  const formatJobMessage = (message?: string) => {
+    if (!message) return '';
+    const direct = t(message);
+    if (direct !== message) return direct;
+    const colonIdx = message.indexOf('：');
+    if (colonIdx > 0) {
+      const prefix = message.slice(0, colonIdx);
+      const rest = message.slice(colonIdx + 1);
+      const transPrefix = t(prefix);
+      if (transPrefix !== prefix) {
+        return `${transPrefix}: ${rest}`;
+      }
+    }
+    return message;
+  };
 
   const getExtensionBadge = (displayName: string) => {
     const parts = displayName.split('.');
@@ -190,7 +206,7 @@ export default function QueuePage({ snapshot, run, openHistory }: SharedProps & 
     { title: t("状态"), key: 'status', width: 140, render: (_, job) => <StatusTag status={job.status} /> },
     { title: t("当前阶段"), key: 'stage', width: 250, render: (_, job) => <><span>{t(stageLabels[job.stage] ?? job.stage)}</span><Progress size="small" percent={percent(job.progress)} status={job.status === 'failed' ? 'exception' : undefined} /><TransferMetrics job={job} /></> },
     { title: t("密码范围"), key: 'password', width: 145, render: (_, job) => job.options.passwordGroup || t("全部启用密码") },
-    { title: t("输出 / 提示"), key: 'message', width: 240, ellipsis: true, render: (_, job) => job.message || displayPath(job.outputPath) || displayPath(job.options.outputRoot) || t("原始归档所在目录") },
+    { title: t("输出 / 提示"), key: 'message', width: 240, ellipsis: true, render: (_, job) => formatJobMessage(job.message) || displayPath(job.outputPath) || displayPath(job.options.outputRoot) || t("原始归档所在目录") },
     { title: t("操作"), key: 'actions', width: 245, fixed: 'right', render: (_, job) => <Space size={0} wrap>
       <Button size="small" type="link" onClick={() => setDetail(job.id)}>{t("详情")}</Button>
       {(job.status === 'needsPassword' || (daemon && job.status === 'running' && job.stage === 'needsPassword')) && (
@@ -382,7 +398,17 @@ export default function QueuePage({ snapshot, run, openHistory }: SharedProps & 
           <Typography.Title level={5} style={{ marginTop: 0 }}>{t("本批次处理选项")}</Typography.Title>
           <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>{t("仅影响本批次；加入队列后设置会冻结。")}</Typography.Paragraph>
           <label className="setting-row"><span>{t("输出根目录")}</span><Space.Compact style={{ width: '100%' }}><Input readOnly={!daemon} onChange={event => setOptions(prev => ({ ...prev, outputRoot: event.target.value }))} aria-label={t("本批次输出目录")} value={displayPath(options.outputRoot)} placeholder={t("留空在源归档旁创建结果目录")} /><Button disabled={!nativeEngine} onClick={() => { const epoch = scanEpochRef.current; void run(async () => { const path = await api.pickDirectory(); if (path && scanEpochRef.current === epoch) setOptions(prev => ({ ...prev, outputRoot: path })); }); }}>{t("选择")}</Button><Button onClick={() => setOptions(prev => ({ ...prev, outputRoot: '' }))}>{t("清空")}</Button></Space.Compact></label>
-          <div className="setting-row"><span>{t("同名目标")}</span><Select style={{ width: 220 }} value={options.conflictPolicy} onChange={conflictPolicy => setOptions(prev => ({ ...prev, conflictPolicy }))} options={[{ value: 'rename', label: t("新建名称，保留已有内容") }, { value: 'skip', label: t("跳过该任务") }]} /></div>
+          <div className="setting-row"><span>{t("同名目标")}</span><Select style={{ width: 220 }} value={options.conflictPolicy} onChange={conflictPolicy => setOptions(prev => ({ ...prev, conflictPolicy }))} options={[{ value: 'rename', label: t("新建名称，保留已有内容") }, { value: 'skip', label: t("跳过该任务") }, ...(options.extractionEngine === 'inPlace' ? [{ value: 'overwrite', label: t("覆盖同名文件（先移开，完成后再删除）") }] : [])]} /></div>
+          <div className="setting-row"><span>{t("解压引擎")}</span><Select style={{ width: 260 }} value={options.extractionEngine || 'standard'} onChange={extractionEngine => setOptions(prev => ({ ...prev, extractionEngine, expandNested: extractionEngine === 'inPlace' ? false : prev.expandNested }))} options={[{ value: 'standard', label: t("标准（7-Zip 引擎）") }, { value: 'inPlace', label: t("原地解压（边解压边释放源包空间）") }]} /></div>
+          {options.extractionEngine === 'inPlace' && (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 8 }}
+              title={t("原地解压会消耗源压缩包")}
+              description={t("解压前会通读压缩包并校验全部条目；通过后边解压边截断源包以释放空间，完成后源包不再保留。中断后重新开始可从断点继续，期间请勿删除压缩包旁的 .hatchzip 文件。")}
+            />
+          )}
           <div className="setting-row"><span>{t("密码分组")}</span><Select value={options.passwordGroup} style={{ width: 220 }} options={[{ value: '', label: t("全部启用密码") }, ...groups.map(group => ({ value: group, label: group }))]} onChange={passwordGroup => setOptions(prev => ({ ...prev, passwordGroup }))} /></div>
           <div className="setting-row"><span>{t("展开内包")}</span><Space><Switch checked={options.expandNested} onChange={expandNested => setOptions(prev => ({ ...prev, expandNested }))} /><InputNumber aria-label={t("总展开层数（含外包）")} min={1} max={8} disabled={!options.expandNested} value={options.maxDepth} onChange={value => setOptions(prev => ({ ...prev, maxDepth: value ?? 2 }))} /></Space></div>
           <div className="setting-row"><span>{t("SSD 工作目录")}</span><Switch checked={options.cacheEnabled} onChange={cacheEnabled => setOptions(prev => ({ ...prev, cacheEnabled }))} /></div>

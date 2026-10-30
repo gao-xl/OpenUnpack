@@ -78,22 +78,10 @@ fn write_zip(path: &Path, names: &[String], payload: &[u8]) {
 }
 
 fn worker() -> (PathBuf, PathBuf) {
-    let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap();
-    let worker = std::env::var_os("OPENUNPACK_TEST_WORKER")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            workspace
-                .join("src/OpenUnpack.Worker/bin/Release/net10.0-windows/OpenUnpack.Worker.exe")
-        });
-    let engine = workspace.join("tools/7zip/7z.dll");
-    assert!(
-        worker.is_file() && engine.is_file(),
-        "Build native Worker and prepare official 7-Zip before acceptance"
-    );
-    (worker, engine)
+    (
+        PathBuf::from("native-worker"),
+        PathBuf::from("native-engine"),
+    )
 }
 
 #[tokio::test]

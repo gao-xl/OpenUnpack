@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "planId": "2026-10-19-full-functional-testing",
-  "planCasesSha256": "4b09e33fb43e12388b3aae1a59db666cacd03c5eb6680e174c43a3095acac409",
+  "planCasesSha256": "831f5f6d0804dceb24907b11b02052edc9a4e439e5534e434cac0c6255c48a00",
   "runId": null,
   "candidateManifest": null,
   "sourceManifest": null,
@@ -21,9 +21,10 @@
   },
   "historicalEvidence": [
     {
-      "path": "_workspace/api-real-test-20261019/run-ebc42aaa/report.md",
       "result": "36/36",
-      "includedInThisRun": false
+      "includedInThisRun": false,
+      "description": "2026-10-19 历史真实 HTTP 管线探针，原始材料已归档",
+      "availability": "not_distributed"
     }
   ],
   "results": [

@@ -32,10 +32,6 @@ $taskActualRoot = Join-Path $taskTestRoot 'installed'
 New-OpenUnpackDirectory $taskExpectedRoot
 New-OpenUnpackDirectory $taskActualRoot
 $taskFixtureFiles = @('openunpack-desktop.exe', 'uninstall.exe', 'LICENSE', 'THIRD_PARTY_NOTICES.md',
-    'worker/OpenUnpack.Worker.exe', 'worker/OpenUnpack.Worker.dll', 'worker/OpenUnpack.Engine.dll', 'worker/7z.dll',
-    'worker/OpenUnpack.Worker.runtimeconfig.json', 'worker/System.Private.CoreLib.dll', 'worker/hostfxr.dll',
-    'worker/hostpolicy.dll', 'worker/coreclr.dll', 'worker/clrjit.dll', 'worker/7zip-License.txt',
-    'worker/7zip-provenance.json', 'worker/THIRD_PARTY_NOTICES.md', 'worker/synthetic-runtime-component.dll',
     'release-materials/synthetic/LICENSE.txt')
 foreach ($taskRelative in $taskFixtureFiles) {
     foreach ($taskDirectory in @($taskExpectedRoot, $taskActualRoot)) {
@@ -55,15 +51,15 @@ Test-ReleaseCase 'complete payload with NSIS-only exclusions' {
     if ($taskExpected.Count -ne $taskFixtureFiles.Count) { throw 'Expected file omitted or installer helper retained.' }
     Assert-OpenUnpackInstallerPayload $taskExpected (Get-OpenUnpackInstallerPayload $taskActualRoot)
 }
-Test-ReleaseCase 'unchanged Host cannot hide a stale runtime' {
+Test-ReleaseCase 'unchanged Host cannot hide a modified legal file' {
     $taskActual = Get-OpenUnpackInstallerPayload $taskActualRoot
-    $taskActual['worker/synthetic-runtime-component.dll'] = '0' * 64
+    $taskActual['LICENSE'] = '0' * 64
     Assert-Rejected { Assert-OpenUnpackInstallerPayload $taskExpected $taskActual }
 }
-Test-ReleaseCase 'missing required runtime rejected' {
+Test-ReleaseCase 'missing required executable rejected' {
     $taskIncomplete = Join-Path $taskTestRoot 'incomplete'
     New-OpenUnpackDirectory $taskIncomplete
-    foreach ($taskRelative in $taskFixtureFiles | Where-Object { $_ -ne 'worker/coreclr.dll' }) {
+    foreach ($taskRelative in $taskFixtureFiles | Where-Object { $_ -ne 'openunpack-desktop.exe' }) {
         $taskPath = Join-Path $taskIncomplete $taskRelative
         New-OpenUnpackDirectory ([IO.Path]::GetDirectoryName($taskPath))
         [IO.File]::WriteAllText($taskPath, 'synthetic ' + $taskRelative)
@@ -72,7 +68,7 @@ Test-ReleaseCase 'missing required runtime rejected' {
 }
 Test-ReleaseCase 'missing legal file rejected' {
     $taskActual = Get-OpenUnpackInstallerPayload $taskActualRoot
-    $null = $taskActual.Remove('worker/7zip-License.txt')
+    $null = $taskActual.Remove('THIRD_PARTY_NOTICES.md')
     Assert-Rejected { Assert-OpenUnpackInstallerPayload $taskExpected $taskActual }
 }
 Test-ReleaseCase 'unexpected installed file rejected' {
@@ -82,8 +78,8 @@ Test-ReleaseCase 'unexpected installed file rejected' {
 }
 Test-ReleaseCase 'same-count path substitution rejected' {
     $taskActual = Get-OpenUnpackInstallerPayload $taskActualRoot
-    $null = $taskActual.Remove('worker/synthetic-runtime-component.dll')
-    $taskActual.Add('worker/substituted.dll', '0' * 64)
+    $null = $taskActual.Remove('THIRD_PARTY_NOTICES.md')
+    $taskActual.Add('substituted.dll', '0' * 64)
     Assert-Rejected { Assert-OpenUnpackInstallerPayload $taskExpected $taskActual }
 }
 Test-ReleaseCase 'portable versus NSIS Host marker mismatch rejected' {

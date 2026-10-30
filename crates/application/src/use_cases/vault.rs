@@ -4,6 +4,7 @@ use openunpack_domain::DomainCandidate;
 use openunpack_protocol::{ImportPreview, ImportResult, PasswordInput, PasswordView};
 use std::path::Path;
 use std::sync::Arc;
+use zeroize::Zeroizing;
 
 pub struct VaultUseCases {
     store: Arc<dyn VaultStore>,
@@ -33,7 +34,7 @@ impl VaultUseCases {
         self.store.delete_entry(id)
     }
 
-    pub fn reveal_password(&self, id: &str) -> Result<String, ApplicationError> {
+    pub fn reveal_password(&self, id: &str) -> Result<Zeroizing<String>, ApplicationError> {
         self.store.reveal_entry(id)
     }
 

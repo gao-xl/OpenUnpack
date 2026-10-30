@@ -18,11 +18,7 @@ function Get-OpenUnpackInstallerPayload {
             throw '安装载荷存在大小写冲突。'
         }
     }
-    foreach ($taskRequired in @('openunpack-desktop.exe', 'uninstall.exe', 'LICENSE', 'THIRD_PARTY_NOTICES.md',
-        'worker/OpenUnpack.Worker.exe', 'worker/OpenUnpack.Worker.dll', 'worker/OpenUnpack.Engine.dll', 'worker/7z.dll',
-        'worker/OpenUnpack.Worker.runtimeconfig.json', 'worker/System.Private.CoreLib.dll',
-        'worker/hostfxr.dll', 'worker/hostpolicy.dll', 'worker/coreclr.dll', 'worker/clrjit.dll',
-        'worker/7zip-License.txt', 'worker/7zip-provenance.json', 'worker/THIRD_PARTY_NOTICES.md')) {
+    foreach ($taskRequired in @('openunpack-desktop.exe', 'uninstall.exe', 'LICENSE', 'THIRD_PARTY_NOTICES.md')) {
         if (-not $taskManifest.ContainsKey($taskRequired)) { throw "安装载荷不完整：$taskRequired" }
     }
     return ,$taskManifest

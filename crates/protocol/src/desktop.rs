@@ -101,6 +101,10 @@ fn default_auto_start_on_add() -> bool {
 pub struct Settings {
     pub output_root: String,
     pub conflict_policy: String,
+    /// `standard` runs the 7-Zip worker; `inPlace` runs the in-place engine,
+    /// which consumes the archive while it extracts.
+    #[serde(default = "default_extraction_engine")]
+    pub extraction_engine: String,
     pub password_group: String,
     pub cache_enabled: bool,
     pub cache_policy: String,
@@ -153,11 +157,26 @@ fn default_post_extraction_action() -> String {
     "none".into()
 }
 
+fn default_extraction_engine() -> String {
+    "standard".into()
+}
+
+impl Settings {
+    /// Whether this batch runs the in-place engine.
+    ///
+    /// Records written before the field existed carry an empty string, which
+    /// means the standard engine.
+    pub fn in_place(&self) -> bool {
+        self.extraction_engine == "inPlace"
+    }
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
             output_root: String::new(),
             conflict_policy: "rename".into(),
+            extraction_engine: default_extraction_engine(),
             password_group: String::new(),
             cache_enabled: false,
             cache_policy: "auto".into(),

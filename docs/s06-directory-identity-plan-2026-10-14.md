@@ -1,6 +1,6 @@
 # S06 目录身份竞态修复执行方案
 
-授权：用户批准先关闭 S06，随后要求“开始”。范围限于当前生产 Core → Worker → Engine 的目录/文件身份保护，保留已有工作区修改，不切换架构。
+范围：Core → Worker → Engine 的目录/文件身份保护。本文件保留安全设计和验收目标；历史执行报告与原始日志已归档，不构成当前候选通过依据。
 
 ## 风险与验收目标
 
@@ -26,4 +26,4 @@
 - Core 工具箱：7 通过，0 失败；跨卷专项默认忽略，需指定第二可写卷另跑。命令：`cargo test -p openunpack-core --lib toolbox::tests -- --nocapture`，`CARGO_TARGET_DIR=target_s06`。
 - C# Release harness：70 通过，0 失败，0 跳过；结果目录 `artifacts/test-results/20261014-110323-9f0cd1b3`。
 
-实施及最终证据见 [S06 修复报告](s06-directory-identity-report-2026-10-15.md)。生成本地便携包、NSIS 候选安装包和源码包；未签发稳定版或公开发布。原生界面套件仍按此前约定暂缓。
+历史实施报告与候选包证据已归档，未随公开仓库提供。复验须固定当前源码、Worker/Engine/7-Zip 和最终包，逐项检查上述身份与源文件保护要求；原生界面、干净机安装升级和物理故障仍单独验收。

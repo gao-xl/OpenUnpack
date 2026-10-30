@@ -22,13 +22,6 @@ const root = path.resolve(rootArg), output = path.resolve(outputArg);
 const workerDirectory = path.resolve(root, workerDirectoryArg ?? 'artifacts/worker');
 if (!output.startsWith(path.join(root, 'artifacts') + path.sep)) throw new Error('Output must be inside project artifacts.');
 const metadata = JSON.parse(fs.readFileSync(metadataArg, 'utf8'));
-// Check the actual PE/deps identity before writing or downloading any release material.
-const runtimePolicy = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'runtime-policy.json'), 'utf8'));
-const runtimeIdentity = JSON.parse(execFileSync('pwsh', ['-NoProfile', '-File', path.join(import.meta.dirname, 'verify-published-runtime.ps1'),
-  '-WorkerDirectory', workerDirectory], { encoding: 'utf8', windowsHide: true }));
-const runtime = runtimeIdentity.version;
-const reviewedRuntime = runtimePolicy.reviewedRuntimes.find(entry => entry.version === runtime);
-if (runtimeIdentity.status !== 'passed' || !reviewedRuntime) throw new Error('Published runtime has not passed the shared reviewed-runtime policy.');
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const cargoChecksums = new Map(fs.readFileSync(path.join(root, 'Cargo.lock'), 'utf8').split(/\n\[\[package\]\]\r?\n/).flatMap(section => {
   const name = section.match(/^name = "([^"]+)"/m)?.[1], version = section.match(/^version = "([^"]+)"/m)?.[1], checksum = section.match(/^checksum = "([0-9a-f]+)"/m)?.[1];
@@ -85,12 +78,6 @@ records.push({ component: '7-Zip', version: '26.04', license: 'LGPL-2.1-or-later
   await download('https://github.com/ip7z/7zip/releases/download/26.04/7z2604-src.7z', '7zip/7z2604-src.7z', '6bcfd2679d178174df06d09d50147dd7b5980d7beac896136689dfc9d51e0fd9'),
   { ...save('7zip/COPYING.LESSER-2.1.txt', lgplLicense), source: lgplSource },
   copy(path.join(root, 'tools/7zip/provenance.json'), '7zip/binary-provenance.json'),
-] });
-// The self-contained publish and its notices must refer to the same runtime release.
-records.push({ component: '.NET Runtime', version: runtime, license: 'MIT and component-specific notices', files: [
-  await download(`https://raw.githubusercontent.com/dotnet/runtime/v${runtime}/LICENSE.TXT`, 'dotnet/LICENSE.TXT', reviewedRuntime.licenseSha256),
-  await download(`https://raw.githubusercontent.com/dotnet/runtime/v${runtime}/THIRD-PARTY-NOTICES.TXT`, 'dotnet/THIRD-PARTY-NOTICES.TXT', reviewedRuntime.thirdPartyNoticesSha256),
-  save('dotnet/published-runtime-identity.json', Buffer.from(JSON.stringify(runtimeIdentity, null, 2) + '\n')),
 ] });
 const nodes = new Map(metadata.resolve.nodes.map(n => [n.id, n])), reachable = new Set(), pending = [...metadata.workspace_members];
 while (pending.length) {

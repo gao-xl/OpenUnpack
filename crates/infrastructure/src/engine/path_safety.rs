@@ -106,11 +106,51 @@ pub fn matches_exclusion(path: &str, patterns: &[String]) -> bool {
         } else {
             file_name
         };
-        if wildcard_match(target, &pattern) {
+        let target_utf16: Vec<u16> = target.encode_utf16().collect();
+        let pattern_utf16: Vec<u16> = pattern.encode_utf16().collect();
+        if wildcard_utf16(&target_utf16, &pattern_utf16) {
             return true;
         }
     }
     false
+}
+
+pub fn preview_output_exclusions(paths: &[String], patterns: &[String]) -> Vec<bool> {
+    if patterns.is_empty() {
+        return vec![false; paths.len()];
+    }
+    let mut excluded_directories = std::collections::HashSet::new();
+    let entries: Vec<(String, bool)> = paths
+        .iter()
+        .map(|path| {
+            let is_dir = path.ends_with('/') || path.ends_with('\\');
+            let norm = path.replace('\\', "/").trim_end_matches('/').to_string();
+            (norm, is_dir)
+        })
+        .collect();
+
+    for (norm, is_dir) in &entries {
+        if *is_dir && matches_exclusion(norm, patterns) {
+            excluded_directories.insert(norm.clone());
+        }
+    }
+
+    let mut result = Vec::with_capacity(paths.len());
+    for (norm, _) in &entries {
+        let mut is_excluded = matches_exclusion(norm, patterns);
+        if !is_excluded && !excluded_directories.is_empty() {
+            let mut parent = norm.as_str();
+            while let Some((p, _)) = parent.rsplit_once('/') {
+                if excluded_directories.contains(p) {
+                    is_excluded = true;
+                    break;
+                }
+                parent = p;
+            }
+        }
+        result.push(is_excluded);
+    }
+    result
 }
 
 /// Evaluates if a relative path matches inclusion patterns (if specified).
@@ -170,6 +210,63 @@ pub fn matches_inclusion(path: &str, _is_directory: bool, patterns: &[String]) -
         }
     }
     false
+}
+
+fn to_upper_invariant(c: u16) -> u16 {
+    if c == 0x0131 {
+        return 0x0131;
+    }
+    if c == 0x03C2 || c == 0x03C3 {
+        return 0x03A3;
+    }
+    if (b'a' as u16..=b'z' as u16).contains(&c) {
+        return c - 32;
+    }
+    if let Some(ch) = char::from_u32(c as u32) {
+        let mut upper = ch.to_uppercase();
+        if let Some(first) = upper.next()
+            && upper.next().is_none()
+        {
+            let u = first as u32;
+            if u <= 0xFFFF {
+                return u as u16;
+            }
+        }
+    }
+    c
+}
+
+fn wildcard_utf16(value: &[u16], pattern: &[u16]) -> bool {
+    let mut v = 0;
+    let mut p = 0;
+    let mut star: Option<usize> = None;
+    let mut restart = 0;
+    let qmark = '?' as u16;
+    let star_char = '*' as u16;
+
+    while v < value.len() {
+        if p < pattern.len()
+            && (pattern[p] == qmark
+                || to_upper_invariant(value[v]) == to_upper_invariant(pattern[p]))
+        {
+            v += 1;
+            p += 1;
+        } else if p < pattern.len() && pattern[p] == star_char {
+            star = Some(p);
+            p += 1;
+            restart = v;
+        } else if let Some(s) = star {
+            p = s + 1;
+            restart += 1;
+            v = restart;
+        } else {
+            return false;
+        }
+    }
+    while p < pattern.len() && pattern[p] == star_char {
+        p += 1;
+    }
+    p == pattern.len()
 }
 
 fn wildcard_match(text: &str, pattern: &str) -> bool {

@@ -1600,5 +1600,33 @@ export const pageMessages: Record<string, [string, string]> = {
   "已选 {count} 项": [
     "{count} selected",
     "{count} 件選択中"
+  ],
+  "解压引擎": [
+    "Extraction engine",
+    "解凍エンジン"
+  ],
+  "标准（7-Zip 引擎）": [
+    "Standard (7-Zip engine)",
+    "標準（7-Zip エンジン）"
+  ],
+  "原地解压（边解压边释放源包空间）": [
+    "In-place (frees the archive as it extracts)",
+    "その場で解凍（解凍しながら元アーカイブの容量を解放）"
+  ],
+  "原地解压会消耗源压缩包": [
+    "In-place extraction consumes the source archive",
+    "その場で解凍すると元アーカイブは消費されます"
+  ],
+  "解压前会通读压缩包并校验全部条目；通过后边解压边截断源包以释放空间，完成后源包不再保留。中断后重新开始可从断点继续，期间请勿删除压缩包旁的 .hatchzip 文件。": [
+    "Every entry is verified before anything is written. The archive is then truncated behind each committed batch, so it is gone once the run completes. Restarting an interrupted job resumes from the saved point; do not delete the .hatchzip files next to the archive meanwhile.",
+    "書き込み前に全エントリを検証します。その後は確定したバッチごとにアーカイブを切り詰めるため、完了時に元アーカイブは残りません。中断した場合は再開でき、その間アーカイブ横の .hatchzip ファイルを削除しないでください。"
+  ],
+  "覆盖同名文件（先移开，完成后再删除）": [
+    "Replace files with the same name (moved aside until the run completes)",
+    "同名ファイルを置き換える（完了まで退避し、その後削除）"
+  ],
+  "原地解压（解压前全量校验 + 输出清单核对）": [
+    "In-place (full verification before extraction, manifest checked after)",
+    "その場で解凍（解凍前の全数検証と出力一覧の照合）"
   ]
 };

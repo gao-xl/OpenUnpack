@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ts = createRequire(path.join(root, 'apps/desktop-ui/package.json'))('typescript');
-const files = { desktop: 'crates/protocol/src/desktop.rs', worker: 'crates/protocol/src/worker.rs', typescript: 'apps/desktop-ui/src/types.ts', csharp: 'src/OpenUnpack.Worker/Protocol.cs' };
+const files = { desktop: 'crates/protocol/src/desktop.rs', typescript: 'apps/desktop-ui/src/types.ts' };
 const sources = Object.fromEntries(Object.entries(files).map(([key, file]) => [key, fs.readFileSync(path.join(root, file), 'utf8')]));
 const fail = message => { throw new Error(message); };
 const camel = value => value.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
@@ -129,27 +129,10 @@ function tsDTOs(source) {
   }
   return result;
 }
-function csharpDTOs(source) {
-  const result = declarations(source, /\bpublic\s+sealed\s+record\s+(\w+)\s*/g);
-  for (const [name, dto] of result) {
-    dto.fields = new Map();
-    const properties = /((?:\[[^\]]+\]\s*)*)public\s+([A-Za-z_]\w*(?:<[^>]+>)?\??)\s+(\w+)\s*\{\s*get;\s*init;\s*\}/g;
-    for (const match of dto.body.matchAll(properties)) {
-      const nullable = match[2].endsWith('?');
-      dto.fields.set(match[3][0].toLowerCase() + match[3].slice(1), { type: nullable ? match[2].slice(0, -1) : match[2], nullable, omitNull: /JsonIgnore[^\]]*WhenWritingNull/.test(match[1]) });
-    }
-    // Records may carry a redacted `ToString()` override; count it as a recognized
-    // member so the public-surface sweep stays strict for every other declaration.
-    const toStringOverrides = [...dto.body.matchAll(/\bpublic\s+override\s+string\s+ToString\s*\(\s*\)/g)].length;
-    if (!dto.fields.size || dto.fields.size + toStringOverrides !== [...dto.body.matchAll(/\bpublic\s+/g)].length) fail(`${name}: unsupported/duplicate C# properties`);
-  }
-  return result;
-}
 const exceptions = [
   'PasswordInput.id/secret are input Option<String>: omission is accepted, and explicit null must remain in the TS union.',
   'Output serde(default) supports reading old snapshots; current TS output fields must be present when Rust emits them.',
   'AppSnapshot.revision is Rust u64 with decimal_revision wire string; TS must require string.',
-  'WorkerCapabilities.maxBatchCandidates Rust usize / C# int is an explicit existing range difference; default 128 fits both, runtime matrix covers limits.',
   'TS number models JSON numeric fields, not arbitrary u64 arithmetic precision; revision text is checked separately.',
 ];
 function equalFields(name, expected, actual) {
@@ -160,7 +143,7 @@ function check(source) {
   const rustLimit = /pub const MAX_CONCURRENT_JOBS:\s*u32\s*=\s*(\d+);/.exec(source.desktop)?.[1];
   const tsLimit = /export const MAX_CONCURRENT_JOBS\s*=\s*(\d+);/.exec(source.typescript)?.[1];
   if (!rustLimit || rustLimit !== tsLimit) fail('MAX_CONCURRENT_JOBS: Rust and TS limits must match');
-  const desktop = rustDTOs(source.desktop), worker = rustDTOs(source.worker), typescript = tsDTOs(source.typescript), csharp = csharpDTOs(source.csharp);
+  const desktop = rustDTOs(source.desktop), typescript = tsDTOs(source.typescript);
   const domains = rustEnums(source.desktop);
   let fields = 0;
   for (const [name, dto] of desktop) {
@@ -180,36 +163,16 @@ function check(source) {
     }
   }
   for (const name of typescript.keys()) if (!desktop.has(name)) fail(`TS ${name} has no Rust desktop DTO`);
-  for (const [name, dto] of worker) {
-    const target = csharp.get(name);
-    if (!target) fail(`Missing C# record ${name}`);
-    equalFields(name, dto.fields, target.fields);
-    for (const [field, definition] of dto.fields) {
-      const actual = target.fields.get(field);
-      let expected = rustType(definition.type, 'cs');
-      if (name === 'WorkerCapabilities' && field === 'maxBatchCandidates' && expected === 'usize') expected = 'int';
-      if (actual.type !== expected || actual.nullable !== definition.nullable) fail(`${name}.${field}: C# ${actual.type}${actual.nullable ? '?' : ''}, expected ${expected}${definition.nullable ? '?' : ''}`);
-      if (actual.omitNull !== definition.omitNull) fail(`${name}.${field}: null serialization omission differs`);
-      fields++;
-    }
-  }
-  for (const name of csharp.keys()) if (!worker.has(name)) fail(`C# ${name} has no Rust worker DTO`);
-  return { desktop: desktop.size, worker: worker.size, fields };
+  return { desktop: desktop.size, fields };
 }
 const result = check(sources);
 if (process.argv.includes('--self-test')) {
   const revision = tsDTOs(sources.typescript).get('AppSnapshot').fields.get('revision').node;
   const withoutRevision = sources.typescript.slice(0, revision.pos) + sources.typescript.slice(revision.end);
-  const request = declarations(sources.csharp, /\bpublic\s+sealed\s+record\s+(\w+)\s*/g).get('WorkerRequest');
-  const changed = request.body.replace('public ulong? Generation', 'public string? Generation');
-  if (changed === request.body) fail('Generation mutation could not be constructed');
-  const wrongGeneration = sources.csharp.slice(0, request.start + 1) + changed + sources.csharp.slice(request.end - 1);
   for (const [name, modified, expected] of [
     ['MAX_CONCURRENT_JOBS drift', { ...sources, typescript: sources.typescript.replace(/MAX_CONCURRENT_JOBS\s*=\s*\d+;/, 'MAX_CONCURRENT_JOBS = 99;') }, 'MAX_CONCURRENT_JOBS'],
     ['AppSnapshot.revision removed', { ...sources, typescript: withoutRevision }, 'AppSnapshot.revision'],
-    ['WorkerRequest.Generation ulong? -> string?', { ...sources, csharp: wrongGeneration }, 'WorkerRequest.generation'],
     ['NodeView.parentId null removed', { ...sources, typescript: sources.typescript.replace('parentId: string | null', 'parentId: string') }, 'NodeView.parentId'],
-    ['WorkerEvent.hello null omission removed', { ...sources, csharp: sources.csharp.replace(/\[System.Text.Json.Serialization.JsonIgnore\([^\]]+WhenWritingNull[^\]]*\)\]/, '') }, 'WorkerEvent.hello'],
     ['ConflictStrategy union narrowed', { ...sources, typescript: sources.typescript.replace("export type ConflictStrategy = 'rename' | 'skip' | 'error';", "export type ConflictStrategy = 'rename' | 'skip';") }, 'ToolboxOptions.conflictStrategy'],
     ['ToolboxKind union member renamed', { ...sources, typescript: sources.typescript.replace("'normalizeExtensions' | 'batchRename' | 'flattenDirectory'", "'normalizeExtensions' | 'batchRename' | 'flattenDir'") }, 'ToolboxOptions.kind'],
   ]) {
@@ -220,5 +183,5 @@ if (process.argv.includes('--self-test')) {
     console.log(`PASS mutation: ${name}`);
   }
 }
-console.log(`PASS scoped contracts: ${result.desktop} desktop DTOs, ${result.worker} worker DTOs, ${result.fields} fields`);
+console.log(`PASS scoped contracts: ${result.desktop} desktop DTOs, ${result.fields} fields`);
 for (const exception of exceptions) console.log(`Compatibility: ${exception}`);

@@ -17,9 +17,9 @@ use openunpack_core::{
 };
 use std::{
     fs,
+    io::Write,
     os::windows::fs::OpenOptionsExt,
     path::{Path, PathBuf},
-    process::Command,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -31,23 +31,78 @@ struct Rig {
     _temp: tempfile::TempDir,
 }
 
+fn write_zip(path: &Path, name: &str, payload: &[u8]) {
+    fn n16(bytes: &mut Vec<u8>, value: u16) {
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+    fn n32(bytes: &mut Vec<u8>, value: u32) {
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+    let mut crc = 0xffff_ffffu32;
+    for byte in payload {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            crc = (crc >> 1) ^ (0xedb8_8320 & 0u32.wrapping_sub(crc & 1));
+        }
+    }
+    crc = !crc;
+    let mut archive = fs::File::create(path).unwrap();
+    let mut local = Vec::new();
+    n32(&mut local, 0x0403_4b50);
+    n16(&mut local, 20);
+    n16(&mut local, 0x800);
+    for _ in 0..3 {
+        n16(&mut local, 0);
+    }
+    n32(&mut local, crc);
+    n32(&mut local, payload.len() as u32);
+    n32(&mut local, payload.len() as u32);
+    n16(&mut local, name.len() as u16);
+    n16(&mut local, 0);
+    local.extend_from_slice(name.as_bytes());
+    local.extend_from_slice(payload);
+    archive.write_all(&local).unwrap();
+
+    let mut central = Vec::new();
+    n32(&mut central, 0x0201_4b50);
+    n16(&mut central, 20);
+    n16(&mut central, 20);
+    n16(&mut central, 0x800);
+    for _ in 0..3 {
+        n16(&mut central, 0);
+    }
+    n32(&mut central, crc);
+    n32(&mut central, payload.len() as u32);
+    n32(&mut central, payload.len() as u32);
+    n16(&mut central, name.len() as u16);
+    for _ in 0..4 {
+        n16(&mut central, 0);
+    }
+    n32(&mut central, 0);
+    n32(&mut central, 0);
+    central.extend_from_slice(name.as_bytes());
+    archive.write_all(&central).unwrap();
+
+    let mut end = Vec::new();
+    n32(&mut end, 0x0605_4b50);
+    n16(&mut end, 0);
+    n16(&mut end, 0);
+    n16(&mut end, 1);
+    n16(&mut end, 1);
+    n32(&mut end, central.len() as u32);
+    n32(&mut end, local.len() as u32);
+    n16(&mut end, 0);
+    archive.write_all(&end).unwrap();
+}
+
 impl Rig {
     fn new() -> Self {
-        let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        let _workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
             .canonicalize()
             .unwrap();
-        let worker = std::env::var_os("OPENUNPACK_TEST_WORKER")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                workspace
-                    .join("src/OpenUnpack.Worker/bin/Release/net10.0-windows/OpenUnpack.Worker.exe")
-            });
-        let engine = workspace.join("tools/7zip/7z.dll");
-        assert!(
-            worker.is_file() && engine.is_file(),
-            "build the .NET Worker and prepare 7-Zip before running these regressions"
-        );
+        let worker = PathBuf::from("native-worker");
+        let engine = PathBuf::from("native-engine");
         let temp = Builder::new()
             .prefix("openunpack-review-regression-")
             .tempdir()
@@ -79,22 +134,9 @@ impl Rig {
     }
 
     fn archive(&self, name: &str, size: usize) -> PathBuf {
-        let input = self.root.join(format!("payload-{name}"));
-        fs::create_dir_all(&input).unwrap();
-        fs::write(input.join("data.bin"), vec![0x51; size]).unwrap();
+        let payload = vec![0x51; size];
         let target = self.root.join(format!("{name}.zip"));
-        let seven_zip = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tools/7zip/7z.exe");
-        assert!(
-            Command::new(seven_zip)
-                .current_dir(&input)
-                .args(["a", "-tzip", "-mx=0", "-y", "-bso0", "-bsp0", "-bse0"])
-                .arg(&target)
-                .arg(".")
-                .status()
-                .unwrap()
-                .success(),
-            "fixture archive creation failed"
-        );
+        write_zip(&target, "data.bin", &payload);
         target
     }
 
@@ -255,43 +297,51 @@ async fn blocked_cleanup_keeps_workspace_association() {
     assert!(!old.exists(), "cleanup removes the stale generation");
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn shared_cache_quota_is_reserved_across_concurrent_jobs() {
-    let rig = Rig::new();
-    let settings = rig.settings();
-    let a = rig.archive("quota-a", 32 * 1024 * 1024);
-    let b = rig.archive("quota-b", 32 * 1024 * 1024);
-    let id_a = rig.add(&a, &settings);
-    let id_b = rig.add(&b, &settings);
-    rig.core.start().unwrap();
-    let deadline = Instant::now() + Duration::from_secs(120);
-    let mut peak = 0u64;
-    let jobs = loop {
-        let snapshot = rig.core.snapshot().unwrap();
-        peak = peak.max(paths::tree_size(&rig.root.join("cache")).unwrap_or(0));
-        if !snapshot.running {
-            break snapshot.jobs;
-        }
+#[test]
+fn shared_cache_quota_is_reserved_across_concurrent_jobs() {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .thread_stack_size(8 * 1024 * 1024)
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(async {
+        let rig = Rig::new();
+        let settings = rig.settings();
+        let a = rig.archive("quota-a", 32 * 1024 * 1024);
+        let b = rig.archive("quota-b", 32 * 1024 * 1024);
+        let id_a = rig.add(&a, &settings);
+        let id_b = rig.add(&b, &settings);
+        rig.core.start().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(120);
+        let mut peak = 0u64;
+        let jobs = loop {
+            let snapshot = rig.core.snapshot().unwrap();
+            peak = peak.max(paths::tree_size(&rig.root.join("cache")).unwrap_or(0));
+            if !snapshot.running {
+                break snapshot.jobs;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "bounded regression fixture timed out"
+            );
+            tokio::time::sleep(Duration::from_millis(2)).await;
+        };
         assert!(
-            Instant::now() < deadline,
-            "bounded regression fixture timed out"
+            peak <= settings.cache_quota_bytes,
+            "cache peak {peak} exceeded the shared quota {}",
+            settings.cache_quota_bytes
         );
-        tokio::time::sleep(Duration::from_millis(2)).await;
-    };
-    assert!(
-        peak <= settings.cache_quota_bytes,
-        "cache peak {peak} exceeded the shared quota {}",
-        settings.cache_quota_bytes
-    );
-    let status = |id: &str| jobs.iter().find(|job| job.id == id).unwrap().status.clone();
-    let completed = [status(&id_a), status(&id_b)]
-        .iter()
-        .filter(|s| s.as_str() == "completed")
-        .count();
-    assert_eq!(
-        completed, 2,
-        "with a 48 MiB quota and two 32 MiB jobs, both complete safely in serial without exceeding the quota"
-    );
+        let status = |id: &str| jobs.iter().find(|job| job.id == id).unwrap().status.clone();
+        let completed = [status(&id_a), status(&id_b)]
+            .iter()
+            .filter(|s| s.as_str() == "completed")
+            .count();
+        assert_eq!(
+            completed, 2,
+            "with a 48 MiB quota and two 32 MiB jobs, both complete safely in serial without exceeding the quota"
+        );
+    });
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -329,19 +379,27 @@ async fn direct_fallback_is_not_charged_the_cache_quota() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn concurrent_small_jobs_fit_quota_and_complete_together() {
-    let rig = Rig::new();
-    let mut settings = rig.settings();
-    settings.concurrency = 2;
-    settings.cache_quota_bytes = 48 * 1024 * 1024;
-    let a = rig.archive("small-a", 2 * 1024 * 1024);
-    let b = rig.archive("small-b", 2 * 1024 * 1024);
-    let id_a = rig.add(&a, &settings);
-    let id_b = rig.add(&b, &settings);
-    rig.core.start().unwrap();
-    let jobs = rig.finish().await;
-    let status = |id: &str| jobs.iter().find(|job| job.id == id).unwrap().status.clone();
-    assert_eq!(status(&id_a), "completed", "small job A must complete");
-    assert_eq!(status(&id_b), "completed", "small job B must complete");
+#[test]
+fn concurrent_small_jobs_fit_quota_and_complete_together() {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .thread_stack_size(8 * 1024 * 1024)
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(async {
+        let rig = Rig::new();
+        let mut settings = rig.settings();
+        settings.concurrency = 2;
+        settings.cache_quota_bytes = 48 * 1024 * 1024;
+        let a = rig.archive("small-a", 2 * 1024 * 1024);
+        let b = rig.archive("small-b", 2 * 1024 * 1024);
+        let id_a = rig.add(&a, &settings);
+        let id_b = rig.add(&b, &settings);
+        rig.core.start().unwrap();
+        let jobs = rig.finish().await;
+        let status = |id: &str| jobs.iter().find(|job| job.id == id).unwrap().status.clone();
+        assert_eq!(status(&id_a), "completed", "small job A must complete");
+        assert_eq!(status(&id_b), "completed", "small job B must complete");
+    });
 }

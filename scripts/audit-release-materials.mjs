@@ -15,7 +15,7 @@ for (const record of manifest.records) {
     count++; bytes += content.length;
   }
 }
-for (const component of ['7-Zip', '.NET Runtime', 'tauri', 'react', 'antd']) {
+for (const component of ['7-Zip', 'tauri', 'react', 'antd']) {
   if (!manifest.records.some(record => record.component === component)) throw new Error(`Missing principal component ${component}`);
 }
 console.log(`Materials audit passed: ${manifest.records.length} components, ${count} verified files, ${bytes} bytes.`);

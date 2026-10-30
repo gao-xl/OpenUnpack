@@ -1,6 +1,8 @@
 # OpenUnpack 全功能测试方案
 
-2026-10-19 · 设计稿 v1 · 全部新用例未执行
+2026-10-19 · 设计稿 v1 · 用例初始状态全部 not_run
+
+公开维护说明（2026-10-22）：本方案保留设计时的 294 项用例与验收准则；命令/设置数量和源文件摘要属于当时快照，执行前须与当前契约核对。旧执行报告与展示导出物已归档，不构成当前候选通过证据。
 
 ## 范围与目标
 
@@ -325,13 +327,13 @@ npm --prefix apps/desktop-ui test
 
 jsdom/桥接测试，不能标为原生窗口通过。
 
-### CMD-07 · UI独立audit与工程检查
+### CMD-07 · UI工程检查与专项覆盖核对
 
 ```powershell
 Push-Location apps/desktop-ui
 try {
-  npx vitest run --config audit/vitest.config.ts
-  if ($LASTEXITCODE -ne 0) { throw "UI audit failed" }
+  npm run lint:a11y
+  if ($LASTEXITCODE -ne 0) { throw "UI a11y gate failed" }
   npm run lint
   if ($LASTEXITCODE -ne 0) { throw "UI lint failed" }
   npm run build
@@ -339,7 +341,7 @@ try {
 } finally { Pop-Location }
 ```
 
-audit必须用独立audit/vitest.config.ts；默认配置仅匹配tests目录。记录实际收集数，0匹配不通过。
+此命令只检查公开的工程门禁，不替代原 UI 专项断言。原独立 audit 配置与执行材料未随公开仓库提供；验收对应专项时须先补齐可审查测试实现，缺失则记录 blocked/not_run。默认 Vitest 仅收集 tests 目录；始终记录实际收集数，0 匹配不算通过。
 
 ### CMD-08 · 严格静态门禁
 
@@ -353,10 +355,12 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 ### CMD-09 · 真实API回归基线
 
 ```powershell
-python _workspace/api-real-test-20261019/run-ebc42aaa/real_test.py --host <新run中从包解压的OpenUnpack.exe> --bootstrap <已核对辅助程序> --run <唯一run目录>
+$env:OPENUNPACK_TEST_WORKER = "<冻结载荷>/OpenUnpack.Worker.exe"
+$env:OPENUNPACK_TEST_ENGINE = "<冻结载荷>/7z.dll"
+cargo test -p openunpack-desktop --lib native_http_extraction_keeps_passwords_temporary_and_gui_jobs_queued -- --ignored --nocapture
 ```
 
-模板不能原样复制；扩展为42命令矩阵。bootstrap只算API夹具，另测设置页创建密钥。
+先将占位路径替换为本轮核对的 Worker 与 7-Zip 载荷，并满足仓库该测试所需的 Windows 工具链与 `tools/7zip/7z.exe`。此测试是基础真实 HTTP 管线，不能代替完整命令/权限矩阵；另测设置页创建密钥、真实发布包启动及原生交互。原私有 bootstrap 探针已归档，不要求外部贡献者运行未提供脚本。
 
 ### CMD-10 · 指定载荷Worker协议
 
@@ -459,7 +463,7 @@ cargo test -p openunpack-core --test physical_disk_cross_device -- --ignored --t
 
 最终报告模板：版本/环境 → 已执行及失败/阻塞/无效统计 → 各模块结论 → P0/P1/P2缺陷 → 原包/成品/秘密保护结果 → API/GUI/安装范围 → 性能时序 → 修复/复跑关联 → 剩余风险 → 开发候选/正式发行分别结论。统计由原始结果计算，不手填一个总通过率。
 
-随本方案提供cases.json/cases.csv和result-template.json。结果模板全部not_run，任何sample字段不是已执行证据。执行后还需检查结案时源码及完整候选字节未变化；如果变化，限定可复用证据并重跑受影响范围。
+公开规范保留 cases.json、Markdown 及 result-template.json；HTML/CSV 展示导出物不属于运行或验收依赖。结果模板全部not_run，任何sample字段不是已执行证据。执行后还需检查结案时源码及完整候选字节未变化；如果变化，限定可复用证据并重跑受影响范围。
 
 ## 风险、数据影响和回退
 
@@ -479,7 +483,9 @@ cargo test -p openunpack-core --test physical_disk_cross_device -- --ignored --t
 
 计划可进入执行阶段。执行前真正需要补齐的是可用测试环境和已核对候选身份，而非重新设计全部方案。缺环境明确blocked；产品修复、对个人数据的操作或公开发行不包含在本次设计交付中。
 
-## 本轮核对的资料
+## 设计时核对的资料（历史快照）
+
+下列 SHA-256 是 2026-10-19 的参考快照，不声明匹配当前源码。历史执行材料仅保留描述和摘要，不提供无效本机链接；执行前须重新冻结实际来源。
 
 | 源文件 | 用途 | SHA256 |
 | --- | --- | --- |
@@ -491,11 +497,11 @@ cargo test -p openunpack-core --test physical_disk_cross_device -- --ignored --t
 | [command.rs](../../crates/local-api/src/command.rs) | 42命令、11 scopes及条件删除权限 | 2f6cc3ec7f1f4281956b1cf2fd1914b2de6e5bd39d6678bcba738bf98355ea38 |
 | [server.rs](../../crates/local-api/src/server.rs) | 实际HTTP路由、资源上限及SSE | 2975bea3a3277d06729282daf7cd256fd658ca35163a7b1c420c8cadc79f205b |
 | [local-api.md](../../docs/local-api.md) | 共享队列、目录授权、预览确认和调用约定 | 52f7103c2104746b9c3ae35ef61c9483aa733cce362e406cffe24deac6cd597d |
-| [local-api-implementation-report-2026-10-19.md](../../docs/local-api-implementation-report-2026-10-19.md) | 已有自动与真实API证据范围 | adc68dbc4a42cda27da4a00ddeeb3e4afff261aa93944f9ce427baccecb58f31 |
-| [report.md](../../_workspace/api-real-test-20261019/run-ebc42aaa/report.md) | 上次实际36/36及三文件SHA256，不等于本方案执行 | fdcfede137ed17857acd5801b8fc6ad2b2cea382d0cd989c3407052fe7d35f21 |
-| [system-fixes-report-2026-10-19.md](../../docs/system-fixes-report-2026-10-19.md) | F01-F04与运行时修复及保留验收项 | d56934475ae0c7b674556f9a107a04553c591c27cec11c092958ad037da32e5c |
-| [release-readiness-report-2026-10-15.md](../../docs/release-readiness-report-2026-10-15.md) | 原生/安装历史证据与正式发行缺口 | 2a7ac690da3adeef9e1814e1b97764ae183a842266b7b16bc45ebb77eca484e9 |
-| [2026-10-17-system-detection.md](../../docs/plans/2026-10-17-system-detection.md) | 原检测56任务与已有真值/环境边界 | 6966421320d3ec8d9eaaac08a28d6edd6ea154d64d6ad9386932b0376d906b5c |
+| 历史 API 实现记录（已归档） | 已有自动与真实API证据范围 | adc68dbc4a42cda27da4a00ddeeb3e4afff261aa93944f9ce427baccecb58f31 |
+| 历史真实 HTTP 探针（已归档） | 上次实际36/36及三文件SHA256，不等于本方案执行 | fdcfede137ed17857acd5801b8fc6ad2b2cea382d0cd989c3407052fe7d35f21 |
+| 历史 F01–F04 修复记录（已归档） | F01-F04与运行时修复及保留验收项 | d56934475ae0c7b674556f9a107a04553c591c27cec11c092958ad037da32e5c |
+| 历史候选验收记录（已归档） | 原生/安装历史证据与正式发行缺口 | 2a7ac690da3adeef9e1814e1b97764ae183a842266b7b16bc45ebb77eca484e9 |
+| 历史检测任务设计（已归档） | 原检测56任务与已有真值/环境边界 | 6966421320d3ec8d9eaaac08a28d6edd6ea154d64d6ad9386932b0376d906b5c |
 | [verify.ps1](../../scripts/verify.ps1) | 真实自动回归入口，默认ignored仍须单列 | 24c8d9aef6890e9f2ccecb70a0c6bb4698312c616dcacad443861e8e35745e60 |
 | [check-contracts.ps1](../../scripts/check-contracts.ps1) | 协议往返与镜像检查 | dde30a772dbe3e37568135f7d3fbf7581b4ddecba3640ae563c56d908b1b8cab |
 | [measure-load.ps1](../../scripts/measure-load.ps1) | 有界独占负载与性能采样 | 26c1ce56b13c568f4ea6f04583e2cead1dc5586227639dee566b8d3eff3152ab |

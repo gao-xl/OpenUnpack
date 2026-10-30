@@ -1,8 +1,8 @@
 # 已知问题修复记录（2026-10-21）
 
-> 输入：`docs/audit-report-final-2026-10-20.md` 第 2 节问题清单与结转项
-> 决策方式：按用户指定的三条推荐路径执行并补齐证据
-> 标的：工作树（HEAD `cf6e344`，并行会话持续写入）
+> 定位：保留便携库、可选 CLI 适配路径及可访问性过渡方案的历史决定。
+> 原审计与执行原始证据已归档，不随公开仓库提供；本文不作为当前候选已通过的证明。
+> 现行决策条件见 [未决事项登记](decisions/OPEN-DECISIONS.md)，生产执行链见 [现行架构](architecture-current.md)。
 
 ---
 
@@ -58,11 +58,11 @@ cmd.arg(format!("-p{}", pwd));   // inspect 与 extract 两处
 
 Windows 上同用户进程可经 `Win32_Process.CommandLine`、ETW 或 Process Explorer 读取完整命令行，无需提权。
 
-**影响范围**：所有加密归档的检查、解压、密码库自动匹配与重试链路。
+**适用范围**：`infrastructure::engine::cli_engine` 可选库适配器及其实验/测试调用；它没有接管 Windows 生产 Worker 管线。Windows 生产链通过命名管道与 DLL 回调传递口令，不能将本项 argv 暴露结论扩展到所有加密作业。
 
 ### 2.1 实测：7-Zip 是否接受 stdin 口令（本轮补齐）
 
-**方法**：使用官方 `7zr.exe`（单文件，不依赖 DLL，可绕过本机对未签名 DLL 的加载限制）与官方完整版 `7za.exe`（从 `7z2604-extra.7z` 解出），构造加密 7z，按四种字节序列写入 stdin，并以 argv 与"无口令"两组作对照。脚本：`artifacts/p2-09-stdin-proof/probe_stdin.py`。
+**方法**：使用官方 `7zr.exe`（单文件，不依赖 DLL，可绕过本机对未签名 DLL 的加载限制）与官方完整版 `7za.exe`（从 `7z2604-extra.7z` 解出），构造加密 7z，按四种字节序列写入 stdin，并以 argv 与"无口令"两组作对照。该次专用探针脚本已归档，未随公开仓库提供；下表保留合成口令字节序列与对照方法。
 
 | 用例 | 7zr 26.04 | 7za 26.04 | 结果 |
 |------|-----------|-----------|------|
@@ -73,7 +73,7 @@ Windows 上同用户进程可经 `Win32_Process.CommandLine`、ETW 或 Process E
 | stdin `WRONG\n` | exit 2 | exit 2 | 预期失败 |
 | `-p-`（无口令） | exit 2 | exit 2 | 预期失败 |
 
-原始记录：`artifacts/p2-09-stdin-proof/stdin-probe-result.json`（7zr）与 `stdin-probe-result-7za.json`（7za）。
+原始 7zr/7za 探针记录已归档，未随公开仓库提供；再次验证需固定具体引擎版本并重跑全部对照。
 **结论：7-Zip 26.04 不读取重定向 stdin 的口令，只在控制台提示时读取。** 前一版把 stdin 设为默认会直接破坏所有加密解压，必须回退。
 
 ### 2.2 修复（按实测结果调整）

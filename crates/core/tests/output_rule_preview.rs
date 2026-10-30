@@ -5,7 +5,7 @@ use std::path::PathBuf;
 #[tokio::test]
 async fn actual_worker_rule_preview_matches_utf16_and_explicit_directories() {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let root = manifest_dir
+    let _root = manifest_dir
         .parent()
         .unwrap()
         .parent()
@@ -13,10 +13,10 @@ async fn actual_worker_rule_preview_matches_utf16_and_explicit_directories() {
         .to_path_buf();
     let executable = std::env::var_os("OPENUNPACK_TEST_WORKER")
         .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            root.join("src/OpenUnpack.Worker/bin/Release/net10.0-windows/OpenUnpack.Worker.exe")
-        });
-    let engine = root.join("tools/7zip/7z.dll");
+        .unwrap_or_else(|| PathBuf::from("native-worker"));
+    let engine = std::env::var_os("OPENUNPACK_TEST_ENGINE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("native-engine"));
     let worker = WorkerClient { executable, engine };
     let paths = vec![
         "😀.txt".into(),

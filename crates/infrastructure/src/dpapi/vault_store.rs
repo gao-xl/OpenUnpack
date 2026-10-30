@@ -170,7 +170,7 @@ impl VaultStore for DpapiVaultStore {
             .map_err(ApplicationError::VaultError)
     }
 
-    fn reveal_entry(&self, id: &str) -> Result<String, ApplicationError> {
+    fn reveal_entry(&self, id: &str) -> Result<Zeroizing<String>, ApplicationError> {
         self.vault.reveal(id).map_err(ApplicationError::VaultError)
     }
 }

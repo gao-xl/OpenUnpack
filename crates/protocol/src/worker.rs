@@ -4,6 +4,10 @@ pub const WORKER_PROTOCOL_VERSION_V1: u32 = 1;
 pub const WORKER_PROTOCOL_VERSION_V2: u32 = 2;
 pub const MAX_MESSAGE_BYTES: usize = 8 * 1024 * 1024;
 
+/// In-process native worker & engine sentinel identifiers used by desktop host & coordinator.
+pub const INPROCESS_WORKER_MARKER: &str = "native-worker";
+pub const INPROCESS_ENGINE_MARKER: &str = "native-engine";
+
 fn known_size() -> bool {
     true
 }

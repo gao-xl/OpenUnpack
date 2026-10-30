@@ -2,6 +2,7 @@ use crate::error::ApplicationError;
 use openunpack_domain::{CandidateOrigin, DomainCandidate};
 use openunpack_protocol::{ImportPreview, ImportResult, PasswordInput, PasswordView};
 use std::path::Path;
+use zeroize::Zeroizing;
 
 /// Stable delivery event. The same event is safe to replay after an outbox retry.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -88,7 +89,7 @@ pub trait VaultStore: Send + Sync {
     }
 
     /// 查看指定密码条目的明文（按需解密）
-    fn reveal_entry(&self, _id: &str) -> Result<String, ApplicationError> {
+    fn reveal_entry(&self, _id: &str) -> Result<Zeroizing<String>, ApplicationError> {
         Err(unsupported())
     }
 }

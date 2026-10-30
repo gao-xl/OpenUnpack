@@ -53,6 +53,9 @@ impl SnapshotProjector {
     /// A poisoned probe lock falls back to direct stats so availability is never
     /// hidden by an unrelated polling failure.
     pub(super) fn engine_available(&self, executable: &Path, engine: &Path) -> bool {
+        if executable.as_os_str() == openunpack_protocol::worker::INPROCESS_WORKER_MARKER {
+            return true;
+        }
         const PROBE_TTL: Duration = Duration::from_secs(2);
         let probe_files = || executable.is_file() && engine.is_file();
         let Ok(mut probe) = self.engine_probe.lock() else {

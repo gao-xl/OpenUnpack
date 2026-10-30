@@ -1038,7 +1038,7 @@ impl Vault {
         Ok(())
     }
 
-    pub fn reveal(&self, id: &str) -> Result<String, String> {
+    pub fn reveal(&self, id: &str) -> Result<Zeroizing<String>, String> {
         let guard = self
             .data
             .lock()
@@ -1050,7 +1050,7 @@ impl Vault {
         if item.deleted {
             return Err(ERR_RECORD_NOT_FOUND.to_string());
         }
-        Ok(item.secret.clone())
+        Ok(Zeroizing::new(item.secret.clone()))
     }
 
     fn persist_internal(&self, data: &VaultData) -> Result<(), String> {
@@ -1928,13 +1928,20 @@ fn atomic_write_file(destination: &Path, content: &[u8]) -> Result<(), String> {
             MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW,
         };
 
-        let ret = unsafe {
-            MoveFileExW(
-                wide_src.as_ptr(),
-                wide_dst.as_ptr(),
-                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-            )
-        };
+        let mut ret = 0;
+        for attempt in 0..15 {
+            ret = unsafe {
+                MoveFileExW(
+                    wide_src.as_ptr(),
+                    wide_dst.as_ptr(),
+                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+                )
+            };
+            if ret != 0 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5 * (attempt + 1)));
+        }
 
         if ret == 0 {
             let _ = fs::remove_file(&tmp_path);

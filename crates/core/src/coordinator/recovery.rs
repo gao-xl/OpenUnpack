@@ -297,10 +297,21 @@ impl Coordinator {
         self.publications
             .commit_recovery(&self.repository, recovery, tree, &mut job)?;
         self.apply_outbox();
-        if paths::remove_owned(&work, id).is_ok() {
-            job.workspace = None;
-        } else {
-            job.status = "cleanupPending".into();
+        match remove_owned_retrying_async(&work, id).await {
+            Ok(()) => job.workspace = None,
+            Err(reason) => {
+                eprintln!(
+                    "workspace_retire_failed job={id} workspace={} reason={reason}",
+                    work.display()
+                );
+                job.status = "cleanupPending".into();
+                let delivered = if job.message.is_empty() {
+                    "发布已确认"
+                } else {
+                    job.message.as_str()
+                };
+                job.message = with_cleanup_pending_note(delivered, &reason);
+            }
         }
         self.put(&job)?;
         self.refresh_usage()

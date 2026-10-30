@@ -78,7 +78,10 @@ impl Coordinator {
         {
             return Err("正在核对恢复结果，请等待恢复操作完成后开始队列。".into());
         }
-        if !self.worker.executable.is_file() || !self.worker.engine.is_file() {
+        if !(self.worker.executable.as_os_str()
+            == openunpack_protocol::worker::INPROCESS_WORKER_MARKER
+            || (self.worker.executable.is_file() && self.worker.engine.is_file()))
+        {
             return Err("解压引擎或作业进程缺失，请运行构建准备脚本。".into());
         }
         if self
@@ -331,19 +334,11 @@ impl Coordinator {
                             // cancellations must never downgrade the delivered task to failed or cancelled.
                             if job.workspace.is_some() {
                                 job.status = "cleanupPending".into();
-                                job.message =
-                                    "文件已解压完成，缓存清理或后续保存失败待重试。".into();
+                                // The base is the message an automatic settle leaves
+                                // behind; the transient reason rides in the marker.
+                                job.message = with_cleanup_pending_note("文件已解压完成。", &code);
                             } else {
-                                job.status = if job.verification_scope.contains("salvaged") {
-                                    "salvaged"
-                                } else if job.nodes.iter().any(|n| {
-                                    matches!(n.status.as_str(), "failed" | "needsPassword")
-                                }) {
-                                    "partial"
-                                } else {
-                                    "completed"
-                                }
-                                .into();
+                                job.status = settled_delivery_status(&job).into();
                                 if job.message.is_empty() {
                                     job.message = "解压完成并已交付输出目录。".into();
                                 }
@@ -377,7 +372,9 @@ impl Coordinator {
                                 "failed"
                             }
                             .into();
-                            job.message = message(&code);
+                            if !(job.options.in_place() && !job.message.is_empty()) {
+                                job.message = message(&code);
+                            }
                             job.finished_at = Some(now());
                             if this.put(&job).is_err() {
                                 this.stop_batch.store(true, Ordering::Release);
@@ -613,11 +610,13 @@ impl Coordinator {
             }
             .into();
             job.message = if committed {
-                "输出已交付，后续处理异常；原包和工作目录已保留。"
+                with_cleanup_pending_note(
+                    "输出已交付，后续处理异常；原包已保留。",
+                    "工作目录待清理",
+                )
             } else {
-                "任务执行出现意外异常中断；原包与工作目录已保留。"
-            }
-            .into();
+                "任务执行出现意外异常中断；原包与工作目录已保留。".into()
+            };
         }
         job.finished_at = Some(now());
         if self.put(&job).is_err() {

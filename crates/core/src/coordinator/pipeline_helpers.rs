@@ -4,6 +4,44 @@ pub(super) fn per_task_engine_threads(logical_cores: usize, concurrency: u32) ->
     (logical_cores / concurrency.clamp(1, MAX_CONCURRENT_JOBS) as usize).clamp(1, 64) as u32
 }
 
+/// Marker appended to a delivered job whose workspace retirement still needs a
+/// retry. Keeping the delivery summary before the marker lets an automatic
+/// settle restore the original message byte-for-byte.
+pub(super) const CLEANUP_PENDING_MARK: &str = "（缓存清理待重试";
+
+pub(super) fn with_cleanup_pending_note(message: &str, reason: &str) -> String {
+    format!(
+        "{}{CLEANUP_PENDING_MARK}：{reason}）",
+        without_cleanup_pending_note(message)
+    )
+}
+
+pub(super) fn without_cleanup_pending_note(message: &str) -> String {
+    match message.find(CLEANUP_PENDING_MARK) {
+        Some(at) => message[..at].to_string(),
+        None => message.to_owned(),
+    }
+}
+
+/// Post-delivery verdict once the workspace is retired. Mirrors the mapping the
+/// delete command applies so an automatic settle never grades the task
+/// differently than an explicit user cleanup.
+pub(super) fn settled_delivery_status(job: &JobView) -> &'static str {
+    if job.output_path.is_none() {
+        "cancelled"
+    } else if job.verification_scope.contains("salvaged") {
+        "salvaged"
+    } else if job
+        .nodes
+        .iter()
+        .any(|node| matches!(node.status.as_str(), "failed" | "needsPassword"))
+    {
+        "partial"
+    } else {
+        "completed"
+    }
+}
+
 pub(super) fn effective_engine_threads(requested: u32, concurrency: u32) -> u32 {
     if requested != 0 {
         return requested;
@@ -516,4 +554,12 @@ pub(super) fn validate_saved_paths(work: &Path, state: &SavedRun) -> Result<(), 
         }
     }
     Ok(())
+}
+
+pub(super) async fn remove_owned_retrying_async(work: &Path, id: &str) -> Result<(), String> {
+    let work = work.to_path_buf();
+    let id = id.to_string();
+    tokio::task::spawn_blocking(move || paths::remove_owned_retrying(&work, &id))
+        .await
+        .map_err(|e| e.to_string())?
 }

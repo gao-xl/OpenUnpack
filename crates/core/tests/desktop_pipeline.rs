@@ -69,22 +69,19 @@ impl Rig {
             .join("../..")
             .canonicalize()
             .unwrap();
-        let worker = std::env::var_os("OPENUNPACK_TEST_WORKER")
+        let worker = PathBuf::from("native-worker");
+        let engine = PathBuf::from("native-engine");
+        let seven_zip = std::env::var_os("OPENUNPACK_7Z_PATH")
             .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                workspace
-                    .join("src/OpenUnpack.Worker/bin/Release/net10.0-windows/OpenUnpack.Worker.exe")
-            });
-        let engine = workspace.join("tools/7zip/7z.dll");
-        let seven_zip = workspace.join("tools/7zip/7z.exe");
-        assert!(
-            worker.is_file(),
-            "Build the .NET Worker before running desktop_pipeline acceptance tests"
-        );
-        assert!(
-            engine.is_file() && seven_zip.is_file(),
-            "Prepare the official 7-Zip engine before running desktop_pipeline"
-        );
+            .or_else(|| {
+                let temp_copy = PathBuf::from(r"C:\Users\im\AppData\Local\Temp\ou-7z\7z.exe");
+                if temp_copy.is_file() {
+                    Some(temp_copy)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| workspace.join("tools/7zip/7z.exe"));
         let temporary = Builder::new()
             .prefix("openunpack-pipeline-")
             .tempdir()
@@ -170,7 +167,7 @@ impl Rig {
                 command.arg("-mhe=on");
             }
         }
-        command.args(extra).arg(target).arg(".");
+        command.args(extra).arg(target).arg("*");
         // Do not print command arguments: even fixture passwords do not belong in logs.
         let status = command
             .status()
@@ -390,20 +387,10 @@ async fn legacy_cached_resume_keeps_actual_cache_quota_after_automatic_route_cha
     job.options.cache_quota_bytes = 4096;
     repository.save_job(&job).unwrap();
     drop(repository);
-    let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap();
-    let worker = std::env::var_os("OPENUNPACK_TEST_WORKER")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            workspace
-                .join("src/OpenUnpack.Worker/bin/Release/net10.0-windows/OpenUnpack.Worker.exe")
-        });
     let reopened = Coordinator::open(
         root.join("data"),
-        worker,
-        workspace.join("tools/7zip/7z.dll"),
+        PathBuf::from("native-worker"),
+        PathBuf::from("native-engine"),
     )
     .unwrap();
     // Retrying uses the current application settings, not the row's old
@@ -1888,6 +1875,7 @@ async fn explicit_partial_delivery_retains_corrupt_inner_archive_and_ordinary_fi
     settings.source_cleanup = "delete".into();
     let id = rig.add(&archive, settings);
     let waiting = rig.run(&id).await;
+    println!("WAITING NODES: {:#?}", waiting.nodes);
     assert_eq!(waiting.status, "failed", "{}", waiting.message);
     assert!(waiting.output_path.is_none());
     assert_eq!(
@@ -2561,7 +2549,13 @@ async fn cache_waiting_jobs_finish_without_manual_restart_and_stay_within_quota(
     for id in [&first_id, &second_id] {
         let job = rig.finish(id).await;
         retried |= job.attempts > 1;
-        assert_eq!(job.status, "completed", "{}", job.message);
+        // A retire failure must say why: the status alone cannot distinguish a
+        // sharing conflict from a foreign ownership marker.
+        assert_eq!(
+            job.status, "completed",
+            "job={id} attempts={} workspace={:?} message={}",
+            job.attempts, job.workspace, job.message
+        );
         assert_eq!(fs::read(delivered(&job).join("item.bin")).unwrap(), payload);
     }
     assert!(peak >= payload.len() as u64);

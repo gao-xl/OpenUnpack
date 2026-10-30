@@ -3,6 +3,8 @@ param([string]$Version = '0.1.0')
 Assert-OpenUnpackWindows
 if ($Version -notmatch '^\d+\.\d+\.\d+([-.][A-Za-z0-9.-]+)?$') { throw '版本格式无效。' }
 $taskRoot = Get-OpenUnpackRoot
+$taskSourcePolicy = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'source-release-policy.json') -Raw | ConvertFrom-Json
+if ($taskSourcePolicy.schemaVersion -ne 1) { throw '源码发布策略版本无效。' }
 $taskRelease = Join-Path $taskRoot 'artifacts/release'
 New-OpenUnpackDirectory $taskRelease
 $taskStage = Join-Path $taskRelease ('OpenUnpack-' + $Version + '-source')
@@ -10,7 +12,7 @@ Reset-OpenUnpackBuildDirectory -Path $taskStage -Parent $taskRelease
 
 # An explicit allowlist prevents local credentials, the Gemini gateway project, data,
 # downloaded engines and build outputs from entering the application source release.
-$taskFiles = @('Cargo.toml', 'Cargo.lock', 'Directory.Build.props', 'global.json', 'OpenUnpack.sln', 'LICENSE', '.gitignore', '.editorconfig', 'README.md', 'CONTRIBUTING.md', 'SECURITY.md', 'CHANGELOG.md', 'THIRD_PARTY_NOTICES.md')
+$taskFiles = @('Cargo.toml', 'Cargo.lock', 'Directory.Build.props', 'global.json', 'OpenUnpack.sln', 'LICENSE', '.gitignore', '.gitattributes', '.editorconfig', 'AGENTS.md', 'README.md', 'CONTRIBUTING.md', 'CODE_OF_CONDUCT.md', 'SECURITY.md', 'CHANGELOG.md', 'THIRD_PARTY_NOTICES.md')
 $taskFiles += @('assets/legal/swagger-ui/LICENSE', 'assets/legal/swagger-ui/NOTICE', 'assets/legal/swagger-ui/provenance.json', 'assets/legal/7zip/COPYING.LESSER-2.1.txt', 'examples/local-api.py', 'examples/local-api.ps1', 'apps/desktop-ui/eslint.config.js')
 foreach ($relative in $taskFiles) {
     $source = Join-Path $taskRoot $relative
@@ -19,7 +21,7 @@ foreach ($relative in $taskFiles) {
     New-OpenUnpackDirectory ([IO.Path]::GetDirectoryName($taskDestination))
     Copy-Item -LiteralPath $source -Destination $taskDestination
 }
-$taskAllowedExtensions = @('.rs', '.toml', '.json', '.lock', '.cs', '.csproj', '.xaml', '.sln', '.props', '.targets', '.tsx', '.ts', '.css', '.html', '.md', '.ps1', '.mjs', '.yml', '.yaml', '.png', '.ico', '.icns', '.svg', '.txt', '.nsi', '.nsh')
+$taskAllowedExtensions = @('.rs', '.toml', '.json', '.lock', '.cs', '.csproj', '.xaml', '.sln', '.props', '.targets', '.tsx', '.ts', '.css', '.html', '.md', '.ps1', '.mjs', '.yml', '.yaml', '.png', '.ico', '.icns', '.svg', '.txt', '.nsi', '.nsh', '.sh', '.bat', '.xml')
 $taskFixturePrefix = 'tests/fixtures/upstream-archives/'
 $taskFixtureProvenance = Join-Path $taskRoot ($taskFixturePrefix + 'provenance.json')
 $taskFixtureFiles = @{}
@@ -39,6 +41,9 @@ foreach ($tree in @('apps', 'crates', 'src', 'tests', 'scripts', 'docs', '.githu
     if (-not (Test-Path -LiteralPath $directory)) { continue }
     foreach ($file in Get-ChildItem -LiteralPath $directory -File -Recurse -Force) {
         $relative = [IO.Path]::GetRelativePath($taskRoot, $file.FullName).Replace('\', '/')
+        if ($tree -eq 'docs' -and $relative -notin $taskSourcePolicy.documentationFiles) { continue }
+        $taskExcluded = @($taskSourcePolicy.excludedPaths | Where-Object { $relative -eq $_ -or $relative.StartsWith($_ + '/', [StringComparison]::Ordinal) }).Count -gt 0
+        if ($taskExcluded) { continue }
         $taskSwaggerAsset = $relative -match '^crates/local-api/assets/swagger-ui/(swagger-ui-bundle|swagger-ui-standalone-preset)\.js$'
         if ($relative -match $taskSensitive -or ($file.Extension -notin $taskAllowedExtensions -and -not $taskFixtureFiles.ContainsKey($relative) -and -not $taskSwaggerAsset)) { continue }
         if ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "源码发布拒绝链接：$relative" }

@@ -1,4 +1,4 @@
-use openunpack_protocol::worker::{FileRecord, WorkerEvent, WorkerRequest};
+use openunpack_protocol::worker::{CandidateItem, FileRecord, WorkerEvent, WorkerRequest};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File},
@@ -11,12 +11,30 @@ use std::{
 };
 
 pub mod cli_engine;
+pub mod extractor;
+pub mod inplace;
+pub mod lz4_engine;
 pub mod path_safety;
+pub mod tar_engine;
 pub mod zip_engine;
 
 pub use cli_engine::*;
+pub use extractor::*;
+pub use lz4_engine::*;
 pub use path_safety::*;
+pub use tar_engine::*;
 pub use zip_engine::*;
+
+#[derive(Debug, Clone)]
+pub enum ProbeOutcome {
+    NoPasswordNeeded,
+    Success(String, Option<String>),
+    WrongPassword,
+    MissingVolume,
+    Corrupt,
+    Unsupported,
+    Failed(String),
+}
 
 // Only decoding/format failures may try another ZIP implementation. Safety,
 // cancellation, budget and filesystem failures must remain terminal, even if
@@ -71,41 +89,24 @@ async fn inspect_archive(request: &WorkerRequest) -> Result<WorkerEvent, String>
         return Err("ArchiveNotFound".into());
     }
 
-    let is_zip = is_zip_file(archive_path);
-
-    let files = if is_zip {
-        match zip_engine::inspect_zip(
+    let extractor = select_extractor(archive_path);
+    let files = extractor
+        .inspect(
             archive_path,
-            request.password.as_deref(),
             request.max_entries,
             request.max_total_bytes,
-        ) {
-            Ok(records) => records,
-            Err(e) if permits_zip_cli_fallback(&e) && cli_engine::has_7z_cli() => {
-                cli_engine::inspect_cli(archive_path, request.password.as_deref())
-                    .await
-                    .map_err(|_| e)?
-            }
-            Err(e) => return Err(e),
-        }
-    } else if cli_engine::has_7z_cli() {
-        cli_engine::inspect_cli(archive_path, request.password.as_deref()).await?
-    } else {
-        zip_engine::inspect_zip(
-            archive_path,
             request.password.as_deref(),
-            request.max_entries,
-            request.max_total_bytes,
         )
-        .map_err(|_| "UnsupportedFormat".to_string())?
-    };
+        .await?;
 
     let total_bytes: u64 = files.iter().map(|f| f.size).sum();
+    let size_known = files.iter().all(|f| f.size_known);
 
     let mut event = make_event(request, "completed");
     event.completed_bytes = total_bytes;
     event.total_bytes = total_bytes;
-    event.total_bytes_known = true;
+    event.total_bytes_known = size_known;
+    event.verification_scope = "metadataOnly".into();
     event.message = "目录扫描已完成。".into();
     event.files = files;
     Ok(event)
@@ -122,46 +123,73 @@ async fn probe_archive(
 
     let mut candidates = Vec::new();
     for p in &request.candidate_passwords {
-        candidates.push((p.clone(), None));
+        candidates.push(CandidateItem {
+            candidate_id: String::new(),
+            source: "manual".into(),
+            revision: 0,
+            label: "manual".into(),
+            secret: p.clone(),
+        });
     }
     for c in &request.candidates {
-        candidates.push((c.secret.clone(), Some(c.candidate_id.clone())));
+        candidates.push(c.clone());
     }
 
-    let is_zip = is_zip_file(archive_path);
-    let matched = if is_zip {
-        match zip_engine::probe_zip(archive_path, &candidates, &cancel) {
-            Ok(res) => res,
-            Err(e) if permits_zip_cli_fallback(&e) && cli_engine::has_7z_cli() => {
-                cli_engine::probe_cli(archive_path, &candidates, &cancel)
-                    .await
-                    .map_err(|_| e)?
-            }
-            Err(e) => return Err(e),
-        }
-    } else if cli_engine::has_7z_cli() {
-        cli_engine::probe_cli(archive_path, &candidates, &cancel).await?
-    } else {
-        zip_engine::probe_zip(archive_path, &candidates, &cancel)
-            .map_err(|_| "UnsupportedFormat".to_string())?
-    };
+    let extractor = select_extractor(archive_path);
+    let outcome = extractor.probe(archive_path, &candidates, cancel).await?;
 
-    if let Some((password, candidate_id)) = matched {
-        let mut event = make_event(request, "completed");
-        event.password_used = true;
-        event.matched_password = Some(password);
-        event.matched_candidate_id = candidate_id;
-        event.probe_status = Some("matched".into());
-        event.message = "密码探测成功。".into();
-        Ok(event)
-    } else {
-        let mut event = make_event(request, "completed");
-        event.password_used = false;
-        event.matched_password = None;
-        event.matched_candidate_id = None;
-        event.probe_status = Some("exhausted".into());
-        event.message = "未能找到匹配的解压密码。".into();
-        Ok(event)
+    match outcome {
+        ProbeOutcome::NoPasswordNeeded => {
+            let mut event = make_event(request, "completed");
+            event.password_used = false;
+            event.probe_status = Some("NoPasswordNeeded".into());
+            event.message = "无需解压密码。".into();
+            Ok(event)
+        }
+        ProbeOutcome::Success(password, candidate_id) => {
+            let mut event = make_event(request, "completed");
+            event.password_used = true;
+            event.matched_password = Some(password);
+            event.matched_candidate_id = candidate_id;
+            event.probe_status = Some("Success".into());
+            event.message = "密码探测成功。".into();
+            Ok(event)
+        }
+        ProbeOutcome::WrongPassword => {
+            let mut event = make_event(request, "completed");
+            event.password_used = false;
+            event.probe_status = Some("WrongPassword".into());
+            event.message = "未能找到匹配的解压密码。".into();
+            Ok(event)
+        }
+        ProbeOutcome::MissingVolume => {
+            let mut event = make_event(request, "completed");
+            event.password_used = false;
+            event.probe_status = Some("MissingVolume".into());
+            event.message = "分卷缺失。".into();
+            Ok(event)
+        }
+        ProbeOutcome::Corrupt => {
+            let mut event = make_event(request, "completed");
+            event.password_used = false;
+            event.probe_status = Some("Corrupt".into());
+            event.message = "压缩文件已损坏。".into();
+            Ok(event)
+        }
+        ProbeOutcome::Unsupported => {
+            let mut event = make_event(request, "completed");
+            event.password_used = false;
+            event.probe_status = Some("Unsupported".into());
+            event.message = "不支持的文件格式。".into();
+            Ok(event)
+        }
+        ProbeOutcome::Failed(msg) => {
+            let mut event = make_event(request, "completed");
+            event.password_used = false;
+            event.probe_status = Some("Failed".into());
+            event.message = msg;
+            Ok(event)
+        }
     }
 }
 
@@ -178,37 +206,34 @@ async fn extract_archive(
     let destination = Path::new(&request.destination_directory);
     fs::create_dir_all(destination).map_err(|e| format!("DestinationCreationFailed: {e}"))?;
 
-    let is_zip = is_zip_file(archive_path);
-    let extracted_files = if is_zip {
-        match zip_engine::extract_zip(request, destination, progress.clone(), cancel.clone()) {
-            Ok(files) => files,
-            Err(e) if permits_zip_cli_fallback(&e) && cli_engine::has_7z_cli() => {
-                cli_engine::extract_cli(request, destination, progress.clone(), cancel)
-                    .await
-                    .map_err(|_| e)?
-            }
-            Err(e) => return Err(e),
-        }
-    } else if cli_engine::has_7z_cli() {
-        cli_engine::extract_cli(request, destination, progress.clone(), cancel).await?
-    } else {
-        zip_engine::extract_zip(request, destination, progress.clone(), cancel)
-            .map_err(|_| "UnsupportedFormat".to_string())?
-    };
-
-    let total_bytes: u64 = extracted_files.iter().map(|f| f.size).sum();
+    let extractor = select_extractor(archive_path);
+    let outcome = extractor
+        .extract(request, destination, progress, cancel)
+        .await?;
 
     let mut event = make_event(request, "completed");
-    event.completed_bytes = total_bytes;
-    event.total_bytes = total_bytes;
+    event.completed_bytes = outcome.total_bytes;
+    event.total_bytes = outcome.total_bytes;
     event.total_bytes_known = true;
     event.message = "解压缩完成。".into();
-    event.files = extracted_files;
-    event.password_used = request.password.is_some();
+    event.files = outcome.files;
+    event.password_used = outcome.password_used;
+    event.verification_scope = outcome.verification_scope;
     Ok(event)
 }
 
 async fn copy_files(
+    request: &WorkerRequest,
+    progress: Arc<dyn Fn(&WorkerEvent) + Send + Sync>,
+    cancel: Arc<AtomicBool>,
+) -> Result<WorkerEvent, String> {
+    let req = request.clone();
+    tokio::task::spawn_blocking(move || copy_files_blocking(&req, progress, cancel))
+        .await
+        .map_err(|e| format!("SpawnBlockingError: {e}"))?
+}
+
+fn copy_files_blocking(
     request: &WorkerRequest,
     progress: Arc<dyn Fn(&WorkerEvent) + Send + Sync>,
     cancel: Arc<AtomicBool>,
@@ -219,6 +244,7 @@ async fn copy_files(
     let mut copied_files = Vec::new();
     let total_bytes: u64 = request.files.iter().map(|f| f.size).sum();
     let mut completed_bytes: u64 = 0;
+    let mut last_progress = std::time::Instant::now();
 
     for file in &request.files {
         if cancel.load(Ordering::Acquire) {
@@ -242,7 +268,8 @@ async fn copy_files(
             continue;
         }
 
-        if let Some(parent) = target_path.parent() {
+        let is_readback = request.operation == "readback";
+        if !is_readback && let Some(parent) = target_path.parent() {
             fs::create_dir_all(parent).map_err(|e| format!("IoError: {e}"))?;
         }
 
@@ -252,9 +279,16 @@ async fn copy_files(
         }
 
         let mut reader = File::open(src).map_err(|e| format!("IoError: {e}"))?;
-        let mut writer = File::create(&target_path).map_err(|e| format!("IoError: {e}"))?;
+        let mut writer = if !is_readback {
+            Some(std::io::BufWriter::with_capacity(
+                64 * 1024,
+                File::create(&target_path).map_err(|e| format!("IoError: {e}"))?,
+            ))
+        } else {
+            None
+        };
         let mut hasher = Sha256::new();
-        let mut buffer = [0u8; 64 * 1024];
+        let mut buffer = vec![0u8; 64 * 1024];
 
         loop {
             if cancel.load(Ordering::Acquire) {
@@ -266,20 +300,34 @@ async fn copy_files(
             if read == 0 {
                 break;
             }
-            writer
-                .write_all(&buffer[..read])
-                .map_err(|e| format!("IoError: {e}"))?;
+            if let Some(ref mut w) = writer {
+                w.write_all(&buffer[..read])
+                    .map_err(|e| format!("IoError: {e}"))?;
+            }
             hasher.update(&buffer[..read]);
             completed_bytes += read as u64;
 
-            let mut prog_ev = make_event(request, "progress");
-            prog_ev.completed_bytes = completed_bytes;
-            prog_ev.total_bytes = total_bytes;
-            prog_ev.total_bytes_known = true;
-            progress(&prog_ev);
+            if last_progress.elapsed() >= std::time::Duration::from_millis(50) {
+                let mut prog_ev = make_event(request, "progress");
+                prog_ev.completed_bytes = completed_bytes;
+                prog_ev.total_bytes = total_bytes;
+                prog_ev.total_bytes_known = true;
+                progress(&prog_ev);
+                last_progress = std::time::Instant::now();
+            }
+        }
+
+        if let Some(mut w) = writer {
+            w.flush().map_err(|e| format!("IoError: {e}"))?;
         }
 
         let hash_hex = hex::encode(hasher.finalize());
+        if request.operation == "readback" && !file.sha256.is_empty() && file.sha256 != hash_hex {
+            let mut err_event = make_event(request, "error");
+            err_event.error_code = "Corrupt".into();
+            err_event.message = "文件回读校验哈希不匹配".into();
+            return Ok(err_event);
+        }
         copied_files.push(FileRecord {
             relative_path: file.relative_path.clone(),
             size: file.size,
@@ -297,6 +345,11 @@ async fn copy_files(
     event.total_bytes_known = true;
     event.message = "文件复制完成。".into();
     event.files = copied_files;
+    event.verification_scope = if request.operation == "readback" {
+        "targetReadback".into()
+    } else {
+        "sourceStreamSha256".into()
+    };
     Ok(event)
 }
 

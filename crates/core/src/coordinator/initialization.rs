@@ -159,6 +159,7 @@ impl Coordinator {
             cache_usage: AtomicU64::new(cache_usage),
             cache_usage_by_job: Mutex::new(cache_usage_by_job),
             cache_budget,
+            inplace_reservations: Arc::new(Mutex::new(HashMap::new())),
             session_id: uuid::Uuid::new_v4().to_string(),
             revision: AtomicU64::new(1),
             view_state: Mutex::new(()),

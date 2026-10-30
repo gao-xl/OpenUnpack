@@ -1,45 +1,36 @@
 @echo off
-setlocal enabledelayedexpansion
-
-:: ==============================================================================
-:: OpenUnpack - aria2 on-download-complete hook (Windows)
-:: 
-:: Setup in aria2.conf:
-::   on-download-complete=C:\path\to\aria2-on-complete.bat
-:: 
-:: Arguments:
-::   %1: GID
-::   %2: File count
-::   %3: File path
-:: ==============================================================================
-
-set "GID=%~1"
+setlocal DisableDelayedExpansion
+:: aria2 arguments: GID, file count, first completed file path.
 set "FILE_COUNT=%~2"
 set "FILE_PATH=%~3"
+if not defined FILE_PATH goto INVALID_INPUT
+if not exist "%FILE_PATH%" goto INVALID_INPUT
+if not defined FILE_COUNT goto INVALID_INPUT
+for /f "delims=0123456789" %%N in ("%FILE_COUNT%") do goto INVALID_INPUT
+if "%FILE_COUNT%"=="0" goto INVALID_INPUT
+set "TARGET_PATH=%FILE_PATH%"
+if "%FILE_COUNT%"=="1" goto RESOLVE_CLI
+:: Append a dot so a quoted directory argument never ends in a backslash.
+for %%F in ("%FILE_PATH%") do set "TARGET_PATH=%%~dpF."
 
-if "%FILE_PATH%"=="" exit /b 0
-if not exist "%FILE_PATH%" exit /b 0
+:RESOLVE_CLI
+if not defined OPENUNPACK_CLI goto FIND_CLI
+if not exist "%OPENUNPACK_CLI%" goto MISSING_CLI
+goto RUN_CLI
 
-echo [OpenUnpack-aria2] Triggered for GID %GID%, file: %FILE_PATH%
-
-set "TARGET=%FILE_PATH%"
-if "%FILE_COUNT%" gtr "1" (
-    for %%F in ("%FILE_PATH%") do set "TARGET=%%~dpF"
-)
-
+:FIND_CLI
 where openunpack.exe >nul 2>&1
-if %errorlevel% equ 0 (
-    openunpack.exe unpack "%TARGET%"
-    exit /b %errorlevel%
-)
+if errorlevel 1 goto MISSING_CLI
+set "OPENUNPACK_CLI=openunpack.exe"
 
-if exist "%LOCALAPPDATA%\Programs\OpenUnpack\openunpack.exe" (
-    "%LOCALAPPDATA%\Programs\OpenUnpack\openunpack.exe" unpack "%TARGET%"
-    exit /b %errorlevel%
-)
+:RUN_CLI
+"%OPENUNPACK_CLI%" unpack "%TARGET_PATH%"
+exit /b %errorlevel%
 
-set "PAYLOAD={\"command\":\"add_archive\",\"args\":{\"path\":\"%TARGET:\=\\%\",\"autoStart\":true}}"
-curl -s -X POST "http://127.0.0.1:47980/api/v1/commands" ^
-     -H "Content-Type: application/json" ^
-     -d "%PAYLOAD%" >nul 2>&1
-exit /b 0
+:INVALID_INPUT
+echo [OpenUnpack-aria2] A positive file count and completed local file are required. >&2
+exit /b 1
+
+:MISSING_CLI
+echo [OpenUnpack-aria2] Configure the standalone CLI through OPENUNPACK_CLI or PATH. >&2
+exit /b 127

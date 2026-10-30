@@ -23,6 +23,12 @@ rand = "0.8"
 walkdir = "2"
 zip = { version = "9.0", default-features = false, features = ["deflate"] }
 flate2 = "1.1"
+tar = "0.4"
+# In-place extraction engine (ZIP / 7z / tar / tar.gz). RAR is deliberately
+# left out: the `rar` feature compiles UnRAR's C++ sources under its own
+# licence, and the standard engine already covers RAR through 7-Zip.
+hatchzip-core = { version = "0.1.5", default-features = false }
+anyhow = "1"
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Security_Cryptography",

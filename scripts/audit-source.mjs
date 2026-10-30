@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { releasePolicy, sourcePathRejection } from './source-release-policy.mjs';
 const root = path.resolve(process.argv[2] ?? '.');
-const banned = /(^|\/)(node_modules|target(?:_[^/]+)?|bin|obj|dist|\.git|gemini-subagent|artifacts|\.gemini-subagent-backups|OpenUnpack-Archive|_workspace.*)(\/|$)|(^|\/)\.env(?:\.[^/]*)?$|\.(tsbuildinfo|vault(?:\.bak)?|sqlite(?:3)?(?:-wal|-shm)?|db|dpapi|pem|pfx|key)$/i;
+const banned = /(^|\/)(node_modules|target(?:_[^/]+)?|bin|obj|dist|\.git|gemini-subagent|artifacts|\.gemini-subagent-backups|OpenUnpack-Archive|apf_analysis|_workspace.*)(\/|$)|(^|\/)\.env(?:\.[^/]*)?$|\.(tsbuildinfo|vault(?:\.bak)?|sqlite(?:3)?(?:-wal|-shm)?|db|dpapi|pem|pfx|key)$/i;
 const credentialPatterns = [
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
   /\b(?:sk-[A-Za-z0-9_-]{24,}|gh[pousr]_[A-Za-z0-9]{30,}|AIza[0-9A-Za-z_-]{30,})\b/,
@@ -17,7 +18,7 @@ const fixtures = new Map((fixtureManifest?.files ?? []).map(file => [fixturePref
 function visit(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const file = path.join(dir, entry.name), relative = path.relative(root, file).replaceAll('\\', '/');
-    if (entry.isSymbolicLink() || banned.test(relative)) throw new Error(`Source release rejects path: ${relative}`);
+    if (entry.isSymbolicLink() || banned.test(relative) || sourcePathRejection(relative, entry.isDirectory())) throw new Error(`Source release rejects path: ${relative}`);
     if (entry.isDirectory()) { visit(file); continue; }
     count++;
     if (fixtures.has(relative)) {
@@ -34,8 +35,11 @@ visit(root);
 for (const [relative] of fixtures) {
   if (!fs.existsSync(path.join(root, relative))) throw new Error(`Source release missing test fixture ${relative}`);
 }
-for (const required of ['LICENSE','README.md','SECURITY.md','CONTRIBUTING.md','Cargo.lock','apps/desktop-ui/package-lock.json','apps/desktop-host/tauri.conf.json','apps/desktop-host/installer.nsi','apps/desktop-host/installer-LICENSE-MIT.txt','scripts/build-desktop.ps1']) {
+for (const required of ['LICENSE','README.md','SECURITY.md','CONTRIBUTING.md','CODE_OF_CONDUCT.md','.gitattributes','Cargo.lock','apps/desktop-ui/package-lock.json','apps/desktop-host/tauri.conf.json','apps/desktop-host/installer.nsi','apps/desktop-host/installer-LICENSE-MIT.txt','scripts/build-desktop.ps1','scripts/audit-git.mjs','scripts/source-release-policy.json','scripts/source-release-policy.mjs','docs/README.md']) {
   if (!fs.existsSync(path.join(root, required))) throw new Error(`Source release missing ${required}`);
+}
+if (JSON.stringify(JSON.parse(fs.readFileSync(path.join(root, 'scripts/source-release-policy.json'), 'utf8'))) !== JSON.stringify(releasePolicy)) {
+  throw new Error('Source release policy differs from the reviewed packaging policy.');
 }
 for (const required of ['crates/local-api/Cargo.toml', 'crates/local-api/assets/swagger-ui/index.html', 'examples/local-api.py', 'examples/local-api.ps1', 'assets/legal/swagger-ui/LICENSE', 'assets/legal/swagger-ui/NOTICE', 'apps/desktop-ui/eslint.config.js']) {
   if (!fs.existsSync(path.join(root, required))) throw new Error(`Source release missing API material ${required}`);
