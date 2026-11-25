@@ -12,6 +12,8 @@
 | 产品需求 | [软件规格](software-spec.md)、[功能设计](functional-design.md) |
 | 验收准则 | [版本验收清单](acceptance-checklist.md)、[完整功能测试规范](plans/2026-10-19-full-functional-testing.md) |
 | 专项验证方法 | [目录身份与竞态](s06-directory-identity-plan-2026-10-14.md)、[磁盘负载](load-optimization-plan-2026-10-15.md) |
+| 优化问题 | [优化问题清单](optimization-issues-2026-11-17.md)、[性能优化方案](performance-optimization-plan-2026-11-17.md) |
+| 阶段总结与报告汇总 | [阶段总结与历史报告汇总（2026-11-25）](reports/phase-summary-2026-11-25.md) |
 | 技术决策 | [未决事项](decisions/OPEN-DECISIONS.md) |
 | 已发布版本 | [v0.1.0-beta.1](release-notes-0.1.0-beta.1.md)、[变更记录](../CHANGELOG.md) |
 
