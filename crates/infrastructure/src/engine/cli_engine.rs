@@ -11,7 +11,7 @@ use std::{
     process::Stdio,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
+        atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering},
     },
     time::Duration,
 };
@@ -1410,10 +1410,11 @@ mod cancellation_and_encryption_tests {
         let seen_progress_clone = Arc::clone(&seen_progress);
         let progress = Arc::new(move |ev: &WorkerEvent| {
             if ev.kind == "progress" {
-                seen_progress_clone
-                    .lock()
-                    .unwrap()
-                    .push((ev.completed_bytes, ev.total_bytes, ev.total_bytes_known));
+                seen_progress_clone.lock().unwrap().push((
+                    ev.completed_bytes,
+                    ev.total_bytes,
+                    ev.total_bytes_known,
+                ));
             }
         });
         let extract_res = extract_cli(&req, &dest_dir, progress, cancel_arc).await;
@@ -1427,7 +1428,11 @@ mod cancellation_and_encryption_tests {
             !events.is_empty(),
             "extract_cli -bsp1 should emit at least one progress event"
         );
-        assert!(events.iter().all(|(done, total, known)| *known && *done <= *total && *total > 0));
+        assert!(
+            events
+                .iter()
+                .all(|(done, total, known)| *known && *done <= *total && *total > 0)
+        );
         drop(events);
         let extracted_file = dest_dir.join("secret_data.txt");
         assert!(extracted_file.exists());

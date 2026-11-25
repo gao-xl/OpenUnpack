@@ -98,8 +98,7 @@ impl ArchiveExtractor for ZipExtractor {
             match zip_res {
                 Ok(records) => Ok(records),
                 Err(e) if permits_zip_cli_fallback(&e) && cli_engine::has_7z_cli() => {
-                    cli_engine::inspect_cli(&p, pwd.as_deref(), max_entries, max_total_bytes)
-                        .await
+                    cli_engine::inspect_cli(&p, pwd.as_deref(), max_entries, max_total_bytes).await
                 }
                 Err(e) => Err(e),
             }

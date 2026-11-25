@@ -12,8 +12,9 @@ impl Coordinator {
     pub fn snapshot_update(&self, since: Option<u64>) -> Result<SnapshotUpdate, String> {
         // The projector takes its cache lock before this closure captures the
         // visible state. Keep this call outside every view_state critical section.
+        let (session_id, revision) = self.revision_info();
         self.snapshot_projector
-            .update(since, || self.queue_snapshot())
+            .update_versioned(since, &session_id, revision, || self.queue_snapshot())
     }
     pub(super) fn snapshot_projection(&self, bounded_history: bool) -> Result<AppSnapshot, String> {
         let _state = self.view_state.lock().map_err(|_| lock_error())?;
@@ -55,13 +56,7 @@ impl Coordinator {
         }
         drop(transfers);
         let settings = self.settings.lock().map_err(|_| lock_error())?.clone();
-        let (passwords, vault_error) = match self.vault() {
-            Ok(v) => match v.views() {
-                Ok(p) => (p, None),
-                Err(e) => (vec![], Some(e)),
-            },
-            Err(e) => (vec![], Some(e)),
-        };
+        let (passwords, vault_error) = self.snapshot_projector.cached_passwords(self.vault());
         let cache_used_bytes = self.cache_usage.load(Ordering::Acquire);
         Ok(AppSnapshot {
             jobs,

@@ -985,12 +985,20 @@ pub fn scan_with_cancel(
                     }
                 };
 
-                let entry_path = entry.path();
-                if is_reparse_point_or_symlink(entry_path) {
+                let file_type = entry.file_type();
+                if file_type.is_symlink() || !file_type.is_file() {
                     continue;
                 }
-
-                if entry_path.is_file() {
+                let entry_path = entry.path();
+                #[cfg(windows)]
+                {
+                    if entry.metadata().is_ok_and(|meta| {
+                        (meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT) != 0
+                    }) {
+                        continue;
+                    }
+                }
+                {
                     let rel = match entry_path.strip_prefix(path) {
                         Ok(r) => r.to_string_lossy().to_string(),
                         Err(_) => entry_path.to_string_lossy().to_string(),

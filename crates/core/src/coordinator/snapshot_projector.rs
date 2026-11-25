@@ -1,3 +1,4 @@
+use openunpack_infrastructure::dpapi::Vault;
 use openunpack_protocol::{
     AppSnapshot, JobView, PasswordView, SnapshotDelta, SnapshotState, SnapshotUpdate,
 };
@@ -13,26 +14,16 @@ use std::{
 #[derive(Default)]
 pub(super) struct SnapshotProjector {
     delta_cache: Mutex<Option<AppSnapshot>>,
+    password_cache: Mutex<Option<(u64, Vec<PasswordView>)>>,
     engine_probe: Mutex<Option<(Instant, bool)>>,
 }
 
 impl SnapshotProjector {
-    /// Capture and publish are serialized together. Capturing before taking this
-    /// lock would let an older, slower reader overwrite a newer delta baseline.
-    ///
-    /// The caller may acquire its visible-state lock inside `capture`; it must
-    /// never call this method while already holding that lock. The closure is
-    /// called synchronously and is never retained by the projector.
-    pub(super) fn update(
-        &self,
+    fn finish_update(
+        cache: &mut Option<AppSnapshot>,
         since: Option<u64>,
-        capture: impl FnOnce() -> Result<AppSnapshot, String>,
-    ) -> Result<SnapshotUpdate, String> {
-        let mut cache = self
-            .delta_cache
-            .lock()
-            .map_err(|_| "内部状态不可用；请重启并检查恢复记录。".to_string())?;
-        let current = capture()?;
+        current: AppSnapshot,
+    ) -> SnapshotUpdate {
         let delta = cache
             .as_ref()
             .filter(|cached| {
@@ -46,7 +37,95 @@ impl SnapshotProjector {
             delta,
         };
         *cache = Some(current);
-        Ok(update)
+        update
+    }
+
+    /// Short-circuits idle polls whose `(session_id, revision)` already matches
+    /// the last projected baseline, avoiding `view_state` capture work completely.
+    pub(super) fn update_versioned(
+        &self,
+        since: Option<u64>,
+        session_id: &str,
+        revision: u64,
+        capture: impl FnOnce() -> Result<AppSnapshot, String>,
+    ) -> Result<SnapshotUpdate, String> {
+        let mut cache = self
+            .delta_cache
+            .lock()
+            .map_err(|_| "内部状态不可用；请重启并检查恢复记录。".to_string())?;
+        if since == Some(revision)
+            && let Some(cached) = cache.as_ref()
+            && cached.revision == revision
+            && cached.session_id == session_id
+        {
+            return Ok(SnapshotUpdate {
+                session_id: session_id.to_string(),
+                revision,
+                full: None,
+                delta: Some(SnapshotDelta {
+                    jobs_changed: Vec::new(),
+                    jobs_removed: Vec::new(),
+                    passwords_changed: Vec::new(),
+                    passwords_removed: Vec::new(),
+                    settings: None,
+                    state: None,
+                }),
+            });
+        }
+        let current = capture()?;
+        Ok(Self::finish_update(&mut cache, since, current))
+    }
+
+    /// Capture and publish are serialized together. Capturing before taking this
+    /// lock would let an older, slower reader overwrite a newer delta baseline.
+    ///
+    /// The caller may acquire its visible-state lock inside `capture`; it must
+    /// never call this method while already holding that lock. The closure is
+    /// called synchronously and is never retained by the projector.
+    #[cfg(test)]
+    pub(super) fn update(
+        &self,
+        since: Option<u64>,
+        capture: impl FnOnce() -> Result<AppSnapshot, String>,
+    ) -> Result<SnapshotUpdate, String> {
+        let mut cache = self
+            .delta_cache
+            .lock()
+            .map_err(|_| "内部状态不可用；请重启并检查恢复记录。".to_string())?;
+        let current = capture()?;
+        Ok(Self::finish_update(&mut cache, since, current))
+    }
+
+    /// Reuses projected password entries when the vault generation is unchanged.
+    pub(super) fn cached_passwords(
+        &self,
+        vault: Result<&Vault, String>,
+    ) -> (Vec<PasswordView>, Option<String>) {
+        let v = match vault {
+            Ok(v) => v,
+            Err(e) => return (Vec::new(), Some(e)),
+        };
+        let Ok(mut cache) = self.password_cache.lock() else {
+            return match v.views() {
+                Ok(p) => (p, None),
+                Err(e) => (Vec::new(), Some(e)),
+            };
+        };
+        let cached_gen = cache.as_ref().map(|(gen_id, _)| *gen_id);
+        match v.views_if_changed(cached_gen) {
+            Ok(Some((generation, views))) => {
+                *cache = Some((generation, views.clone()));
+                (views, None)
+            }
+            Ok(None) => (
+                cache
+                    .as_ref()
+                    .map(|(_, views)| views.clone())
+                    .unwrap_or_default(),
+                None,
+            ),
+            Err(e) => (Vec::new(), Some(e)),
+        }
     }
 
     /// The installed worker/engine paths are fixed for this projector's lifetime.
@@ -328,5 +407,32 @@ mod tests {
         let next = projector.update(Some(3), || Ok(snapshot(3))).unwrap();
         assert!(next.full.is_none());
         assert!(next.delta.is_some());
+    }
+
+    #[test]
+    fn update_versioned_short_circuits_without_capturing_when_revision_matches() {
+        let projector = SnapshotProjector::default();
+        let initial = projector
+            .update_versioned(None, "session-a", 1, || Ok(snapshot(1)))
+            .unwrap();
+        assert!(initial.full.is_some());
+
+        let mut captured = false;
+        let idle = projector
+            .update_versioned(Some(1), &initial.session_id, 1, || {
+                captured = true;
+                Ok(snapshot(1))
+            })
+            .unwrap();
+        assert!(
+            !captured,
+            "matching revision must skip full snapshot capture"
+        );
+        assert!(idle.full.is_none());
+        let delta = idle.delta.unwrap();
+        assert!(delta.jobs_changed.is_empty());
+        assert!(delta.jobs_removed.is_empty());
+        assert!(delta.passwords_changed.is_empty());
+        assert!(delta.passwords_removed.is_empty());
     }
 }

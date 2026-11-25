@@ -58,7 +58,9 @@ where
             skip_next = true;
             continue;
         }
-        if trimmed.starts_with('-') || (trimmed.starts_with('/') && Path::new(trimmed).as_os_str() != Path::new("/")) {
+        if trimmed.starts_with('-')
+            || (trimmed.starts_with('/') && Path::new(trimmed).as_os_str() != Path::new("/"))
+        {
             // Skip CLI flags and slash switches unless Windows path? On Windows paths start with C:\ or \\server
             #[cfg(windows)]
             if trimmed.starts_with('/') {
@@ -194,7 +196,11 @@ pub fn try_notify_running_instance(data_dir: &Path, paths: &[String]) -> bool {
     };
 
     for _ in 0..8 {
-        match fs::OpenOptions::new().read(true).write(true).open(&pipe_name) {
+        match fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&pipe_name)
+        {
             Ok(mut stream) => {
                 if stream.write_all(payload.as_bytes()).is_err() || stream.flush().is_err() {
                     return false;

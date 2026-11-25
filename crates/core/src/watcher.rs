@@ -1,5 +1,5 @@
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -275,6 +275,58 @@ pub fn update_candidate_stability(
     )
 }
 
+/// Maximum remembered archive fingerprints kept in memory by the folder watcher.
+const MAX_ENQUEUED_HISTORY: usize = 4096;
+
+/// Bounded FIFO fingerprint set preventing unbounded watcher RAM growth over
+/// long desktop sessions while deduplicating already-seen archives.
+#[derive(Debug, Default)]
+pub struct BoundedEnqueueHistory {
+    entries: HashSet<(PathBuf, u64, SystemTime)>,
+    order: VecDeque<(PathBuf, u64, SystemTime)>,
+    capacity: usize,
+}
+
+impl BoundedEnqueueHistory {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            entries: HashSet::new(),
+            order: VecDeque::new(),
+            capacity: capacity.max(1),
+        }
+    }
+
+    pub fn contains(&self, key: &(PathBuf, u64, SystemTime)) -> bool {
+        self.entries.contains(key)
+    }
+
+    pub fn insert(&mut self, key: (PathBuf, u64, SystemTime)) -> bool {
+        if !self.entries.insert(key.clone()) {
+            return false;
+        }
+        self.order.push_back(key);
+        while self.order.len() > self.capacity {
+            if let Some(evicted) = self.order.pop_front() {
+                self.entries.remove(&evicted);
+            }
+        }
+        true
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+}
+
+/// Computes exponential backoff duration after consecutive preflight failures,
+/// capping at 32 seconds so incomplete downloads aren't probed every 500ms tick.
+pub fn preflight_backoff_duration(failures: u32) -> Duration {
+    if failures == 0 {
+        return Duration::ZERO;
+    }
+    Duration::from_secs(1u64 << failures.saturating_sub(1).min(5))
+}
+
 /// Stability tracking for a candidate archive file.
 #[derive(Debug, Clone)]
 pub struct FileStabilityRecord {
@@ -283,6 +335,8 @@ pub struct FileStabilityRecord {
     pub last_mtime: SystemTime,
     pub stable_ticks: usize,
     pub consecutive_probe_failures: usize,
+    pub preflight_failures: u32,
+    pub next_preflight_at: Option<Instant>,
     pub first_seen: Instant,
 }
 
@@ -408,7 +462,7 @@ fn run_watcher_loop(
 ) {
     let mut watched_dirs: HashSet<PathBuf> = HashSet::new();
     let mut pending_candidates: HashMap<PathBuf, FileStabilityRecord> = HashMap::new();
-    let mut enqueued_history: HashSet<(PathBuf, u64, SystemTime)> = HashSet::new();
+    let mut enqueued_history = BoundedEnqueueHistory::with_capacity(MAX_ENQUEUED_HISTORY);
     let recursive_mode = if config.recursive {
         RecursiveMode::Recursive
     } else {
@@ -483,6 +537,11 @@ fn run_watcher_loop(
                 continue;
             }
 
+            if current_size != record.last_size || current_mtime != record.last_mtime {
+                record.preflight_failures = 0;
+                record.next_preflight_at = None;
+            }
+
             // Non-blocking exclusive read probe (Layer 2) and stability update (Layer 3)
             let probe_ok = probe_file_ready(path);
             update_candidate_stability(
@@ -512,12 +571,19 @@ fn run_watcher_loop(
         // parent directory trigger at most one read_dir each, instead of one per
         // stable candidate.
         let mut dir_listing_cache: HashMap<PathBuf, Option<Vec<String>>> = HashMap::new();
+        let now = Instant::now();
 
-        for (path, record) in pending_candidates.iter() {
+        for (path, record) in pending_candidates.iter_mut() {
             if to_remove.contains(path) {
                 continue;
             }
             if record.stable_ticks >= config.required_stable_ticks {
+                if record
+                    .next_preflight_at
+                    .is_some_and(|next_at| now < next_at)
+                {
+                    continue;
+                }
                 // Verify it actually is a supported archive format
                 let fname = path
                     .file_name()
@@ -530,8 +596,13 @@ fn run_watcher_loop(
 
                 // L4 Pre-flight verification: header/footer truncation detection
                 if !is_archive_complete_preflight(path) {
+                    record.preflight_failures = record.preflight_failures.saturating_add(1);
+                    record.next_preflight_at =
+                        Some(now + preflight_backoff_duration(record.preflight_failures));
                     continue;
                 }
+                record.preflight_failures = 0;
+                record.next_preflight_at = None;
 
                 // L5 Volume Co-readiness verification:
                 // If this is a multi-part volume archive, check whether any sibling volume
@@ -620,7 +691,7 @@ fn sync_watched_dirs(
     current_dirs: &mut HashSet<PathBuf>,
     new_dirs: Vec<PathBuf>,
     recursive_mode: RecursiveMode,
-    enqueued_history: &mut HashSet<(PathBuf, u64, SystemTime)>,
+    enqueued_history: &mut BoundedEnqueueHistory,
 ) {
     let target_set: HashSet<PathBuf> = new_dirs
         .into_iter()
@@ -659,7 +730,7 @@ fn sync_watched_dirs(
 fn handle_notify_event(
     event: Event,
     pending: &mut HashMap<PathBuf, FileStabilityRecord>,
-    enqueued: &HashSet<(PathBuf, u64, SystemTime)>,
+    enqueued: &BoundedEnqueueHistory,
 ) {
     match event.kind {
         EventKind::Create(_) | EventKind::Modify(_) | EventKind::Any => {
@@ -686,7 +757,7 @@ fn handle_notify_event(
 fn consider_candidate(
     path: PathBuf,
     pending: &mut HashMap<PathBuf, FileStabilityRecord>,
-    enqueued: &HashSet<(PathBuf, u64, SystemTime)>,
+    enqueued: &BoundedEnqueueHistory,
 ) {
     let fname = match path.file_name().and_then(|n| n.to_str()) {
         Some(n) => n,
@@ -728,6 +799,8 @@ fn consider_candidate(
                 last_mtime: mtime,
                 stable_ticks: 0,
                 consecutive_probe_failures: 0,
+                preflight_failures: 0,
+                next_preflight_at: None,
                 first_seen: Instant::now(),
             },
         );
@@ -829,6 +902,8 @@ mod tests {
             last_mtime: t0,
             stable_ticks: 0,
             consecutive_probe_failures: 0,
+            preflight_failures: 0,
+            next_preflight_at: None,
             first_seen: Instant::now(),
         };
 
@@ -992,5 +1067,32 @@ mod tests {
             50,
             &mut cursor
         ));
+    }
+
+    #[test]
+    fn bounded_enqueue_history_evicts_oldest_at_capacity() {
+        let mut history = BoundedEnqueueHistory::with_capacity(2);
+        let t0 = SystemTime::UNIX_EPOCH;
+        assert!(history.insert((PathBuf::from("a.zip"), 10, t0)));
+        assert!(history.insert((PathBuf::from("b.zip"), 20, t0)));
+        assert!(!history.insert((PathBuf::from("a.zip"), 10, t0)));
+        assert_eq!(history.len(), 2);
+
+        // Third distinct entry evicts "a.zip" FIFO.
+        assert!(history.insert((PathBuf::from("c.zip"), 30, t0)));
+        assert_eq!(history.len(), 2);
+        assert!(!history.contains(&(PathBuf::from("a.zip"), 10, t0)));
+        assert!(history.contains(&(PathBuf::from("b.zip"), 20, t0)));
+        assert!(history.contains(&(PathBuf::from("c.zip"), 30, t0)));
+    }
+
+    #[test]
+    fn preflight_backoff_scales_exponentially_and_caps() {
+        assert_eq!(preflight_backoff_duration(0), Duration::ZERO);
+        assert_eq!(preflight_backoff_duration(1), Duration::from_secs(1));
+        assert_eq!(preflight_backoff_duration(2), Duration::from_secs(2));
+        assert_eq!(preflight_backoff_duration(3), Duration::from_secs(4));
+        assert_eq!(preflight_backoff_duration(6), Duration::from_secs(32));
+        assert_eq!(preflight_backoff_duration(20), Duration::from_secs(32));
     }
 }

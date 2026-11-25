@@ -168,10 +168,25 @@ impl Vault {
     }
 
     pub fn views(&self) -> Result<Vec<PasswordView>, String> {
+        let (_, list) = self
+            .views_if_changed(None)?
+            .unwrap_or_else(|| (0, Vec::new()));
+        Ok(list)
+    }
+
+    /// Returns `Some((generation, views))` when the in-memory vault generation differs
+    /// from `cached_generation`, or `None` when the caller's projection is still fresh.
+    pub fn views_if_changed(
+        &self,
+        cached_generation: Option<u64>,
+    ) -> Result<Option<(u64, Vec<PasswordView>)>, String> {
         let guard = self
             .data
             .lock()
             .map_err(|_| ERR_MUTEX_POISONED.to_string())?;
+        if cached_generation == Some(guard.generation) {
+            return Ok(None);
+        }
         let mut list = Vec::new();
         for item in guard.items.values() {
             if !item.deleted {
@@ -187,7 +202,7 @@ impl Vault {
                 });
             }
         }
-        Ok(list)
+        Ok(Some((guard.generation, list)))
     }
 
     pub fn groups(&self) -> Result<Vec<String>, String> {
