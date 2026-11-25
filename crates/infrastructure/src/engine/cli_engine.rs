@@ -1423,17 +1423,18 @@ mod cancellation_and_encryption_tests {
             "extract_cli failed: {:?}",
             extract_res.err()
         );
-        let events = seen_progress.lock().unwrap();
-        assert!(
-            !events.is_empty(),
-            "extract_cli -bsp1 should emit at least one progress event"
-        );
-        assert!(
-            events
-                .iter()
-                .all(|(done, total, known)| *known && *done <= *total && *total > 0)
-        );
-        drop(events);
+        {
+            let events = seen_progress.lock().unwrap();
+            assert!(
+                !events.is_empty(),
+                "extract_cli -bsp1 should emit at least one progress event"
+            );
+            assert!(
+                events
+                    .iter()
+                    .all(|(done, total, known)| *known && *done <= *total && *total > 0)
+            );
+        }
         let extracted_file = dest_dir.join("secret_data.txt");
         assert!(extracted_file.exists());
         assert_eq!(

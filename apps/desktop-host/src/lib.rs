@@ -469,19 +469,16 @@ fn verify_no_reparse_ancestors(path: &Path) -> Result<(), String> {
             {
                 let has_reparse_attr = (meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
                 if meta.file_type().is_symlink() || has_reparse_attr {
-                    let allowed = match query_reparse_tag(segment) {
+                    let allowed = matches!(
+                        query_reparse_tag(segment),
                         Some(tag)
                             if !matches!(
                                 tag,
                                 IO_REPARSE_TAG_SYMLINK
                                     | IO_REPARSE_TAG_MOUNT_POINT
                                     | IO_REPARSE_TAG_LX_SYMLINK
-                            ) && is_allowed_cloud_reparse_tag(tag) =>
-                        {
-                            true
-                        }
-                        _ => false,
-                    };
+                            ) && is_allowed_cloud_reparse_tag(tag)
+                    );
                     if !allowed {
                         return Err(format!(
                             "Path or ancestor is a symlink/reparse point: {}",

@@ -191,7 +191,7 @@ pub fn try_notify_running_instance(data_dir: &Path, paths: &[String]) -> bool {
         token,
         paths: paths.to_vec(),
     }) {
-        Ok(json) if json.len() + 1 <= MAX_WAKE_BYTES => format!("{json}\n"),
+        Ok(json) if json.len() < MAX_WAKE_BYTES => format!("{json}\n"),
         _ => return false,
     };
 

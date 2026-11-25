@@ -20,7 +20,7 @@ try {
     Invoke-OpenUnpackTool cargo @('fetch', '--locked', '--target', 'x86_64-pc-windows-msvc')
     & (Join-Path $PSScriptRoot 'check-contracts.ps1') -RunCargoTest
     & (Join-Path $PSScriptRoot 'test-release-validation.ps1')
-    & (Join-Path $PSScriptRoot 'collect-release-materials.ps1')
+    & (Join-Path $PSScriptRoot 'collect-release-materials.ps1') -Offline:$SkipInstall
     if (-not $SkipSecurityAudit) {
         & (Join-Path $PSScriptRoot 'audit-security.ps1') -Offline:$SkipInstall -DenyWarnings
     }
