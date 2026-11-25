@@ -1,4 +1,4 @@
-# Scanner output is a trust boundary: malformed or incomplete reports never pass.
+﻿# Scanner output is a trust boundary: malformed or incomplete reports never pass.
 function Get-OpenUnpackCargoAuditGraph {
     param([Parameter(Mandatory)][string]$MetadataJson)
     try { $metadata = ConvertFrom-Json -InputObject $MetadataJson -ErrorAction Stop }
@@ -53,7 +53,7 @@ function Get-OpenUnpackCargoAuditGraph {
     }
     return @{ packages = $packages; nodes = $nodes; reachable = $reachable;
         roots = $metadata.workspace_members;
-        sha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($MetadataJson))).ToLowerInvariant() }
+        sha256 = ([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($MetadataJson))).Replace('-', '').ToLowerInvariant()) }
 }
 
 function Get-OpenUnpackWindowsAuditExceptions {

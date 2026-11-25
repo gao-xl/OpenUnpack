@@ -1,4 +1,4 @@
-param([string]$Destination = (Join-Path $PSScriptRoot '../tools/7zip'))
+﻿param([string]$Destination = (Join-Path $PSScriptRoot '../tools/7zip'))
 $ErrorActionPreference = 'Stop'
 $version = '26.04'
 $expectedMsiHash = '0b01334a418654293513449f61d6bfc99e5196ca371e3c3dc961eda57cd535c6'
@@ -85,8 +85,12 @@ try {
     $licenceHash = (Get-FileHash -LiteralPath $licencePath -Algorithm SHA256).Hash.ToLowerInvariant()
     $dllHash=(Get-FileHash -LiteralPath (Join-Path $destinationPath '7z.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
     [IO.File]::WriteAllText((Join-Path $destinationPath '7z.dll.sha256'), "$dllHash  7z.dll`n", [Text.UTF8Encoding]::new($false))
-    @{ version=$version; source=$sourceUrl; msiSha256=$expectedMsiHash; dllSha256=$dllHash; license='msi:License.txt'; licenseSha256=$licenceHash } |
-        ConvertTo-Json | Set-Content -LiteralPath (Join-Path $destinationPath 'provenance.json') -Encoding utf8NoBOM
+    # 7z.exe is the binary that actually gets executed and redistributed, so it
+    # must sit in the same hash chain as 7z.dll — never ship an unhashed engine.
+    $exeHash=(Get-FileHash -LiteralPath (Join-Path $destinationPath '7z.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
+    [IO.File]::WriteAllText((Join-Path $destinationPath '7z.exe.sha256'), "$exeHash  7z.exe`n", [Text.UTF8Encoding]::new($false))
+    $provenanceJson = (@{ version=$version; source=$sourceUrl; msiSha256=$expectedMsiHash; dllSha256=$dllHash; exeSha256=$exeHash; license='msi:License.txt'; licenseSha256=$licenceHash } | ConvertTo-Json) + "`n"
+    [IO.File]::WriteAllText((Join-Path $destinationPath 'provenance.json'), $provenanceJson, [Text.UTF8Encoding]::new($false))
     Write-Host "Official 7-Zip $version ready at $destinationPath"
 } finally {
     # No recursive deletion: the temporary installer and cabinet remain available for inspection.

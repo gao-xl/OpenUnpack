@@ -1,4 +1,4 @@
-param([switch]$SkipPrepare)
+﻿param([switch]$SkipPrepare)
 . (Join-Path $PSScriptRoot 'common.ps1')
 Assert-OpenUnpackWindows
 Import-OpenUnpackMsvc

@@ -3,24 +3,31 @@ import { SnapshotCursor, validVersion } from '../src/snapshot-cursor';
 import type { AppSnapshot, JobView, SnapshotDelta, SnapshotUpdate } from '../src/types';
 import { defaultSettings } from '../src/types';
 
-const snapshot = (sessionId: string, revision: string) => ({
-  jobs: [],
-  passwords: [],
-  settings: { ...defaultSettings },
-  running: false,
-  paused: false,
-  vaultError: null,
-  dataDirectory: 'test-data',
-  engineAvailable: true,
-  recoverableCount: 0,
-  cacheUsedBytes: 0,
-  sessionId,
-  revision,
-}) as AppSnapshot;
+const snapshot = (sessionId: string, revision: string) =>
+  ({
+    jobs: [],
+    passwords: [],
+    settings: { ...defaultSettings },
+    running: false,
+    paused: false,
+    vaultError: null,
+    dataDirectory: 'test-data',
+    engineAvailable: true,
+    recoverableCount: 0,
+    cacheUsedBytes: 0,
+    sessionId,
+    revision,
+  }) as AppSnapshot;
 
 const makeJob = (id: string, message = 'initial'): JobView => ({
   id,
-  source: { path: `${id}.zip`, displayName: `${id}.zip`, volumes: [`${id}.zip`], size: 100, missingVolume: false },
+  source: {
+    path: `${id}.zip`,
+    displayName: `${id}.zip`,
+    volumes: [`${id}.zip`],
+    size: 100,
+    missingVolume: false,
+  },
   options: { ...defaultSettings },
   status: 'running',
   stage: 'extracting',
@@ -90,7 +97,18 @@ describe('快照增量合成器 (SnapshotCursor.applyUpdate)', () => {
     const delta: SnapshotDelta = {
       jobsChanged: [makeJob('job-1', 'updated-msg'), makeJob('job-3', 'new-job')],
       jobsRemoved: ['job-2'],
-      passwordsChanged: [{ id: 'p-1', name: 'pwd', groups: [], notes: '', enabled: true, successCount: 0, lastSuccess: null, revision: 1 }],
+      passwordsChanged: [
+        {
+          id: 'p-1',
+          name: 'pwd',
+          groups: [],
+          notes: '',
+          enabled: true,
+          successCount: 0,
+          lastSuccess: null,
+          revision: 1,
+        },
+      ],
       passwordsRemoved: [],
       settings: { ...defaultSettings, completionSound: true },
       state: {
@@ -114,8 +132,8 @@ describe('快照增量合成器 (SnapshotCursor.applyUpdate)', () => {
     const synthesized = cursor.applyUpdate(update);
     expect(synthesized).not.toBeNull();
     expect(synthesized?.revision).toBe('2');
-    expect(synthesized?.jobs.map(j => j.id)).toEqual(['job-1', 'job-3']);
-    expect(synthesized?.jobs.find(j => j.id === 'job-1')?.message).toBe('updated-msg');
+    expect(synthesized?.jobs.map((j) => j.id)).toEqual(['job-1', 'job-3']);
+    expect(synthesized?.jobs.find((j) => j.id === 'job-1')?.message).toBe('updated-msg');
     expect(synthesized?.passwords.length).toBe(1);
     expect(synthesized?.settings.completionSound).toBe(true);
     expect(synthesized?.running).toBe(true);
@@ -136,15 +154,26 @@ describe('快照增量合成器 (SnapshotCursor.applyUpdate)', () => {
     };
 
     // 1. 无 base 快照
-    expect(cursor.applyUpdate({ sessionId: 'sess-1', revision: '2', full: null, delta })).toBeNull();
+    expect(
+      cursor.applyUpdate({ sessionId: 'sess-1', revision: '2', full: null, delta }),
+    ).toBeNull();
 
     // 初始化一个会话
-    cursor.applyUpdate({ sessionId: 'sess-1', revision: '1', full: snapshot('sess-1', '1'), delta: null });
+    cursor.applyUpdate({
+      sessionId: 'sess-1',
+      revision: '1',
+      full: snapshot('sess-1', '1'),
+      delta: null,
+    });
 
     // 2. 会话不匹配
-    expect(cursor.applyUpdate({ sessionId: 'sess-2', revision: '2', full: null, delta })).toBeNull();
+    expect(
+      cursor.applyUpdate({ sessionId: 'sess-2', revision: '2', full: null, delta }),
+    ).toBeNull();
 
     // 3. 乱序旧版本
-    expect(cursor.applyUpdate({ sessionId: 'sess-1', revision: '1', full: null, delta })).toBeNull();
+    expect(
+      cursor.applyUpdate({ sessionId: 'sess-1', revision: '1', full: null, delta }),
+    ).toBeNull();
   });
 });

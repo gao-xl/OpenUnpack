@@ -1,9 +1,16 @@
-param([switch]$SkipPrepare, [switch]$SkipInstall, [switch]$Installer, [switch]$OfflineInstaller, [switch]$OfflineMaterials)
+﻿param([switch]$SkipPrepare, [switch]$SkipInstall, [switch]$Installer, [switch]$OfflineInstaller, [switch]$OfflineMaterials)
 . (Join-Path $PSScriptRoot 'common.ps1')
 Assert-OpenUnpackWindows
 Import-OpenUnpackMsvc
 if ($OfflineInstaller -and -not $Installer) { throw '-OfflineInstaller 需要同时使用 -Installer。' }
 $taskRoot = Get-OpenUnpackRoot
+# 2026-11-17: 沙箱文件系统过滤会对工作区外用户目录（%TEMP%）的大文件写删持锁，
+# 导致 esbuild 大输入临时文件删除报 "Access is denied"（vite build 1MB+ chunk 稳定复现）。
+# 将 TEMP/TMP 重定向到工作区内目录规避；对 cargo/rustc 同样生效。
+$taskBuildTmp = Join-Path $taskRoot 'artifacts/build-tmp'
+New-OpenUnpackDirectory $taskBuildTmp
+$env:TEMP = $taskBuildTmp
+$env:TMP = $taskBuildTmp
 if (-not $SkipPrepare) { & (Join-Path $PSScriptRoot 'prepare-desktop.ps1') -SkipInstall:$SkipInstall -SkipFrontendBuild }
 $taskHadTargetOverride = Test-Path Env:CARGO_TARGET_DIR
 $taskOriginalTargetOverride = $env:CARGO_TARGET_DIR
@@ -12,8 +19,12 @@ try {
     & (Join-Path $PSScriptRoot 'collect-release-materials.ps1') -Offline:$OfflineMaterials
     $taskMetadata = & cargo metadata --format-version 1 --no-deps --locked
     if ($LASTEXITCODE -ne 0) { throw '无法确定 Cargo 构建输出目录。' }
-    $taskTarget = ($taskMetadata | ConvertFrom-Json).target_directory
-    if (-not $taskTarget -or -not [IO.Path]::IsPathFullyQualified($taskTarget)) { throw 'Cargo 输出目录无效。' }
+    $taskTarget = if ($taskHadTargetOverride -and $taskOriginalTargetOverride) {
+        [IO.Path]::GetFullPath($taskOriginalTargetOverride)
+    } else {
+        ($taskMetadata | ConvertFrom-Json).target_directory
+    }
+    if (-not $taskTarget -or -not [IO.Path]::IsPathRooted($taskTarget)) { throw 'Cargo 输出目录无效。' }
     # Tauri runs Cargo from apps/desktop-host. A relative override must not
     # resolve to a second checkout-local target and leave an old installer here.
     $env:CARGO_TARGET_DIR = $taskTarget
@@ -25,8 +36,8 @@ try {
         $taskWebViewMode = if ($OfflineInstaller) { 'offlineInstaller' } else { 'embedBootstrapper' }
         $taskFlavor = if ($OfflineInstaller) { 'offline' } else { 'standard' }
         $taskOverride = Join-Path $taskRoot 'artifacts/release-installer.config.json'
-        @{ bundle = @{ licenseFile = '../../LICENSE'; resources = @{ '../../artifacts/release-materials/' = 'release-materials/'; '../../LICENSE' = 'LICENSE'; '../../THIRD_PARTY_NOTICES.md' = 'THIRD_PARTY_NOTICES.md' }; windows = @{ webviewInstallMode = @{ type = $taskWebViewMode }; nsis = @{ installMode = 'currentUser'; languages = @('SimpChinese', 'English') } } } } |
-            ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $taskOverride -Encoding utf8NoBOM
+        $taskOverrideJson = @{ bundle = @{ licenseFile = '../../LICENSE'; resources = @{ '../../artifacts/release-materials/' = 'release-materials/'; '../../LICENSE' = 'LICENSE'; '../../THIRD_PARTY_NOTICES.md' = 'THIRD_PARTY_NOTICES.md' }; windows = @{ webviewInstallMode = @{ type = $taskWebViewMode }; nsis = @{ installMode = 'currentUser'; languages = @('SimpChinese', 'English') } } } } | ConvertTo-Json -Depth 8
+        [IO.File]::WriteAllText($taskOverride, $taskOverrideJson, [System.Text.UTF8Encoding]::new($false))
         # Tauri owns the fresh frontend hook and final Host build for installers.
         # Do not prebuild either here: its installer config can change the Host.
         Push-Location (Join-Path $taskRoot 'apps/desktop-host')
@@ -39,9 +50,14 @@ try {
         Copy-Item -LiteralPath $taskSetup -Destination (Join-Path $taskRelease "OpenUnpack-$taskVersion-windows-x64-$taskFlavor-setup.exe") -Force
     } else {
         # SkipPrepare skips dependency preparation, never fresh frontend compilation.
-        Invoke-OpenUnpackTool npm @('--prefix', (Join-Path $taskRoot 'apps/desktop-ui'), 'run', 'build')
-        Invoke-OpenUnpackTool cargo @('build', '-p', 'openunpack-desktop', '--release', '--features', 'custom-protocol', '--locked')
-        Invoke-OpenUnpackTool cargo @('build', '-p', 'openunpack-cli', '--release', '--locked')
+        Push-Location (Join-Path $taskRoot 'apps/desktop-ui')
+        try {
+            Invoke-OpenUnpackTool npm run build
+        } finally {
+            Pop-Location
+        }
+        Invoke-OpenUnpackTool cargo build -p openunpack-desktop --release --features custom-protocol --locked
+        Invoke-OpenUnpackTool cargo build -p openunpack-cli --release --locked
     }
     # Tauri can rebuild the Host for the installer config and patch its bundle type.
     # Freeze the portable payload only after that final Host has been produced.
@@ -52,6 +68,17 @@ try {
         Copy-Item -LiteralPath (Join-Path $taskTarget 'release/openunpack.exe') -Destination (Join-Path $portable 'openunpack-cli.exe')
     }
     if (Test-Path -LiteralPath (Join-Path $taskRoot 'tools') -PathType Container) {
+        # Every engine binary that ships in the payload must already sit in the
+        # pinned hash chain: assert before copying so a swapped 7z.exe/7z.dll can
+        # never be packaged or executed downstream.
+        $taskEngineDir = Join-Path $taskRoot 'tools/7zip'
+        $taskEngineProvenance = Get-Content -LiteralPath (Join-Path $taskEngineDir 'provenance.json') -Raw | ConvertFrom-Json
+        foreach ($taskEngineFile in @(@{ Name = '7z.exe'; Expected = $taskEngineProvenance.exeSha256 }, @{ Name = '7z.dll'; Expected = $taskEngineProvenance.dllSha256 })) {
+            $taskEngineActual = (Get-FileHash -LiteralPath (Join-Path $taskEngineDir $taskEngineFile.Name) -Algorithm SHA256).Hash.ToLowerInvariant()
+            if (-not $taskEngineFile.Expected -or $taskEngineActual -ne $taskEngineFile.Expected.ToLowerInvariant()) {
+                throw "tools/7zip/$($taskEngineFile.Name) does not match the pinned provenance hash; refusing to package."
+            }
+        }
         Copy-Item -LiteralPath (Join-Path $taskRoot 'tools') -Destination $portable -Recurse -Force
     }
     Copy-Item -LiteralPath (Join-Path $taskRoot 'LICENSE') -Destination $portable

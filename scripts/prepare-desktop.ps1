@@ -1,4 +1,4 @@
-param(
+﻿param(
     [switch]$SkipInstall,
     [string]$RuntimeFrameworkVersion,
     [switch]$SkipFrontendBuild

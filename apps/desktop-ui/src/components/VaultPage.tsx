@@ -1,15 +1,40 @@
 import { t, getLanguage } from '../i18n';
 import { useState, useEffect, useRef, useMemo, useDeferredValue } from 'react';
 import {
-  Table, Button, Input, Modal, Form, Select, Switch, Space, Tag, Popconfirm, Typography, Alert, Card,
+  Table,
+  Button,
+  Input,
+  Modal,
+  Form,
+  Select,
+  Switch,
+  Space,
+  Tag,
+  Popconfirm,
+  Typography,
+  Alert,
+  Card,
+  Segmented,
+  Checkbox,
+  Empty,
 } from 'antd';
 import {
-  PlusOutlined, ImportOutlined, EyeOutlined, EditOutlined, DeleteOutlined, CopyOutlined,
-  SearchOutlined, FolderOpenOutlined,
+  PlusOutlined,
+  ImportOutlined,
+  EyeOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  CopyOutlined,
+  SearchOutlined,
+  FolderOpenOutlined,
+  AppstoreOutlined,
+  BarsOutlined,
+  KeyOutlined,
 } from '@ant-design/icons';
 import type { AppSnapshot, PasswordView, PasswordInput, ImportPreview } from '../types';
 import { api, isDesktop } from '../api';
 import BulkPasswordBar from './BulkPasswordBar';
+import VirtualGrid from './VirtualGrid';
 
 const { Text, Paragraph } = Typography;
 
@@ -29,6 +54,7 @@ export default function VaultPage({ snapshot, run }: VaultPageProps) {
   const [enabledFilter, setEnabledFilter] = useState('all');
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [copyNotice, setCopyNotice] = useState('');
   const [secretVisible, setSecretVisible] = useState(false);
   const savingRef = useRef(false);
@@ -55,10 +81,10 @@ export default function VaultPage({ snapshot, run }: VaultPageProps) {
   const importDraftEpochRef = useRef(0);
 
   useEffect(() => {
-    const existingIds = new Set(snapshot.passwords.map(password => password.id));
+    const existingIds = new Set(snapshot.passwords.map((password) => password.id));
     queueMicrotask(() => {
-      setSelected(previous => {
-        const next = previous.filter(id => existingIds.has(id));
+      setSelected((previous) => {
+        const next = previous.filter((id) => existingIds.has(id));
         return next.length === previous.length ? previous : next;
       });
     });
@@ -77,16 +103,25 @@ export default function VaultPage({ snapshot, run }: VaultPageProps) {
   }, [form]);
   const bulkAction = (action: 'enable' | 'disable' | 'delete' | 'setGroups', groups?: string[]) => {
     if (savingRef.current || !selected.length) return;
-    savingRef.current = true; setSaving(true);
+    savingRef.current = true;
+    setSaving(true);
     void run(async () => {
       await api.bulkPasswordAction(selected, action === 'setGroups' ? 'group' : action, groups);
       setSelected([]);
-    }).finally(() => { savingRef.current = false; setSaving(false); });
+    }).finally(() => {
+      savingRef.current = false;
+      setSaving(false);
+    });
   };
-  const copyPassword = (item: PasswordView) => void run(async () => {
-    await api.copyPassword(item.id);
-    setCopyNotice(t("密码已复制，剪贴板将在 30 秒后自动清除（已排除系统历史与云同步；第三方工具可能不受约束）。"));
-  });
+  const copyPassword = (item: PasswordView) =>
+    void run(async () => {
+      await api.copyPassword(item.id);
+      setCopyNotice(
+        t(
+          '密码已复制，剪贴板将在 30 秒后自动清除（已排除系统历史与云同步；第三方工具可能不受约束）。',
+        ),
+      );
+    });
 
   const closeReveal = () => {
     revealEpochRef.current += 1;
@@ -98,7 +133,10 @@ export default function VaultPage({ snapshot, run }: VaultPageProps) {
   useEffect(() => {
     if (!revealTarget) return;
     queueMicrotask(() => setRevealSeconds(20));
-    const countdown = setInterval(() => setRevealSeconds(seconds => Math.max(0, seconds - 1)), 1000);
+    const countdown = setInterval(
+      () => setRevealSeconds((seconds) => Math.max(0, seconds - 1)),
+      1000,
+    );
     const timer = setTimeout(closeReveal, 20000);
     const onBlurOrHide = () => closeReveal();
     window.addEventListener('blur', onBlurOrHide);
@@ -122,7 +160,7 @@ export default function VaultPage({ snapshot, run }: VaultPageProps) {
         const secret = await api.revealPassword(item.id);
         if (revealEpochRef.current === epoch) setRevealedSecret(secret);
       } catch (error) {
-        if (revealEpochRef.current === epoch) setRevealError(t("密码读取失败，请关闭后重试。"));
+        if (revealEpochRef.current === epoch) setRevealError(t('密码读取失败，请关闭后重试。'));
         throw error;
       }
     });
@@ -156,21 +194,26 @@ export default function VaultPage({ snapshot, run }: VaultPageProps) {
     if (savingRef.current) return;
     const epoch = editDraftEpochRef.current;
     const editingId = editingItem?.id;
-    savingRef.current = true; setSaving(true);
+    savingRef.current = true;
+    setSaving(true);
     try {
       const values = await form.validateFields().catch(() => null);
       if (!values || editDraftEpochRef.current !== epoch) return;
       await run(async () => {
-      await api.savePassword({
-        id: editingId,
-        name: values.name.trim(),
-        groups: values.groups || [],
-        notes: values.notes || '',
-        enabled: values.enabled ?? true,
-        secret: values.secret ? values.secret : undefined,
+        await api.savePassword({
+          id: editingId,
+          name: values.name.trim(),
+          groups: values.groups || [],
+          notes: values.notes || '',
+          enabled: values.enabled ?? true,
+          secret: values.secret ? values.secret : undefined,
+        });
+        if (editDraftEpochRef.current === epoch) clearEdit();
       });
-      if (editDraftEpochRef.current === epoch) clearEdit();
-    }); } finally { savingRef.current = false; setSaving(false); }
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   };
 
   const clearEdit = () => {
@@ -183,10 +226,20 @@ export default function VaultPage({ snapshot, run }: VaultPageProps) {
 
   const handleToggle = (item: PasswordView, enabled: boolean) => {
     if (savingRef.current) return;
-    savingRef.current = true; setSaving(true);
-    void run(() => api.savePassword({
-      id: item.id, name: item.name, groups: item.groups, notes: item.notes, enabled,
-    })).finally(() => { savingRef.current = false; setSaving(false); });
+    savingRef.current = true;
+    setSaving(true);
+    void run(() =>
+      api.savePassword({
+        id: item.id,
+        name: item.name,
+        groups: item.groups,
+        notes: item.notes,
+        enabled,
+      }),
+    ).finally(() => {
+      savingRef.current = false;
+      setSaving(false);
+    });
   };
 
   const clearImport = () => {
@@ -206,7 +259,11 @@ export default function VaultPage({ snapshot, run }: VaultPageProps) {
       const paths = await api.pickFiles(false);
       if (paths && paths[0]) {
         const content = await api.readImportFile(paths[0], importEncoding);
-        if (epoch === previewEpochRef.current) { importDraftEpochRef.current += 1; setImportText(content); setPreview(null); }
+        if (epoch === previewEpochRef.current) {
+          importDraftEpochRef.current += 1;
+          setImportText(content);
+          setPreview(null);
+        }
       }
     });
   };
@@ -225,51 +282,71 @@ export default function VaultPage({ snapshot, run }: VaultPageProps) {
     if (!preview?.token || preview.errorCount > 0) return;
     if (savingRef.current) return;
     const draftEpoch = importDraftEpochRef.current;
-    savingRef.current = true; setSaving(true);
+    savingRef.current = true;
+    setSaving(true);
     try {
       await run(async () => {
         await api.confirmImport(importText, importGroup, importFormat, preview.token);
         if (importDraftEpochRef.current === draftEpoch) clearImport();
       });
-    } finally { savingRef.current = false; setSaving(false); }
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   };
 
   const filteredPasswords = useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
     return snapshot.passwords.filter(
-      (p) => (!groupFilter || p.groups.includes(groupFilter)) && (enabledFilter === 'all' || p.enabled === (enabledFilter === 'enabled')) && (!q || p.name.toLowerCase().includes(q)
-        || p.groups.some((g) => g.toLowerCase().includes(q))
-        || (p.notes && p.notes.toLowerCase().includes(q))),
+      (p) =>
+        (!groupFilter || p.groups.includes(groupFilter)) &&
+        (enabledFilter === 'all' || p.enabled === (enabledFilter === 'enabled')) &&
+        (!q ||
+          p.name.toLowerCase().includes(q) ||
+          p.groups.some((g) => g.toLowerCase().includes(q)) ||
+          (p.notes && p.notes.toLowerCase().includes(q))),
     );
   }, [snapshot.passwords, deferredSearch, groupFilter, enabledFilter]);
 
   const columns = [
     {
-      title: t("状态"),
+      title: t('状态'),
       dataIndex: 'enabled',
       key: 'enabled',
       width: 80,
       render: (enabled: boolean, r: PasswordView) => (
-        <Switch size="small" disabled={!connected || saving || !!snapshot.vaultError} checked={enabled} onChange={(val) => handleToggle(r, val)} aria-label={t("切换 {p0} 启用状态", { p0: r.name })} />
+        <Switch
+          size="small"
+          disabled={!connected || saving || !!snapshot.vaultError}
+          checked={enabled}
+          onChange={(val) => handleToggle(r, val)}
+          aria-label={t('切换 {p0} 启用状态', { p0: r.name })}
+        />
       ),
     },
-    { title: t("名称/标识"), dataIndex: 'name', key: 'name', ellipsis: true },
+    { title: t('名称/标识'), dataIndex: 'name', key: 'name', ellipsis: true },
     {
-      title: t("分组"),
+      title: t('分组'),
       dataIndex: 'groups',
       key: 'groups',
       render: (groups: string[]) => groups.map((g) => <Tag key={g}>{g}</Tag>),
     },
-    { title: t("备注"), dataIndex: 'notes', key: 'notes', ellipsis: true, render: (t: string) => t || '-' },
     {
-      title: t("成功次数"),
+      title: t('备注'),
+      dataIndex: 'notes',
+      key: 'notes',
+      ellipsis: true,
+      render: (t: string) => t || '-',
+    },
+    {
+      title: t('成功次数'),
       dataIndex: 'successCount',
       key: 'successCount',
       width: 90,
       render: (count: number) => <span className="tabular-nums mono-text">{count}</span>,
     },
     {
-      title: t("上次使用"),
+      title: t('上次使用'),
       dataIndex: 'lastSuccess',
       key: 'lastSuccess',
       width: 170,
@@ -280,22 +357,44 @@ export default function VaultPage({ snapshot, run }: VaultPageProps) {
       ),
     },
     {
-      title: t("操作"),
+      title: t('操作'),
       key: 'action',
       width: 175,
       render: (_: unknown, r: PasswordView) => (
         <Space size="small">
-          <Button size="small" icon={<CopyOutlined />} disabled={!nativeEngine || !!snapshot.vaultError} onClick={() => copyPassword(r)} aria-label={t("复制 {p0} 密码", { p0: r.name })} />
+          <Button
+            size="small"
+            icon={<CopyOutlined />}
+            disabled={!nativeEngine || !!snapshot.vaultError}
+            onClick={() => copyPassword(r)}
+            aria-label={t('复制 {p0} 密码', { p0: r.name })}
+          />
           <Button
             size="small"
             icon={<EyeOutlined />}
             disabled={!connected || !!snapshot.vaultError}
             onClick={() => handleReveal(r)}
-            aria-label={t("查看密码")}
+            aria-label={t('查看 {p0} 密码', { p0: r.name })}
           />
-          <Button size="small" disabled={!connected || saving || !!snapshot.vaultError} icon={<EditOutlined />} onClick={() => openEdit(r)} aria-label={t("编辑 {p0}", { p0: r.name })} />
-          <Popconfirm disabled={!connected || saving || !!snapshot.vaultError} title={t("确认删除该密码条目吗？")} onConfirm={() => void run(() => api.deletePassword(r.id))}>
-            <Button size="small" disabled={!connected || saving || !!snapshot.vaultError} danger icon={<DeleteOutlined />} aria-label={t("删除 {p0}", { p0: r.name })} />
+          <Button
+            size="small"
+            disabled={!connected || saving || !!snapshot.vaultError}
+            icon={<EditOutlined />}
+            onClick={() => openEdit(r)}
+            aria-label={t('编辑 {p0}', { p0: r.name })}
+          />
+          <Popconfirm
+            disabled={!connected || saving || !!snapshot.vaultError}
+            title={t('确认删除该密码条目吗？')}
+            onConfirm={() => void run(() => api.deletePassword(r.id))}
+          >
+            <Button
+              size="small"
+              disabled={!connected || saving || !!snapshot.vaultError}
+              danger
+              icon={<DeleteOutlined />}
+              aria-label={t('删除 {p0}', { p0: r.name })}
+            />
           </Popconfirm>
         </Space>
       ),
@@ -303,191 +402,527 @@ export default function VaultPage({ snapshot, run }: VaultPageProps) {
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div className="page-header">
         <div>
-          <h2 className="page-title">{t("密码库")}</h2>
+          <h2 className="page-title">{t('密码库')}</h2>
           <p className="page-description">
-            {t("按分组管理候选密码。列表与处理记录只显示标识，密码由当前 Windows 账户保护。")}
+            {t('按分组管理候选密码。列表与处理记录只显示标识，密码由当前 Windows 账户保护。')}
           </p>
         </div>
       </div>
+      <div className="telemetry-bar">
+        <div className="telemetry-card">
+          <span className="telemetry-label">{t('密码总数')}</span>
+          <span className="telemetry-value tabular-nums">{snapshot.passwords.length}</span>
+        </div>
+        <div className="telemetry-card">
+          <span className="telemetry-label">{t('启用状态')}</span>
+          <span className="telemetry-value tabular-nums" style={{ color: 'var(--ou-success)' }}>
+            {snapshot.passwords.filter((p) => p.enabled).length} / {snapshot.passwords.length}
+          </span>
+        </div>
+        <div className="telemetry-card">
+          <span className="telemetry-label">{t('分组数量')}</span>
+          <span className="telemetry-value tabular-nums">
+            {[...new Set(snapshot.passwords.flatMap((p) => p.groups))].length}
+          </span>
+        </div>
+        <div className="telemetry-card">
+          <span className="telemetry-label">{t('存储安全状态')}</span>
+          <span
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: snapshot.vaultError ? 'var(--ou-danger)' : 'var(--ou-success)',
+              marginTop: 2,
+            }}
+          >
+            {snapshot.vaultError ? t('需检查密码库') : t('Windows 账户加密保护')}
+          </span>
+        </div>
+      </div>
+
       <div className="toolbar">
         <Input
           prefix={<SearchOutlined />}
-          placeholder={t("按名称、分组或备注搜索...")}
+          placeholder={t('按名称、分组或备注搜索...')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ maxWidth: 360 }}
           allowClear
-          aria-label={t("搜索密码条目")}
+          aria-label={t('搜索密码条目')}
         />
         <Space wrap>
-          <Select aria-label={t("密码分组筛选")} value={groupFilter} onChange={setGroupFilter} style={{ width: 150 }} options={[{ value: '', label: t("全部分组") }, ...[...new Set(snapshot.passwords.flatMap(password => password.groups))].map(group => ({ value: group, label: group }))]} />
-          <Select aria-label={t("密码启用状态筛选")} value={enabledFilter} onChange={setEnabledFilter} style={{ width: 120 }} options={[{ value: 'all', label: t("全部状态") }, { value: 'enabled', label: t("已启用") }, { value: 'disabled', label: t("已停用") }]} />
-          <Button disabled={!connected || !!snapshot.vaultError} icon={<ImportOutlined />} onClick={() => setIsImportOpen(true)}>{t("批量导入")}</Button>
-          <Button disabled={!connected || !!snapshot.vaultError} type="primary" icon={<PlusOutlined />} onClick={openAdd}>{t("添加密码")}</Button>
+          <Select
+            aria-label={t('密码分组筛选')}
+            value={groupFilter}
+            onChange={setGroupFilter}
+            style={{ width: 150 }}
+            options={[
+              { value: '', label: t('全部分组') },
+              ...[...new Set(snapshot.passwords.flatMap((password) => password.groups))].map(
+                (group) => ({ value: group, label: group }),
+              ),
+            ]}
+          />
+          <Select
+            aria-label={t('密码启用状态筛选')}
+            value={enabledFilter}
+            onChange={setEnabledFilter}
+            style={{ width: 120 }}
+            options={[
+              { value: 'all', label: t('全部状态') },
+              { value: 'enabled', label: t('已启用') },
+              { value: 'disabled', label: t('已停用') },
+            ]}
+          />
+          <Segmented
+            value={viewMode}
+            onChange={(v) => setViewMode(v as 'table' | 'cards')}
+            options={[
+              { value: 'table', icon: <BarsOutlined aria-hidden />, label: t('表格视图') },
+              { value: 'cards', icon: <AppstoreOutlined aria-hidden />, label: t('卡片看板') },
+            ]}
+          />
+          <Button
+            disabled={!connected || !!snapshot.vaultError}
+            icon={<ImportOutlined />}
+            onClick={() => setIsImportOpen(true)}
+          >
+            {t('批量导入')}
+          </Button>
+          <Button
+            disabled={!connected || !!snapshot.vaultError}
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={openAdd}
+          >
+            {t('添加密码')}
+          </Button>
         </Space>
       </div>
 
-      {copyNotice && <Alert type="info" showIcon closable title={t("临时剪贴板")} description={copyNotice} onClose={() => setCopyNotice('')} />}
-      <BulkPasswordBar selectedCount={selected.length} disabled={!connected || !!snapshot.vaultError} busy={saving} groups={[...new Set(snapshot.passwords.flatMap(password => password.groups))]} onAction={bulkAction} onClear={() => setSelected([])} />
-
-      <Table<PasswordView>
-        rowKey="id"
-        columns={columns}
-        dataSource={filteredPasswords}
-        pagination={{ pageSize: 15, showTotal: (total) => t("共 {p0} 条", { p0: total }) }}
-        scroll={{ x: 1050 }}
-        size="small"
-        rowSelection={{ selectedRowKeys: selected, onChange: keys => setSelected(keys.map(String)), getCheckboxProps: () => ({ disabled: !isDesktop || saving || !!snapshot.vaultError }) }}
+      {copyNotice && (
+        <Alert
+          type="info"
+          showIcon
+          closable
+          title={t('临时剪贴板')}
+          description={copyNotice}
+          onClose={() => setCopyNotice('')}
+        />
+      )}
+      <BulkPasswordBar
+        selectedCount={selected.length}
+        disabled={!connected || !!snapshot.vaultError}
+        busy={saving}
+        groups={[...new Set(snapshot.passwords.flatMap((password) => password.groups))]}
+        onAction={bulkAction}
+        onClear={() => setSelected([])}
       />
 
+      {viewMode === 'table' ? (
+        <Table<PasswordView>
+          rowKey="id"
+          columns={columns}
+          dataSource={filteredPasswords}
+          virtual
+          pagination={{ pageSize: 15, showTotal: (total) => t('共 {p0} 条', { p0: total }) }}
+          scroll={{ x: 1050, y: 460 }}
+          size="small"
+          rowSelection={{
+            selectedRowKeys: selected,
+            onChange: (keys) => setSelected(keys.map(String)),
+            getCheckboxProps: () => ({ disabled: !connected || saving || !!snapshot.vaultError }),
+          }}
+        />
+      ) : filteredPasswords.length === 0 ? (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('暂无匹配的密码条目')} />
+      ) : (
+        <VirtualGrid
+          items={filteredPasswords}
+          itemKey={(item) => item.id}
+          minItemWidth={310}
+          rowHeight={165}
+          containerHeight={520}
+          renderItem={(item) => {
+            const isSelected = selected.includes(item.id);
+            return (
+              <div
+                className="telemetry-card"
+                style={{
+                  padding: '12px 14px',
+                  border: isSelected ? '1.5px solid var(--ou-primary)' : undefined,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                  height: '100%',
+                  boxSizing: 'border-box',
+                }}
+              >
+                <div
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}
+                  >
+                    <Checkbox
+                      checked={isSelected}
+                      disabled={!connected || saving || !!snapshot.vaultError}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setSelected((prev) =>
+                          checked ? [...prev, item.id] : prev.filter((id) => id !== item.id),
+                        );
+                      }}
+                    />
+                    <KeyOutlined
+                      style={{ color: item.enabled ? 'var(--ou-primary)' : 'var(--ou-text-muted)' }}
+                    />
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        fontSize: 13,
+                        color: 'var(--ou-text-title)',
+                        wordBreak: 'break-all',
+                      }}
+                    >
+                      {item.name}
+                    </span>
+                  </div>
+                  <Switch
+                    size="small"
+                    checked={item.enabled}
+                    disabled={!connected || saving || !!snapshot.vaultError}
+                    onChange={(checked) => handleToggle(item, checked)}
+                    aria-label={t('启用状态')}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, minHeight: 22 }}>
+                  {item.groups?.length ? (
+                    item.groups.map((g) => (
+                      <Tag key={g} color="blue" style={{ margin: 0, fontSize: 10 }}>
+                        {g}
+                      </Tag>
+                    ))
+                  ) : (
+                    <span style={{ fontSize: 11, color: 'var(--ou-text-muted)' }}>
+                      {t('未分组')}
+                    </span>
+                  )}
+                </div>
+
+                {item.notes && (
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--ou-text-muted)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {item.notes}
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    borderTop: '1px solid var(--ou-border-color)',
+                    paddingTop: 6,
+                    marginTop: 'auto',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: 'var(--ou-font-mono)',
+                      fontSize: 12,
+                      color: 'var(--ou-text-muted)',
+                      letterSpacing: 2,
+                    }}
+                  >
+                    ••••••••
+                  </span>
+                  <Space size={4}>
+                    <Button
+                      size="small"
+                      icon={<CopyOutlined />}
+                      disabled={!nativeEngine || !!snapshot.vaultError}
+                      onClick={() => copyPassword(item)}
+                      aria-label={t('复制 {p0} 密码', { p0: item.name })}
+                    />
+                    <Button
+                      size="small"
+                      icon={<EyeOutlined />}
+                      disabled={!connected || !!snapshot.vaultError}
+                      onClick={() => handleReveal(item)}
+                      aria-label={t('查看 {p0} 密码', { p0: item.name })}
+                    />
+                    <Button
+                      size="small"
+                      disabled={!connected || saving || !!snapshot.vaultError}
+                      icon={<EditOutlined />}
+                      onClick={() => openEdit(item)}
+                      aria-label={t('编辑 {p0}', { p0: item.name })}
+                    />
+                    <Popconfirm
+                      disabled={!connected || saving || !!snapshot.vaultError}
+                      title={t('确认删除该密码条目吗？')}
+                      onConfirm={() => void run(() => api.deletePassword(item.id))}
+                    >
+                      <Button
+                        size="small"
+                        disabled={!connected || saving || !!snapshot.vaultError}
+                        danger
+                        icon={<DeleteOutlined />}
+                        aria-label={t('删除 {p0}', { p0: item.name })}
+                      />
+                    </Popconfirm>
+                  </Space>
+                </div>
+              </div>
+            );
+          }}
+        />
+      )}
+
       <Modal
-        title={editingItem ? t("编辑密码条目") : t("新建密码条目")}
+        title={editingItem ? t('编辑密码条目') : t('新建密码条目')}
         open={isEditOpen}
         onOk={() => void handleSave()}
         confirmLoading={saving}
-        okText={t("保存")}
-        cancelText={t("取消")}
+        okText={t('保存')}
+        cancelText={t('取消')}
         onCancel={clearEdit}
         destroyOnHidden
       >
-        <Form form={form} layout="vertical" preserve={false} onValuesChange={() => { editDraftEpochRef.current += 1; }}>
-          <Form.Item name="name" label={t("名称 / 标识")} rules={[{ required: true, message: t("请输入密码名称或标识") }]}>
-            <Input placeholder={t("例如：日常解压密码")} maxLength={100} />
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          onValuesChange={() => {
+            editDraftEpochRef.current += 1;
+          }}
+        >
+          <Form.Item
+            name="name"
+            label={t('名称 / 标识')}
+            rules={[{ required: true, message: t('请输入密码名称或标识') }]}
+          >
+            <Input placeholder={t('例如：日常解压密码')} maxLength={100} />
           </Form.Item>
           <Form.Item
             name="secret"
-            label={t("密码明文")}
-            rules={[...(editingItem ? [] : [{ required: true, message: t("请输入密码") }]), { validator: (_rule, value: string | undefined) => value && /[\0\r\n]/.test(value) ? Promise.reject(new Error(t("密码不支持 NUL、换行或回车。"))) : Promise.resolve() }]}
-            extra={t("{p0}首尾空格与大小写会完整保留；仅支持单行密码。", { p0: editingItem ? t("留空保持原密码。") : '' })}
+            label={t('密码明文')}
+            rules={[
+              ...(editingItem ? [] : [{ required: true, message: t('请输入密码') }]),
+              {
+                validator: (_rule, value: string | undefined) =>
+                  value && /[\0\r\n]/.test(value)
+                    ? Promise.reject(new Error(t('密码不支持 NUL、换行或回车。')))
+                    : Promise.resolve(),
+              },
+            ]}
+            extra={t('{p0}首尾空格与大小写会完整保留；仅支持单行密码。', {
+              p0: editingItem ? t('留空保持原密码。') : '',
+            })}
           >
-            <Input.Password placeholder={t("密码明文，保存后加密存储")} visibilityToggle={{ visible: secretVisible, onVisibleChange: setSecretVisible }} autoComplete="new-password" />
+            <Input.Password
+              placeholder={t('密码明文，保存后加密存储')}
+              visibilityToggle={{ visible: secretVisible, onVisibleChange: setSecretVisible }}
+              autoComplete="new-password"
+            />
           </Form.Item>
-          <Form.Item name="groups" label={t("分组标签")}>
-            <Select mode="tags" placeholder={t("选择或输入标签后回车")} tokenSeparators={[',']} options={[...new Set(snapshot.passwords.flatMap(password => password.groups))].map(group => ({ value: group, label: group }))} />
+          <Form.Item name="groups" label={t('分组标签')}>
+            <Select
+              mode="tags"
+              placeholder={t('选择或输入标签后回车')}
+              tokenSeparators={[',']}
+              notFoundContent={t('暂无已有分组，直接输入新标签后按回车添加')}
+              options={[...new Set(snapshot.passwords.flatMap((password) => password.groups))].map(
+                (group) => ({ value: group, label: group }),
+              )}
+            />
           </Form.Item>
-          <Form.Item name="notes" label={t("备注信息")}>
-            <Input.TextArea rows={2} placeholder={t("来源说明或其他备注")} maxLength={500} />
+          <Form.Item name="notes" label={t('备注信息')}>
+            <Input.TextArea rows={2} placeholder={t('来源说明或其他备注')} maxLength={500} />
           </Form.Item>
-          <Form.Item name="enabled" label={t("启用状态")} valuePropName="checked">
-            <Switch checkedChildren={t("已启用")} unCheckedChildren={t("已停用")} />
+          <Form.Item name="enabled" label={t('启用状态')} valuePropName="checked">
+            <Switch checkedChildren={t('已启用')} unCheckedChildren={t('已停用')} />
           </Form.Item>
         </Form>
       </Modal>
 
       <Modal
-        title={t("查看密码 - {p0}", { p0: revealTarget?.name ?? '' })}
+        title={t('查看密码 - {p0}', { p0: revealTarget?.name ?? '' })}
         open={Boolean(revealTarget)}
         onCancel={closeReveal}
-        footer={[<Button key="close" onClick={closeReveal}>{t("关闭")}</Button>]}
+        footer={[
+          <Button key="close" onClick={closeReveal}>
+            {t('关闭')}
+          </Button>,
+        ]}
         destroyOnHidden
       >
         <Alert
           type="warning"
           showIcon
-          title={t("安全性提示")}
-          description={t("密码将在 {p0} 秒后隐藏。窗口失焦或隐藏时立即清空显示。", { p0: revealSeconds })}
+          title={t('安全性提示')}
+          description={t('密码将在 {p0} 秒后隐藏。窗口失焦或隐藏时立即清空显示。', {
+            p0: revealSeconds,
+          })}
           style={{ marginBottom: 16 }}
         />
         <div style={{ textAlign: 'center', padding: '12px 0' }}>
           {revealedSecret !== null ? (
-            <Paragraph
-              style={{ fontSize: 18, fontFamily: 'monospace', margin: 0 }}
-            >
-              <Text code strong style={{ fontSize: 16 }}>{revealedSecret}</Text>
+            <Paragraph style={{ fontSize: 18, fontFamily: 'monospace', margin: 0 }}>
+              <Text code strong style={{ fontSize: 16 }}>
+                {revealedSecret}
+              </Text>
             </Paragraph>
-          ) : revealError ? <Text type="danger">{revealError}</Text> : (
-            <Text type="secondary">{t("正在读取安全密码...")}</Text>
+          ) : revealError ? (
+            <Text type="danger">{revealError}</Text>
+          ) : (
+            <Text type="secondary">{t('正在读取安全密码...')}</Text>
           )}
         </div>
       </Modal>
 
       <Modal
-        title={t("批量导入密码")}
+        title={t('批量导入密码')}
         open={isImportOpen}
         width={720}
         destroyOnHidden
         onCancel={clearImport}
         footer={[
-          <Button key="cancel" onClick={clearImport}>{t("取消")}</Button>,
+          <Button key="cancel" onClick={clearImport}>
+            {t('取消')}
+          </Button>,
           <Button
             key="confirm"
             type="primary"
             disabled={!connected || !preview?.token || preview.errorCount > 0 || saving}
             loading={saving}
             onClick={() => void handleConfirmImport()}
-          >{preview ? t("确认导入 ({count} 新增)", { count: preview.newCount }) : t("确认导入")}
+          >
+            {preview ? t('确认导入 ({count} 新增)', { count: preview.newCount }) : t('确认导入')}
           </Button>,
         ]}
       >
-        <Space orientation="vertical" style={{ width: '100%' }} size="middle">
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <Space wrap>
-            <span>{t("格式：")}</span>
+            <span>{t('格式：')}</span>
             <Select
-              aria-label={t("导入文本格式")}
+              aria-label={t('导入文本格式')}
               value={importFormat}
-              onChange={(val) => { importDraftEpochRef.current += 1; previewEpochRef.current += 1; setImportFormat(val); setPreview(null); }}
+              onChange={(val) => {
+                importDraftEpochRef.current += 1;
+                previewEpochRef.current += 1;
+                setImportFormat(val);
+                setPreview(null);
+              }}
               options={[
-                { label: t("TXT：每行一个密码"), value: 'txt' },
-                { label: t("TSV：名称、密码、分组、备注"), value: 'tsv' },
-                { label: t("CSV：逗号分隔 / 自定义列映射"), value: 'csv' },
+                { label: t('TXT：每行一个密码'), value: 'txt' },
+                { label: t('TSV：名称、密码、分组、备注'), value: 'tsv' },
+                { label: t('CSV：逗号分隔 / 自定义列映射'), value: 'csv' },
               ]}
               style={{ width: 240 }}
             />
-            <span>{t("默认分组：")}</span>
+            <span>{t('默认分组：')}</span>
             <Input
-              aria-label={t("导入默认分组")}
+              aria-label={t('导入默认分组')}
               value={importGroup}
-              placeholder={t("默认分组（可选）")}
-              onChange={(e) => { importDraftEpochRef.current += 1; previewEpochRef.current += 1; setImportGroup(e.target.value); setPreview(null); }}
+              placeholder={t('默认分组（可选）')}
+              onChange={(e) => {
+                importDraftEpochRef.current += 1;
+                previewEpochRef.current += 1;
+                setImportGroup(e.target.value);
+                setPreview(null);
+              }}
               style={{ width: 140 }}
             />
-            <span>{t("读取前选择编码：")}</span>
+            <span>{t('读取前选择编码：')}</span>
             <Select
-              aria-label={t("导入文件编码")}
+              aria-label={t('导入文件编码')}
               value={importEncoding}
-              onChange={value => { importDraftEpochRef.current += 1; previewEpochRef.current += 1; setImportEncoding(value); setPreview(null); }}
-              options={[{ label: 'UTF-8', value: 'utf-8' }, { label: 'GB18030', value: 'gb18030' }, { label: 'UTF-16LE', value: 'utf-16le' }]}
+              onChange={(value) => {
+                importDraftEpochRef.current += 1;
+                previewEpochRef.current += 1;
+                setImportEncoding(value);
+                setPreview(null);
+              }}
+              options={[
+                { label: 'UTF-8', value: 'utf-8' },
+                { label: 'GB18030', value: 'gb18030' },
+                { label: 'UTF-16LE', value: 'utf-16le' },
+              ]}
               style={{ width: 110 }}
             />
-            <Button icon={<FolderOpenOutlined />} disabled={!nativeEngine} onClick={() => void handlePickFile()}>{t("选择文件")}</Button>
+            <Button
+              icon={<FolderOpenOutlined />}
+              disabled={!nativeEngine}
+              onClick={() => void handlePickFile()}
+            >
+              {t('选择文件')}
+            </Button>
           </Space>
 
           <Input.TextArea
-            aria-label={t("待导入密码文本")}
+            aria-label={t('待导入密码文本')}
             rows={5}
-            placeholder={t("粘贴待导入密码内容...")}
+            placeholder={t('粘贴待导入密码内容...')}
             value={importText}
-            onChange={(e) => { importDraftEpochRef.current += 1; previewEpochRef.current += 1; setImportText(e.target.value); setPreview(null); }}
+            onChange={(e) => {
+              importDraftEpochRef.current += 1;
+              previewEpochRef.current += 1;
+              setImportText(e.target.value);
+              setPreview(null);
+            }}
           />
           <Alert
             type="info"
             showIcon
-            title={t("密码按原样保存")}
+            title={t('密码按原样保存')}
             description={
               importFormat === 'txt'
-                ? t("TXT 格式每行一个密码，空行自动忽略；首尾空格与大小写完整保留。")
+                ? t('TXT 格式每行一个密码，空行自动忽略；首尾空格与大小写完整保留。')
                 : importFormat === 'tsv'
-                ? t("TSV 格式每行四列，使用 Tab 分隔：名称、密码、分组、备注；分组可用逗号分隔。无需包含表头。")
-                : t("CSV 格式支持逗号分隔、带双引号转义；支持首行表头自动识别密码列，或按 [名称, 密码, 分组, 备注] 顺序排列。")
+                  ? t(
+                      'TSV 格式每行四列，使用 Tab 分隔：名称、密码、分组、备注；分组可用逗号分隔。无需包含表头。',
+                    )
+                  : t(
+                      'CSV 格式支持逗号分隔、带双引号转义；支持首行表头自动识别密码列，或按 [名称, 密码, 分组, 备注] 顺序排列。',
+                    )
             }
           />
 
-          <Button type="dashed" block onClick={handlePreviewImport} disabled={!connected || !importText.length}>{t("生成导入预览")}</Button>
+          <Button
+            type="dashed"
+            block
+            onClick={handlePreviewImport}
+            disabled={!connected || !importText.length}
+          >
+            {t('生成导入预览')}
+          </Button>
 
           {preview && (
-            <Card size="small" title={t("预览结果")}>
+            <Card size="small" title={t('预览结果')}>
               <Space style={{ marginBottom: 8 }}>
-                <Tag color="green">{t("新增: {count}", { count: preview.newCount })}</Tag>
-                <Tag color="orange">{t("重复: {count}", { count: preview.duplicateCount })}</Tag>
-                <Tag color={preview.errorCount > 0 ? 'red' : 'default'}>{t("错误: {count}", { count: preview.errorCount })}</Tag>
+                <Tag color="green">{t('新增: {count}', { count: preview.newCount })}</Tag>
+                <Tag color="orange">{t('重复: {count}', { count: preview.duplicateCount })}</Tag>
+                <Tag color={preview.errorCount > 0 ? 'red' : 'default'}>
+                  {t('错误: {count}', { count: preview.errorCount })}
+                </Tag>
               </Space>
               {preview.errorCount > 0 && (
                 <Alert
                   type="error"
-                  title={t("存在解析错误条目，必须先纠正或清理错误行方可执行导入。")}
+                  title={t('存在解析错误条目，必须先纠正或清理错误行方可执行导入。')}
                   style={{ marginBottom: 8 }}
                 />
               )}
@@ -497,11 +932,11 @@ export default function VaultPage({ snapshot, run }: VaultPageProps) {
                 size="small"
                 pagination={{ pageSize: 5 }}
                 columns={[
-                  { title: t("行号"), dataIndex: 'line', key: 'line', width: 60 },
-                  { title: t("标识/名称"), dataIndex: 'name', key: 'name' },
-                  { title: t("分组"), dataIndex: 'group', key: 'group' },
-                  { title: t("状态"), dataIndex: 'status', key: 'status', width: 80 },
-                  { title: t("说明"), dataIndex: 'message', key: 'message' },
+                  { title: t('行号'), dataIndex: 'line', key: 'line', width: 60 },
+                  { title: t('标识/名称'), dataIndex: 'name', key: 'name' },
+                  { title: t('分组'), dataIndex: 'group', key: 'group' },
+                  { title: t('状态'), dataIndex: 'status', key: 'status', width: 80 },
+                  { title: t('说明'), dataIndex: 'message', key: 'message' },
                 ]}
               />
             </Card>

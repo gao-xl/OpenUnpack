@@ -3,7 +3,9 @@ import { displayPath } from '../src/components/shared';
 
 describe('displayPath 规范路径显示（仅界面渲染，不回写 IPC）', () => {
   it('去除扩展长度前缀并保留中文、空格与常规路径', () => {
-    expect(displayPath('\\\\?\\C:\\Users\\im\\下载 目录\\包 一.zip')).toBe('C:\\Users\\im\\下载 目录\\包 一.zip');
+    expect(displayPath('\\\\?\\C:\\Users\\im\\下载 目录\\包 一.zip')).toBe(
+      'C:\\Users\\im\\下载 目录\\包 一.zip',
+    );
     expect(displayPath('\\\\?\\D:\\分卷\\split.7z.001')).toBe('D:\\分卷\\split.7z.001');
   });
   it('UNC 扩展前缀转换为常规 UNC 形式', () => {

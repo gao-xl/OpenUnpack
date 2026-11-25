@@ -10,17 +10,55 @@ import { defaultSettings } from '../src/types';
 import type { AppSnapshot, JobView, ScanResult } from '../src/types';
 
 const bridge = vi.hoisted(() => ({
-  snapshot: vi.fn(), scan: vi.fn(), cancelScan: vi.fn(), pickFiles: vi.fn(), pickDirectory: vi.fn(), onDrop: vi.fn(),
-  addJobs: vi.fn(), start: vi.fn(), pause: vi.fn(), cancel: vi.fn(), retry: vi.fn(), retryNode: vi.fn(), remove: vi.fn(), clearCompleted: vi.fn(),
-  copyPassword: vi.fn(), revealPassword: vi.fn(), savePassword: vi.fn(), bulkPasswordAction: vi.fn(), deletePassword: vi.fn(),
-  pickOpenBackup: vi.fn(), previewRestoreBackup: vi.fn(), confirmRestoreBackup: vi.fn(), pickSaveBackup: vi.fn(), exportBackup: vi.fn(), saveSettings: vi.fn(),
-  previewExclusions: vi.fn(), openPath: vi.fn(), recover: vi.fn(), history: vi.fn(), clearHistory: vi.fn(), inspectArchive: vi.fn(), cancelInspectArchive: vi.fn(),
+  snapshot: vi.fn(),
+  scan: vi.fn(),
+  cancelScan: vi.fn(),
+  pickFiles: vi.fn(),
+  pickDirectory: vi.fn(),
+  onDrop: vi.fn(),
+  addJobs: vi.fn(),
+  start: vi.fn(),
+  pause: vi.fn(),
+  cancel: vi.fn(),
+  retry: vi.fn(),
+  retryNode: vi.fn(),
+  remove: vi.fn(),
+  clearCompleted: vi.fn(),
+  copyPassword: vi.fn(),
+  revealPassword: vi.fn(),
+  savePassword: vi.fn(),
+  bulkPasswordAction: vi.fn(),
+  deletePassword: vi.fn(),
+  pickOpenBackup: vi.fn(),
+  previewRestoreBackup: vi.fn(),
+  confirmRestoreBackup: vi.fn(),
+  pickSaveBackup: vi.fn(),
+  exportBackup: vi.fn(),
+  saveSettings: vi.fn(),
+  previewExclusions: vi.fn(),
+  openPath: vi.fn(),
+  recover: vi.fn(),
+  history: vi.fn(),
+  clearHistory: vi.fn(),
+  inspectArchive: vi.fn(),
+  cancelInspectArchive: vi.fn(),
 }));
 vi.mock('../src/api', () => ({ isDesktop: true, api: bridge }));
 
 const snapshot: AppSnapshot = {
   jobs: [],
-  passwords: [{ id: 'pw-1', name: '默认组密码', groups: ['测试组'], notes: '', enabled: true, revision: 1, successCount: 0, lastSuccess: null }],
+  passwords: [
+    {
+      id: 'pw-1',
+      name: '默认组密码',
+      groups: ['测试组'],
+      notes: '',
+      enabled: true,
+      revision: 1,
+      successCount: 0,
+      lastSuccess: null,
+    },
+  ],
   settings: { ...defaultSettings, autoStartOnAdd: true },
   running: false,
   paused: false,
@@ -33,13 +71,20 @@ const snapshot: AppSnapshot = {
   revision: '1',
 };
 
-const run = async (work: () => Promise<unknown>) => { await work(); };
+const run = async (work: () => Promise<unknown>) => {
+  await work();
+};
 const refresh = async () => {};
-const renderPage = (element: React.ReactNode) => render(
-  <ConfigProvider locale={zhCN} button={{ autoInsertSpace: false }} theme={{ token: { motion: false } }}>
-    <AntApp>{element}</AntApp>
-  </ConfigProvider>
-);
+const renderPage = (element: React.ReactNode) =>
+  render(
+    <ConfigProvider
+      locale={zhCN}
+      button={{ autoInsertSpace: false }}
+      theme={{ token: { motion: false } }}
+    >
+      <AntApp>{element}</AntApp>
+    </ConfigProvider>,
+  );
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -52,7 +97,13 @@ describe('UX 重构 6 项核心痛点验收', () => {
     const user = userEvent.setup();
     const scanResult: ScanResult = {
       sources: [
-        { path: 'C:\\fixtures\\pkg.zip', displayName: 'pkg.zip', volumes: ['C:\\fixtures\\pkg.zip'], size: 1024, missingVolume: false },
+        {
+          path: 'C:\\fixtures\\pkg.zip',
+          displayName: 'pkg.zip',
+          volumes: ['C:\\fixtures\\pkg.zip'],
+          size: 1024,
+          missingVolume: false,
+        },
       ],
       notices: [],
     };
@@ -92,7 +143,13 @@ describe('UX 重构 6 项核心痛点验收', () => {
     const user = userEvent.setup();
     const pwdJob: JobView = {
       id: 'job-pwd',
-      source: { path: 'C:\\fixtures\\secret.zip', displayName: 'secret.zip', volumes: [], size: 1024, missingVolume: false },
+      source: {
+        path: 'C:\\fixtures\\secret.zip',
+        displayName: 'secret.zip',
+        volumes: [],
+        size: 1024,
+        missingVolume: false,
+      },
       options: { ...defaultSettings },
       status: 'needsPassword',
       stage: 'probing',
@@ -111,7 +168,9 @@ describe('UX 重构 6 项核心痛点验收', () => {
     bridge.savePassword.mockResolvedValueOnce({ id: 'saved-id', name: 'secret.zip 密码' });
     bridge.retry.mockResolvedValueOnce(undefined);
 
-    renderPage(<QueuePage snapshot={{ ...snapshot, jobs: [pwdJob] }} refresh={refresh} run={run} />);
+    renderPage(
+      <QueuePage snapshot={{ ...snapshot, jobs: [pwdJob] }} refresh={refresh} run={run} />,
+    );
     const pwdBtn = screen.getByRole('button', { name: '输入密码' });
     expect(pwdBtn).toBeTruthy();
     await user.click(pwdBtn);
@@ -123,10 +182,14 @@ describe('UX 重构 6 项核心痛点验收', () => {
     const submitBtn = screen.getByRole('button', { name: '解密并重试' });
     await user.click(submitBtn);
 
-    await waitFor(() => expect(bridge.savePassword).toHaveBeenCalledWith(expect.objectContaining({
-      secret: '123456',
-      notes: '解压即时录入',
-    })));
+    await waitFor(() =>
+      expect(bridge.savePassword).toHaveBeenCalledWith(
+        expect.objectContaining({
+          secret: '123456',
+          notes: '解压即时录入',
+        }),
+      ),
+    );
     expect(bridge.retry).toHaveBeenCalledWith('job-pwd');
   });
 
@@ -134,7 +197,13 @@ describe('UX 重构 6 项核心痛点验收', () => {
     const user = userEvent.setup();
     const pwdJob: JobView = {
       id: 'job-browse',
-      source: { path: 'C:\\fixtures\\secret2.zip', displayName: 'secret2.zip', volumes: [], size: 1024, missingVolume: false },
+      source: {
+        path: 'C:\\fixtures\\secret2.zip',
+        displayName: 'secret2.zip',
+        volumes: [],
+        size: 1024,
+        missingVolume: false,
+      },
       options: { ...defaultSettings },
       status: 'needsPassword',
       stage: 'probing',
@@ -156,7 +225,16 @@ describe('UX 重构 6 项核心痛点验收', () => {
       totalSize: 512,
       totalSizeKnown: true,
       encryptedEntries: 1,
-      entries: [{ path: 'file.txt', size: 512, sizeKnown: true, isDirectory: false, isEncrypted: true, rawPath: '' }],
+      entries: [
+        {
+          path: 'file.txt',
+          size: 512,
+          sizeKnown: true,
+          isDirectory: false,
+          isEncrypted: true,
+          rawPath: '',
+        },
+      ],
     };
     bridge.inspectArchive
       .mockRejectedValueOnce(new Error('NeedsPassword'))
@@ -174,9 +252,13 @@ describe('UX 重构 6 项核心痛点验收', () => {
     expect(applyRetryBtn).toBeTruthy();
     await user.click(applyRetryBtn);
 
-    await waitFor(() => expect(bridge.savePassword).toHaveBeenCalledWith(expect.objectContaining({
-      secret: 'password999',
-    })));
+    await waitFor(() =>
+      expect(bridge.savePassword).toHaveBeenCalledWith(
+        expect.objectContaining({
+          secret: 'password999',
+        }),
+      ),
+    );
     expect(bridge.retry).toHaveBeenCalledWith('job-browse');
   });
 
@@ -184,7 +266,13 @@ describe('UX 重构 6 项核心痛点验收', () => {
     const user = userEvent.setup();
     const stoppingJob: JobView = {
       id: 'job-stopping',
-      source: { path: 'C:\\fixtures\\stuck.zip', displayName: 'stuck.zip', volumes: [], size: 1024, missingVolume: false },
+      source: {
+        path: 'C:\\fixtures\\stuck.zip',
+        displayName: 'stuck.zip',
+        volumes: [],
+        size: 1024,
+        missingVolume: false,
+      },
       options: { ...defaultSettings },
       status: 'stopping',
       stage: 'extracting',
@@ -202,7 +290,9 @@ describe('UX 重构 6 项核心痛点验收', () => {
     };
     bridge.remove.mockResolvedValueOnce(undefined);
 
-    renderPage(<QueuePage snapshot={{ ...snapshot, jobs: [stoppingJob] }} refresh={refresh} run={run} />);
+    renderPage(
+      <QueuePage snapshot={{ ...snapshot, jobs: [stoppingJob] }} refresh={refresh} run={run} />,
+    );
     const deleteBtn = screen.getByRole('button', { name: '尝试删除' }) as HTMLButtonElement;
     expect(deleteBtn.title).toContain('退出尚未确认时保留任务和临时缓存');
     expect(screen.queryByRole('button', { name: '强行终止' })).toBeNull();
@@ -222,7 +312,13 @@ describe('UX 重构 6 项核心痛点验收', () => {
       jobs: [
         {
           id: 'job-waiting',
-          source: { path: 'C:\\fixtures\\waiting.zip', displayName: 'waiting.zip', volumes: [], size: 1024, missingVolume: false },
+          source: {
+            path: 'C:\\fixtures\\waiting.zip',
+            displayName: 'waiting.zip',
+            volumes: [],
+            size: 1024,
+            missingVolume: false,
+          },
           options: { ...defaultSettings },
           status: 'queued' as const,
           stage: 'queued' as const,

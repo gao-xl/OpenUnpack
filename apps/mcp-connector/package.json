@@ -4,8 +4,12 @@
   "private": true,
   "description": "Local stdio MCP connector for the OpenUnpack desktop API",
   "type": "module",
-  "engines": { "node": ">=24" },
-  "bin": { "openunpack-mcp": "dist/index.js" },
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "openunpack-mcp": "dist/index.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",

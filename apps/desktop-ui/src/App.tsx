@@ -1,5 +1,18 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { App as AntApp, ConfigProvider, Layout, Menu, Alert, Spin, Button, Tag, Modal, Typography } from 'antd';
+import { useState, useEffect, useRef, useCallback, useMemo, startTransition } from 'react';
+import {
+  App as AntApp,
+  ConfigProvider,
+  Layout,
+  Menu,
+  Alert,
+  Spin,
+  Button,
+  Tag,
+  Modal,
+  Typography,
+  Badge,
+  Progress,
+} from 'antd';
 import {
   FileZipOutlined,
   KeyOutlined,
@@ -20,7 +33,7 @@ import enUS from 'antd/locale/en_US';
 import jaJP from 'antd/locale/ja_JP';
 import { t, useLanguage } from './i18n';
 import { formatBytes } from './components/shared';
-import { getAppTheme } from './theme/themeConfig';
+import { SkinProvider, useSkin } from './theme';
 import QueuePage from './components/QueuePage';
 import VaultPage from './components/VaultPage';
 import HistoryPage from './components/HistoryPage';
@@ -66,7 +79,7 @@ const titleMap: Record<string, string> = {
   settings: '设置与备份',
 };
 
-export default function App() {
+function AppShell() {
   const { language } = useLanguage();
   const daemon = api.isDaemonMode?.() === true;
   const [snapshot, setSnapshot] = useState<AppSnapshot>(initialSnapshot);
@@ -74,15 +87,59 @@ export default function App() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [localError, setLocalError] = useState<string | null>(null);
   useEffect(() => {
-    if (isDesktop) void api.setLanguage(language).catch((error: unknown) => {
-      setLocalError(error instanceof Error ? error.message : String(error));
-    });
+    if (isDesktop)
+      void api.setLanguage(language).catch((error: unknown) => {
+        setLocalError(error instanceof Error ? error.message : String(error));
+      });
   }, [language]);
   const busyRef = useRef(0);
   const refreshGeneration = useRef(0);
   const snapshotCursor = useRef(new SnapshotCursor());
   const [busy, setBusy] = useState(false);
   const [compact, setCompact] = useState(() => window.innerWidth <= 1050);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const dragCounter = useRef(0);
+
+  useEffect(() => {
+    const handleDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter.current += 1;
+      if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) {
+        setIsDraggingOver(true);
+      }
+    };
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter.current = Math.max(0, dragCounter.current - 1);
+      if (dragCounter.current === 0) {
+        setIsDraggingOver(false);
+      }
+    };
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    };
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounter.current = 0;
+      setIsDraggingOver(false);
+      setSelectedKey('queue');
+    };
+
+    window.addEventListener('dragenter', handleDragEnter);
+    window.addEventListener('dragleave', handleDragLeave);
+    window.addEventListener('dragover', handleDragOver);
+    window.addEventListener('drop', handleDrop);
+    return () => {
+      window.removeEventListener('dragenter', handleDragEnter);
+      window.removeEventListener('dragleave', handleDragLeave);
+      window.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('drop', handleDrop);
+    };
+  }, []);
+
   useEffect(() => {
     const media = window.matchMedia('(max-width: 1050px)');
     const changed = () => setCompact(media.matches);
@@ -90,36 +147,38 @@ export default function App() {
     return () => media.removeEventListener('change', changed);
   }, []);
 
-  const [systemDark, setSystemDark] = useState<boolean>(
-    () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches
-  );
+  const { isDark, themeConfig, setThemeMode } = useSkin();
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return;
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = (e: MediaQueryListEvent) => setSystemDark(e.matches);
-    media.addEventListener('change', handler);
-    return () => media.removeEventListener('change', handler);
-  }, []);
-
-  const isDark = snapshot.settings.theme === 'dark' || (snapshot.settings.theme !== 'light' && systemDark);
-
-  useEffect(() => {
-    const mode = isDark ? 'dark' : 'light';
-    document.body.setAttribute('data-theme', mode);
-    return () => {
-      document.body.removeAttribute('data-theme');
-    };
-  }, [isDark]);
+    if (
+      snapshot.settings.theme &&
+      (snapshot.settings.theme === 'light' ||
+        snapshot.settings.theme === 'dark' ||
+        snapshot.settings.theme === 'system')
+    ) {
+      if (!localStorage.getItem('openunpack_theme_mode')) {
+        setThemeMode(snapshot.settings.theme);
+      }
+    }
+  }, [snapshot.settings.theme, setThemeMode]);
 
   const refresh = useCallback(async () => {
     const generation = ++refreshGeneration.current;
     const connectionVersion = api.getConnectionVersion?.() ?? 0;
     try {
       const next = await api.snapshot();
-      if (connectionVersion === (api.getConnectionVersion?.() ?? 0) && generation === refreshGeneration.current && snapshotCursor.current.accept(next)) setSnapshot(next);
+      if (
+        connectionVersion === (api.getConnectionVersion?.() ?? 0) &&
+        generation === refreshGeneration.current &&
+        snapshotCursor.current.accept(next)
+      ) {
+        startTransition(() => {
+          setSnapshot(next);
+        });
+      }
     } catch (err: unknown) {
-      if (connectionVersion === (api.getConnectionVersion?.() ?? 0) && err instanceof Error) setLocalError(err.message);
+      if (connectionVersion === (api.getConnectionVersion?.() ?? 0) && err instanceof Error)
+        setLocalError(err.message);
     }
   }, []);
 
@@ -139,7 +198,7 @@ export default function App() {
         setBusy(busyRef.current > 0);
       }
     },
-    [refresh]
+    [refresh],
   );
 
   useEffect(() => {
@@ -152,12 +211,27 @@ export default function App() {
       });
     });
 
-    void api.subscribe((next) => {
-      if (!unmounted && snapshotCursor.current.accept(next)) { refreshGeneration.current += 1; setSnapshot(next); }
-    }, message => { if (!unmounted) setLocalError(message); }).then((cleanup) => {
-      if (unmounted) cleanup();
-      else unsub = cleanup;
-    }).catch(() => { if (!unmounted) setLocalError(t('状态订阅未建立，请使用刷新检查任务状态。')); });
+    void api
+      .subscribe(
+        (next) => {
+          if (!unmounted && snapshotCursor.current.accept(next)) {
+            refreshGeneration.current += 1;
+            startTransition(() => {
+              setSnapshot(next);
+            });
+          }
+        },
+        (message) => {
+          if (!unmounted) setLocalError(message);
+        },
+      )
+      .then((cleanup) => {
+        if (unmounted) cleanup();
+        else unsub = cleanup;
+      })
+      .catch(() => {
+        if (!unmounted) setLocalError(t('状态订阅未建立，请使用刷新检查任务状态。'));
+      });
 
     return () => {
       unmounted = true;
@@ -165,28 +239,53 @@ export default function App() {
     };
   }, [refresh]);
 
-  const [countdownState, setCountdownState] = useState<{ action: string; seconds: number } | null>(null);
+  const [countdownState, setCountdownState] = useState<{ action: string; seconds: number } | null>(
+    null,
+  );
   const prevRunningRef = useRef(false);
+  const jobsRef = useRef(snapshot.jobs);
+  const settingsRef = useRef(snapshot.settings);
+  useEffect(() => {
+    jobsRef.current = snapshot.jobs;
+    settingsRef.current = snapshot.settings;
+  }, [snapshot.jobs, snapshot.settings]);
 
   useEffect(() => {
     const wasRunning = prevRunningRef.current;
     prevRunningRef.current = snapshot.running;
 
     if (wasRunning && !snapshot.running && isDesktop && !daemon) {
-      const allSettled = snapshot.jobs.length > 0 && snapshot.jobs.every(j =>
-        ['completed', 'partial', 'salvaged', 'failed', 'cancelled', 'skipped'].includes(j.status)
-      );
-      const anyCancelled = snapshot.jobs.some(j => j.status === 'cancelled');
+      const currentJobs = jobsRef.current;
+      const currentSettings = settingsRef.current;
+      const allSettled =
+        currentJobs.length > 0 &&
+        currentJobs.every((j) =>
+          [
+            'completed',
+            'cleanupPending',
+            'partial',
+            'salvaged',
+            'failed',
+            'cancelled',
+            'skipped',
+          ].includes(j.status),
+        );
+      const anyCancelled = currentJobs.some((j) => j.status === 'cancelled');
       if (allSettled) {
-        const action = snapshot.settings.postExtractionAction;
+        const action = currentSettings.postExtractionAction;
         if (action === 'openOutput') {
-          const lastOutput = [...snapshot.jobs]
-            .filter(j => j.outputPath)
-            .sort((a, b) => (b.finishedAt ?? b.createdAt).localeCompare(a.finishedAt ?? a.createdAt))[0]?.outputPath
-            || snapshot.settings.outputRoot;
+          const lastOutput =
+            [...currentJobs]
+              .filter((j) => j.outputPath)
+              .sort((a, b) =>
+                (b.finishedAt ?? b.createdAt).localeCompare(a.finishedAt ?? a.createdAt),
+              )[0]?.outputPath || currentSettings.outputRoot;
           if (lastOutput) {
-            void api.executePostAction('openOutput', lastOutput).catch((err: unknown) =>
-              setLocalError(err instanceof Error ? err.message : String(err)));
+            void api
+              .executePostAction('openOutput', lastOutput)
+              .catch((err: unknown) =>
+                setLocalError(err instanceof Error ? err.message : String(err)),
+              );
           }
         } else if ((action === 'sleep' || action === 'shutdown') && !anyCancelled) {
           // Cancelling the batch means "stop", not "finished": never shut the
@@ -197,16 +296,19 @@ export default function App() {
         }
       }
     }
-  }, [snapshot.running, snapshot.jobs, snapshot.settings.postExtractionAction, snapshot.settings.outputRoot, daemon]);
+  }, [snapshot.running, daemon]);
 
   useEffect(() => {
     if (!countdownState) return;
     const timer = setTimeout(() => {
-      setCountdownState(prev => {
+      setCountdownState((prev) => {
         if (!prev) return null;
         if (prev.seconds <= 1) {
-          void api.executePostAction(prev.action).catch((err: unknown) =>
-            setLocalError(err instanceof Error ? err.message : String(err)));
+          void api
+            .executePostAction(prev.action)
+            .catch((err: unknown) =>
+              setLocalError(err instanceof Error ? err.message : String(err)),
+            );
           return null;
         }
         return { ...prev, seconds: prev.seconds - 1 };
@@ -217,8 +319,17 @@ export default function App() {
 
   const runningCount = useMemo(
     () => snapshot.jobs.filter((j) => j.status === 'running').length,
-    [snapshot.jobs]
+    [snapshot.jobs],
   );
+  const queueTotal = snapshot.jobs.length;
+  const queueCompleted = useMemo(
+    () => snapshot.jobs.filter((j) => ['completed', 'cleanupPending'].includes(j.status)).length,
+    [snapshot.jobs],
+  );
+  const globalPercent =
+    queueTotal > 0
+      ? Math.min(100, Math.max(0, Math.round((queueCompleted / queueTotal) * 100)))
+      : 0;
 
   const sharedProps: SharedProps = { snapshot, refresh, run };
 
@@ -239,157 +350,246 @@ export default function App() {
   };
 
   return (
-    <ConfigProvider locale={{ 'zh-CN': zhCN, 'en-US': enUS, 'ja-JP': jaJP }[language]} button={{ autoInsertSpace: false }} theme={getAppTheme(isDark)}>
+    <ConfigProvider
+      locale={{ 'zh-CN': zhCN, 'en-US': enUS, 'ja-JP': jaJP }[language]}
+      button={{ autoInsertSpace: false }}
+      theme={themeConfig}
+    >
       <AntApp>
-      <Layout className="app-shell" style={{ minHeight: '100vh' }}>
-        <Sider className="sidebar" width={200} collapsed={compact} collapsedWidth={64} theme={isDark ? 'dark' : 'light'}>
-          <div className="brand">
-            <span className="brand-mark">OU</span>
-            <span className="brand-name">OpenUnpack</span>
-          </div>
-          <Menu
-            mode="inline"
+        <Layout className="app-shell" style={{ minHeight: '100vh' }}>
+          <Sider
+            className="sidebar"
+            width={200}
+            collapsed={compact}
+            collapsedWidth={64}
             theme={isDark ? 'dark' : 'light'}
-            selectedKeys={[selectedKey]}
-            items={menuItems.map(item => ({
-              ...item,
-              label: (
-                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                  <span>{t(item.label)}</span>
-                  {item.key === 'queue' && runningCount > 0 && (
-                    <span style={{
-                      backgroundColor: 'var(--ou-primary)',
-                      color: 'var(--ou-text-white)',
-                      fontSize: 10,
-                      fontWeight: 600,
-                      borderRadius: 10,
-                      padding: '1px 6px',
-                      lineHeight: '14px',
-                    }}>
-                      {runningCount}
-                    </span>
-                  )}
-                </span>
-              ),
-            }))}
-            onClick={({ key }) => setSelectedKey(key)}
-          />
-          {!compact && (
-            <div className="sidebar-telemetry">
-              <div className="sidebar-telemetry-item">
-                <span className="mono-text" style={{ fontSize: 11 }}>
-                  {t('缓存占用: {size}', { size: formatBytes(snapshot.cacheUsedBytes) })}
-                </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  {snapshot.engineAvailable ? (
-                    <CheckCircleOutlined style={{ color: 'var(--ou-primary)', fontSize: 11 }} />
-                  ) : (
-                    <CloseCircleOutlined style={{ color: 'var(--ou-danger)', fontSize: 11 }} />
-                  )}
-                  <span style={{ fontSize: 11 }}>{snapshot.engineAvailable ? t('就绪') : t('失败')}</span>
-                </span>
-              </div>
-            </div>
-          )}
-        </Sider>
-        <Layout className="main-layout">
-          <Header className="header-bar">
-            <h2>{t(titleMap[selectedKey] || 'OpenUnpack')}</h2>
-            <div className="header-actions">
-              {snapshot.running ? (
-                <Tag color="processing">{t('处理中 ({count})', { count: runningCount })}</Tag>
-              ) : snapshot.paused ? (
-                <Tag color="warning">{t('已暂停')}</Tag>
-              ) : (
-                <Tag color="default">{t('就绪')}</Tag>
-              )}
-              <Button aria-label={t('刷新状态')} icon={<ReloadOutlined aria-hidden />} onClick={() => void refresh()}>
-                {t('刷新')}
-              </Button>
-            </div>
-          </Header>
-          <Content className="page-content" style={{ padding: 20, overflow: 'auto' }}>
-            {!isDesktop && !daemon && (
-              <Alert
-                title={t('浏览器预览模式')}
-                description={t('解压引擎与本地密码库需在桌面客户端中运行。')}
-                type="info"
-                showIcon
-                closable
-                style={{ marginBottom: 16 }}
-              />
-            )}
-            {snapshot.vaultError && (
-              <Alert
-                title={t('密码库状态提示')}
-                description={humanizeVaultError(snapshot.vaultError, t)}
-                type="warning"
-                showIcon
-                style={{ marginBottom: 16 }}
-              />
-            )}
-            {localError && (
-              <Alert
-                title={t('操作提示')}
-                description={localError}
-                type="error"
-                showIcon
-                closable
-                onClose={() => setLocalError(null)}
-                style={{ marginBottom: 16 }}
-              />
-            )}
-            {initialLoading ? (
-              <div style={{ textAlign: 'center', padding: '80px 0' }}>
-                <Spin size="large" />
-              </div>
-            ) : (
-              <div aria-busy={busy}>{renderPage()}</div>
-            )}
-          </Content>
-          <Footer className="bottom-bar">
-            <span>{t('缓存占用: {size}', { size: formatBytes(snapshot.cacheUsedBytes) })}</span>
-            <span>{t('数据目录: {path}', { path: snapshot.dataDirectory || t('默认') })}</span>
-            <span>{t('任务总数: {count} 项', { count: snapshot.jobs.length })}</span>
-            {snapshot.recoverableCount > 0 && <span>{t('可恢复: {count}', { count: snapshot.recoverableCount })}</span>}
-          </Footer>
-        </Layout>
-      </Layout>
-      <Modal
-        open={!!countdownState}
-        title={countdownState?.action === 'shutdown' ? t('任务完成，即将自动关机') : t('任务完成，即将进入休眠')}
-        footer={[
-          <Button key="cancel" onClick={() => setCountdownState(null)}>
-            {t('取消操作')}
-          </Button>,
-          <Button
-            key="confirm"
-            type="primary"
-            danger={countdownState?.action === 'shutdown'}
-            onClick={() => {
-              const act = countdownState!.action;
-              setCountdownState(null);
-              void api.executePostAction(act).catch((err: unknown) =>
-                setLocalError(err instanceof Error ? err.message : String(err)));
-            }}
           >
-            {t('立即执行')}
-          </Button>,
-        ]}
-        closable={false}
-      >
-        <div style={{ textAlign: 'center', padding: '24px 0' }}>
-          <Typography.Title level={2} style={{ margin: 0, color: 'var(--ou-primary)' }}>
-            {countdownState?.seconds}s
-          </Typography.Title>
-          <Typography.Paragraph type="secondary" style={{ marginTop: 12 }}>
-            {countdownState?.action === 'shutdown'
-              ? t('所有解压任务已完成。计算机将在倒计时结束后自动关机，按“取消操作”可终止。')
-              : t('所有解压任务已完成。计算机将在倒计时结束后进入休眠，按“取消操作”可终止。')}
-          </Typography.Paragraph>
-        </div>
-      </Modal>
+            <div className="brand">
+              <span className="brand-mark">OU</span>
+              <span className="brand-name">OpenUnpack</span>
+            </div>
+            <Menu
+              mode="inline"
+              theme={isDark ? 'dark' : 'light'}
+              selectedKeys={[selectedKey]}
+              items={menuItems.map((item) => ({
+                ...item,
+                label: (
+                  <span
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      width: '100%',
+                    }}
+                  >
+                    <span>{t(item.label)}</span>
+                    {item.key === 'queue' && runningCount > 0 && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <Progress
+                          type="circle"
+                          size={16}
+                          percent={globalPercent}
+                          showInfo={false}
+                          strokeColor="var(--ou-primary)"
+                        />
+                        <Badge count={runningCount} size="small" />
+                      </span>
+                    )}
+                  </span>
+                ),
+              }))}
+              onClick={({ key }) => setSelectedKey(key)}
+            />
+            {!compact && (
+              <div className="sidebar-telemetry">
+                <div className="sidebar-telemetry-item">
+                  <span style={{ fontSize: 11, color: 'var(--ou-text-muted)' }}>
+                    {t('解压引擎')}
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    {snapshot.engineAvailable ? (
+                      <CheckCircleOutlined style={{ color: 'var(--ou-success)', fontSize: 12 }} />
+                    ) : (
+                      <CloseCircleOutlined style={{ color: 'var(--ou-danger)', fontSize: 12 }} />
+                    )}
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 500,
+                        color: snapshot.engineAvailable
+                          ? 'var(--ou-success)'
+                          : 'var(--ou-danger)',
+                      }}
+                    >
+                      {snapshot.engineAvailable ? t('就绪') : t('不可用')}
+                    </span>
+                  </span>
+                </div>
+              </div>
+            )}
+          </Sider>
+          <Layout className="main-layout">
+            <Header className="header-bar">
+              <h1>{t(titleMap[selectedKey] || 'OpenUnpack')}</h1>
+              <div className="header-actions">
+                {snapshot.running ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <Tag color="processing">
+                      <span className="ou-pulse-dot" style={{ marginRight: 6 }} />
+                      {t('处理中 ({count})', { count: runningCount })}
+                    </Tag>
+                    <div
+                      style={{ width: 80, display: 'inline-flex', alignItems: 'center' }}
+                      title={t('总进度：{percent}%', { percent: globalPercent })}
+                    >
+                      <Progress
+                        size="small"
+                        percent={globalPercent}
+                        status="active"
+                        showInfo={false}
+                      />
+                    </div>
+                    <span
+                      className="mono-text"
+                      style={{ fontSize: 11, color: 'var(--ou-text-muted)' }}
+                    >
+                      {globalPercent}%
+                    </span>
+                  </span>
+                ) : snapshot.paused ? (
+                  <Tag color="warning">{t('已暂停')}</Tag>
+                ) : (
+                  <Tag color="default">{t('就绪')}</Tag>
+                )}
+                <Button
+                  aria-label={t('刷新状态')}
+                  icon={<ReloadOutlined aria-hidden />}
+                  onClick={() => void refresh()}
+                >
+                  {t('刷新')}
+                </Button>
+              </div>
+            </Header>
+            <Content className="page-content" style={{ padding: 20, overflow: 'auto' }}>
+              {!isDesktop && !daemon && (
+                <Alert
+                  title={t('浏览器预览模式')}
+                  description={t('解压引擎与本地密码库需在桌面客户端中运行。')}
+                  type="info"
+                  showIcon
+                  closable
+                  style={{ marginBottom: 16 }}
+                />
+              )}
+              {snapshot.vaultError && (
+                <Alert
+                  title={t('密码库状态提示')}
+                  description={humanizeVaultError(snapshot.vaultError, t)}
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                />
+              )}
+              {localError && (
+                <Alert
+                  title={t('操作提示')}
+                  description={localError}
+                  type="error"
+                  showIcon
+                  closable
+                  onClose={() => setLocalError(null)}
+                  style={{ marginBottom: 16 }}
+                />
+              )}
+              {initialLoading ? (
+                <div style={{ textAlign: 'center', padding: '80px 0' }}>
+                  <Spin size="large" tip={t('正在同步解压引擎与任务状态…')} />
+                </div>
+              ) : (
+                <div aria-busy={busy}>{renderPage()}</div>
+              )}
+            </Content>
+            <Footer className="bottom-bar">
+              <span>{t('缓存占用: {size}', { size: formatBytes(snapshot.cacheUsedBytes) })}</span>
+              <span>{t('数据目录: {path}', { path: snapshot.dataDirectory || t('默认') })}</span>
+              <span>{t('任务总数: {count} 项', { count: snapshot.jobs.length })}</span>
+              {snapshot.recoverableCount > 0 && (
+                <span>{t('可恢复: {count}', { count: snapshot.recoverableCount })}</span>
+              )}
+            </Footer>
+          </Layout>
+        </Layout>
+        <Modal
+          open={!!countdownState}
+          title={
+            countdownState?.action === 'shutdown'
+              ? t('任务完成，即将自动关机')
+              : t('任务完成，即将进入休眠')
+          }
+          footer={[
+            <Button key="cancel" onClick={() => setCountdownState(null)}>
+              {t('取消操作')}
+            </Button>,
+            <Button
+              key="confirm"
+              type="primary"
+              danger={countdownState?.action === 'shutdown'}
+              onClick={() => {
+                const act = countdownState!.action;
+                setCountdownState(null);
+                void api
+                  .executePostAction(act)
+                  .catch((err: unknown) =>
+                    setLocalError(err instanceof Error ? err.message : String(err)),
+                  );
+              }}
+            >
+              {t('立即执行')}
+            </Button>,
+          ]}
+          closable={false}
+        >
+          <div style={{ textAlign: 'center', padding: '24px 0' }}>
+            <Typography.Title level={2} style={{ margin: 0, color: 'var(--ou-primary)' }}>
+              {countdownState?.seconds}s
+            </Typography.Title>
+            <Typography.Paragraph type="secondary" style={{ marginTop: 12 }}>
+              {countdownState?.action === 'shutdown'
+                ? t('所有解压任务已完成。计算机将在倒计时结束后自动关机，按“取消操作”可终止。')
+                : t('所有解压任务已完成。计算机将在倒计时结束后进入休眠，按“取消操作”可终止。')}
+            </Typography.Paragraph>
+          </div>
+        </Modal>
+        {isDraggingOver && (
+          <div className="drag-overlay" role="presentation">
+            <div className="drag-overlay-box">
+              <FileZipOutlined style={{ fontSize: 52, color: 'var(--ou-primary)' }} />
+              <div
+                style={{
+                  fontSize: 18,
+                  fontWeight: 600,
+                  color: 'var(--ou-text-title)',
+                  marginTop: 14,
+                }}
+              >
+                {t('松开鼠标立即批量解压')}
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--ou-text-muted)', marginTop: 6 }}>
+                {t('支持 ZIP, RAR, 7Z, TAR 等压缩包及分卷自动归组')}
+              </div>
+            </div>
+          </div>
+        )}
       </AntApp>
     </ConfigProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <SkinProvider>
+      <AppShell />
+    </SkinProvider>
   );
 }

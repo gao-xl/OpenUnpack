@@ -1,6 +1,33 @@
+﻿function ConvertFrom-OpenUnpackJsonHashtable {
+    param([Parameter(Mandatory)][string]$Json)
+    if ($PSVersionTable.PSVersion.Major -ge 6) {
+        return ConvertFrom-Json -InputObject $Json -AsHashtable -ErrorAction Stop
+    }
+    function Convert-Node {
+        param($node)
+        if ($node -is [Array]) {
+            $list = [Collections.Generic.List[object]]::new()
+            foreach ($item in $node) {
+                $list.Add((Convert-Node $item))
+            }
+            return ,$list.ToArray()
+        } elseif ($node -is [System.Management.Automation.PSCustomObject]) {
+            $hash = [Collections.Hashtable]::new([StringComparer]::Ordinal)
+            foreach ($prop in $node.PSObject.Properties) {
+                $hash[$prop.Name] = Convert-Node $prop.Value
+            }
+            return $hash
+        } else {
+            return $node
+        }
+    }
+    $obj = ConvertFrom-Json -InputObject $Json -ErrorAction Stop
+    return (Convert-Node $obj)
+}
+
 # Shared reviewed versions and notice hashes are data, not independently maintained allowlists.
 function Get-OpenUnpackRuntimePolicy {
-    $policy = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'runtime-policy.json') | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+    $policy = ConvertFrom-OpenUnpackJsonHashtable (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'runtime-policy.json'))
     if ($policy.schemaVersion -ne 1 -or $policy.channelVersion -ne '10.0' -or
         $policy.releaseMetadataUrl -ne 'https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json' -or
         $policy.reviewedRuntimes -isnot [Array] -or $policy.reviewedRuntimes.Count -eq 0 -or
@@ -28,8 +55,8 @@ function Assert-OpenUnpackReviewedRuntime {
 function Assert-OpenUnpackPublishedRuntimeIdentity {
     param([Parameter(Mandatory)][string]$RuntimeConfigJson, [Parameter(Mandatory)][string]$DepsJson,
         [Parameter(Mandatory)][Collections.IDictionary]$FileVersions, $Policy = (Get-OpenUnpackRuntimePolicy))
-    $config = ConvertFrom-Json -InputObject $RuntimeConfigJson -AsHashtable -ErrorAction Stop
-    $deps = ConvertFrom-Json -InputObject $DepsJson -AsHashtable -ErrorAction Stop
+    $config = ConvertFrom-OpenUnpackJsonHashtable $RuntimeConfigJson
+    $deps = ConvertFrom-OpenUnpackJsonHashtable $DepsJson
     $options = $config.runtimeOptions
     if ($options -isnot [Collections.IDictionary] -or $options.tfm -ne 'net10.0' -or
         $options.includedFrameworks -isnot [Array] -or $options.includedFrameworks.Count -ne 1 -or
@@ -83,7 +110,7 @@ function Get-OpenUnpackRuntimeSecurityStatus {
     param([Parameter(Mandatory)][string]$RuntimeVersion, [Parameter(Mandatory)][string]$MetadataJson,
         $Policy = (Get-OpenUnpackRuntimePolicy))
     if ($RuntimeVersion -notmatch '^10\.0\.(0|[1-9]\d*)$') { throw 'Unknown published runtime version.' }
-    try { $metadata = ConvertFrom-Json -InputObject $MetadataJson -AsHashtable -ErrorAction Stop }
+    try { $metadata = ConvertFrom-OpenUnpackJsonHashtable $MetadataJson }
     catch { throw 'Official runtime metadata is not valid JSON.' }
     if ($metadata -isnot [Collections.IDictionary] -or $metadata['channel-version'] -ne $Policy.channelVersion -or
         $metadata['latest-runtime'] -notmatch '^10\.0\.(0|[1-9]\d*)$' -or
@@ -109,6 +136,6 @@ function Get-OpenUnpackRuntimeSecurityStatus {
     $updates = @($releases | Where-Object { $_.security -and [version]$_.version -gt [version]$RuntimeVersion } | Sort-Object { [version]$_.version })
     return @{ status = $(if ($updates.Count -eq 0) { 'passed' } else { 'failed' }); checked = $true;
         version = $RuntimeVersion; latestRuntime = $metadata['latest-runtime']; laterSecurityReleases = $updates;
-        source = $Policy.releaseMetadataUrl; metadataSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($MetadataJson))).ToLowerInvariant();
+        source = $Policy.releaseMetadataUrl; metadataSha256 = ([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($MetadataJson))).Replace('-', '').ToLowerInvariant());
         checkedAtUtc = [DateTimeOffset]::UtcNow.ToString('o'); scope = 'Runtime servicing baseline; release-level security flags are not application exploitability findings.' }
 }

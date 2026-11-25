@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
@@ -8,8 +8,34 @@ function Get-OpenUnpackRoot {
 }
 
 function Assert-OpenUnpackWindows {
-    if (-not [OperatingSystem]::IsWindows()) { throw '此脚本需要 Windows 和 PowerShell 7。' }
-    if (-not [Environment]::Is64BitProcess) { throw '请使用 64 位 PowerShell 7。' }
+    $onWindows = if ($PSVersionTable.PSEdition -eq 'Core') { [OperatingSystem]::IsWindows() } else { [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT }
+    if (-not $onWindows) { throw '此脚本需要 Windows 运行环境。' }
+    if (-not [Environment]::Is64BitProcess) { throw '请使用 64 位 PowerShell。' }
+    if (-not $env:PATHEXT -or $env:PATHEXT -notlike '*.EXE*') {
+        $env:PATHEXT = '.COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC'
+    }
+    $taskUserProfile = if ($env:USERPROFILE) { $env:USERPROFILE } else { 'C:\Users\im' }
+    $taskCargoBin = Join-Path $taskUserProfile '.cargo/bin'
+    if ((Test-Path -LiteralPath $taskCargoBin) -and ($env:PATH -notlike "*$taskCargoBin*")) {
+        $env:PATH = "$taskCargoBin;$env:PATH"
+    }
+    # 检测工作区路径是否包含非 ASCII 字符；MSVC cc-rs 调用 cl.exe/lib.exe 在中文路径下会静默失败 (exit 2)
+    # 若包含非 ASCII 字符且未显式指定 CARGO_TARGET_DIR，则自动重定向至纯 ASCII 缓存目录
+    if (-not $env:CARGO_TARGET_DIR) {
+        $workspaceRoot = Get-OpenUnpackRoot
+        if ($workspaceRoot -match '[^\x00-\x7F]') {
+            $fallbackTarget = if ($env:LOCALAPPDATA -and ($env:LOCALAPPDATA -notmatch '[^\x00-\x7F]')) {
+                Join-Path $env:LOCALAPPDATA 'openunpack-target'
+            } else {
+                Join-Path $taskUserProfile '.cache/openunpack-target'
+            }
+            if (-not (Test-Path -LiteralPath $fallbackTarget)) {
+                New-Item -ItemType Directory -Path $fallbackTarget -Force | Out-Null
+            }
+            $env:CARGO_TARGET_DIR = $fallbackTarget
+            Write-Host "[提示] 检测到工作区路径含非 ASCII 字符，自动配置 `$env:CARGO_TARGET_DIR = '$fallbackTarget' 规避 MSVC 编译缺陷。" -ForegroundColor Yellow
+        }
+    }
 }
 
 function Import-OpenUnpackMsvc {
@@ -21,8 +47,11 @@ function Import-OpenUnpackMsvc {
     if (Test-OpenUnpackMsvcReady) {
         return
     }
+    $taskSystemRoot = if ($env:SystemRoot) { $env:SystemRoot } else { 'C:\Windows' }
+    $taskPfX86 = if (${env:ProgramFiles(x86)}) { ${env:ProgramFiles(x86)} } else { 'C:\Program Files (x86)' }
+    $taskPf = if ($env:ProgramFiles) { $env:ProgramFiles } else { 'C:\Program Files' }
     $taskCandidates = [Collections.Generic.List[string]]::new()
-    $taskVswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+    $taskVswhere = Join-Path $taskPfX86 'Microsoft Visual Studio/Installer/vswhere.exe'
     if (Test-Path -LiteralPath $taskVswhere) {
         $taskInstallations = @(& $taskVswhere -all -products '*' -property installationPath)
         foreach ($taskInstallation in $taskInstallations) {
@@ -31,8 +60,8 @@ function Import-OpenUnpackMsvc {
             }
         }
     }
-    $taskCandidates.Add((Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/18/BuildTools/VC/Auxiliary/Build/vcvars64.bat'))
-    $taskCandidates.Add((Join-Path ${env:ProgramFiles} 'Microsoft Visual Studio/2022/BuildTools/VC/Auxiliary/Build/vcvars64.bat'))
+    $taskCandidates.Add((Join-Path $taskPfX86 'Microsoft Visual Studio/18/BuildTools/VC/Auxiliary/Build/vcvars64.bat'))
+    $taskCandidates.Add((Join-Path $taskPf 'Microsoft Visual Studio/2022/BuildTools/VC/Auxiliary/Build/vcvars64.bat'))
     $taskVcvars = $taskCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
     if (-not $taskVcvars) { throw '缺少 Visual Studio C++ x64 Build Tools。请安装 C++ 桌面开发与 Windows SDK，或从 x64 Native Tools PowerShell 启动。' }
     # The batch command only reads environment variables. All filesystem writes
@@ -43,7 +72,7 @@ function Import-OpenUnpackMsvc {
     # missing optional variable or a warning is enough). Use `&` so the build
     # variables are always collected, then validate the real toolchain below.
     $taskBatchCommand = 'call "' + $taskVcvars + '" >nul & (' + $taskReadVars + ')'
-    $taskEnvironmentLines = @(& (Join-Path $env:SystemRoot 'System32/cmd.exe') /d /s /c $taskBatchCommand 2>&1)
+    $taskEnvironmentLines = @(& (Join-Path $taskSystemRoot 'System32/cmd.exe') /d /s /c $taskBatchCommand 2>&1)
     # cmd's `set NAME` returns nonzero for an optional absent variable. Validate
     # the actual compiler/linker/SDK below instead of mistaking that for vcvars failure.
     foreach ($taskLine in $taskEnvironmentLines) {
@@ -51,6 +80,11 @@ function Import-OpenUnpackMsvc {
         if ($taskMatch.Success -and $taskMatch.Groups[1].Value -in $taskAllowed) {
             [Environment]::SetEnvironmentVariable($taskMatch.Groups[1].Value, $taskMatch.Groups[2].Value, 'Process')
         }
+    }
+    $taskUserProfile = if ($env:USERPROFILE) { $env:USERPROFILE } else { 'C:\Users\im' }
+    $taskCargoBin = Join-Path $taskUserProfile '.cargo/bin'
+    if ((Test-Path -LiteralPath $taskCargoBin) -and ($env:PATH -notlike "*$taskCargoBin*")) {
+        $env:PATH = "$taskCargoBin;$env:PATH"
     }
     $taskCompiler = Get-Command cl.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     $taskLinker = Get-Command link.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -157,8 +191,9 @@ function Test-OpenUnpackMsvcReady {
 }
 
 function Invoke-OpenUnpackTool {
-    param([string]$Name, [Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
-    & $Name @Arguments
+    param([string]$Name, [Parameter(ValueFromRemainingArguments = $true)]$Arguments)
+    $argsList = @($Arguments | ForEach-Object { $_ })
+    & $Name @argsList
     if ($LASTEXITCODE -ne 0) { throw "$Name 执行失败，退出码：$LASTEXITCODE" }
 }
 
@@ -196,11 +231,22 @@ function Reset-OpenUnpackBuildDirectory {
     New-OpenUnpackDirectory $resolved
 }
 
+function Write-OpenUnpackUtf8NoBom {
+    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][AllowEmptyString()][string]$Content)
+    [IO.File]::WriteAllText($Path, $Content, [Text.UTF8Encoding]::new($false))
+}
+
 function Write-OpenUnpackChecksums {
     param([string]$Directory, [string]$Output = (Join-Path $Directory 'SHA256SUMS.txt'))
+    $base = [IO.Path]::GetFullPath($Directory).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
     $lines = foreach ($file in Get-ChildItem -LiteralPath $Directory -File -Recurse | Sort-Object FullName) {
         if ($file.FullName -eq [IO.Path]::GetFullPath($Output)) { continue }
-        $relative = [IO.Path]::GetRelativePath($Directory, $file.FullName).Replace('\', '/')
+        $full = [IO.Path]::GetFullPath($file.FullName)
+        $relative = if ($full.StartsWith($base, [StringComparison]::OrdinalIgnoreCase)) {
+            $full.Substring($base.Length).Replace('\', '/')
+        } else {
+            [IO.Path]::GetFileName($full)
+        }
         '{0}  {1}' -f (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $relative
     }
     [IO.File]::WriteAllText($Output, ($lines -join "`n") + "`n", [Text.UTF8Encoding]::new($false))

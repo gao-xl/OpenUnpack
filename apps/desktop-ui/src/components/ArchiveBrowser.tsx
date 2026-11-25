@@ -1,6 +1,18 @@
 import { t, useLanguage } from '../i18n';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { App as AntApp, Alert, Button, Empty, Input, Modal, Space, Spin, Tag, Tree, Typography } from 'antd';
+import {
+  App as AntApp,
+  Alert,
+  Button,
+  Empty,
+  Input,
+  Modal,
+  Space,
+  Spin,
+  Tag,
+  Tree,
+  Typography,
+} from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { FileOutlined, FolderOutlined, SearchOutlined } from '@ant-design/icons';
 import { api, isDesktop } from '../api';
@@ -24,7 +36,9 @@ const MAX_TREE_DEPTH = 32;
 const MAX_TREE_NODES = 10_000;
 const boundedParts = (path: string) => {
   const parts = splitPath(path);
-  return parts.length <= MAX_TREE_DEPTH ? parts : [...parts.slice(0, MAX_TREE_DEPTH - 1), parts.slice(MAX_TREE_DEPTH - 1).join('/')];
+  return parts.length <= MAX_TREE_DEPTH
+    ? parts
+    : [...parts.slice(0, MAX_TREE_DEPTH - 1), parts.slice(MAX_TREE_DEPTH - 1).join('/')];
 };
 
 /** Rebuilds the directory hierarchy from flat entry paths; ancestors of matched
@@ -34,7 +48,8 @@ function buildTree(entries: ArchiveEntryView[]): DataNode[] {
   let totalNodes = 0;
   for (const entry of entries) {
     if (totalNodes >= MAX_TREE_NODES) break;
-    const rawParts = entry.rawPath && entry.rawPath !== entry.path ? boundedParts(entry.rawPath) : [];
+    const rawParts =
+      entry.rawPath && entry.rawPath !== entry.path ? boundedParts(entry.rawPath) : [];
     const parts = boundedParts(entry.path);
     if (!parts.length) continue;
     let level = roots;
@@ -43,11 +58,26 @@ function buildTree(entries: ArchiveEntryView[]): DataNode[] {
     for (let index = 0; index < parts.length - 1; index += 1) {
       prefix = prefix ? `${prefix}/${parts[index]}` : parts[index];
       let node = level.get(parts[index]);
-      const rawPart = rawParts.length === parts.length && rawParts[index] !== parts[index] ? rawParts[index] : undefined;
+      const rawPart =
+        rawParts.length === parts.length && rawParts[index] !== parts[index]
+          ? rawParts[index]
+          : undefined;
       if (!node) {
-        if (totalNodes >= MAX_TREE_NODES) { complete = false; break; }
+        if (totalNodes >= MAX_TREE_NODES) {
+          complete = false;
+          break;
+        }
         totalNodes += 1;
-        node = { name: parts[index], fullPath: prefix, size: 0, sizeKnown: true, isDirectory: true, isEncrypted: false, rawName: rawPart, children: new Map() };
+        node = {
+          name: parts[index],
+          fullPath: prefix,
+          size: 0,
+          sizeKnown: true,
+          isDirectory: true,
+          isEncrypted: false,
+          rawName: rawPart,
+          children: new Map(),
+        };
         level.set(parts[index], node);
       } else if (rawPart && !node.rawName) {
         node.rawName = rawPart;
@@ -86,19 +116,30 @@ function buildTree(entries: ArchiveEntryView[]): DataNode[] {
     depth >= MAX_TREE_DEPTH
       ? []
       : [...nodes.values()]
-          .sort((a, b) => (a.isDirectory === b.isDirectory ? a.name.localeCompare(b.name) : a.isDirectory ? -1 : 1))
-          .map(node => ({
+          .sort((a, b) =>
+            a.isDirectory === b.isDirectory ? a.name.localeCompare(b.name) : a.isDirectory ? -1 : 1,
+          )
+          .map((node) => ({
             key: node.fullPath,
             title: (
               <Space size={6}>
                 {node.isDirectory ? <FolderOutlined aria-hidden /> : <FileOutlined aria-hidden />}
                 <span>{node.name}</span>
                 {node.rawName && (
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }} title={t("原始名称: {p0}", { p0: node.rawName })}>{t("(原: {name})", { name: node.rawName })}
+                  <Typography.Text
+                    type="secondary"
+                    style={{ fontSize: 12 }}
+                    title={t('原始名称: {p0}', { p0: node.rawName })}
+                  >
+                    {t('(原: {name})', { name: node.rawName })}
                   </Typography.Text>
                 )}
-                {!node.isDirectory && <span className="muted">{node.sizeKnown ? formatBytes(node.size) : t("大小未知")}</span>}
-                {node.isEncrypted && <Tag color="warning">{t("加密")}</Tag>}
+                {!node.isDirectory && (
+                  <span className="muted">
+                    {node.sizeKnown ? formatBytes(node.size) : t('大小未知')}
+                  </span>
+                )}
+                {node.isEncrypted && <Tag color="warning">{t('加密')}</Tag>}
               </Space>
             ),
             children: node.children.size ? convert(node.children, depth + 1) : undefined,
@@ -121,10 +162,15 @@ const collectKeys = (nodes: DataNode[]): string[] => {
   return keys;
 };
 
-interface ArchiveBrowserProps { job?: JobView; close: () => void }
+interface ArchiveBrowserProps {
+  job?: JobView;
+  close: () => void;
+}
 export default function ArchiveBrowser(props: ArchiveBrowserProps) {
   const connectionVersion = api.getConnectionVersion?.() ?? 0;
-  const owner = props.job ? `${connectionVersion}:${props.job.id}:${props.job.source.path}` : 'no-archive';
+  const owner = props.job
+    ? `${connectionVersion}:${props.job.id}:${props.job.source.path}`
+    : 'no-archive';
   return <ArchiveBrowserContent key={owner} {...props} />;
 }
 function ArchiveBrowserContent({ job, close }: ArchiveBrowserProps) {
@@ -143,7 +189,9 @@ function ArchiveBrowserContent({ job, close }: ArchiveBrowserProps) {
   const [checkedKeys, setCheckedKeys] = useState<string[]>([]);
   const [extractingSelected, setExtractingSelected] = useState(false);
   const [selectedOutputRoot, setSelectedOutputRoot] = useState<string | null>(null);
-  const [extractionPasswordError, setExtractionPasswordError] = useState<'required' | 'mismatchOrCorrupt' | null>(null);
+  const [extractionPasswordError, setExtractionPasswordError] = useState<
+    'required' | 'mismatchOrCorrupt' | null
+  >(null);
   const [applyingPassword, setApplyingPassword] = useState(false);
   const loadSeqRef = useRef(0);
   const activeRequestRef = useRef<{ id: string; owner: string } | null>(null);
@@ -152,61 +200,73 @@ function ArchiveBrowserContent({ job, close }: ArchiveBrowserProps) {
   const mountedRef = useRef(false);
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; loadSeqRef.current += 1; };
+    return () => {
+      mountedRef.current = false;
+      loadSeqRef.current += 1;
+    };
   }, []);
-  const cancelRequest = useCallback((id: string) => {
-    void api.cancelInspectArchive(id).catch(() => {
-      if (mountedRef.current) void message.warning(t("停止归档检查未确认，请稍后核对后台状态。"));
-    });
-  }, [message]);
-  const cancelActive = useCallback((owner?: string) => {
-    const current = activeRequestRef.current;
-    if (!current || (owner !== undefined && current.owner !== owner)) return;
-    activeRequestRef.current = null;
-    cancelRequest(current.id);
-  }, [cancelRequest]);
+  const cancelRequest = useCallback(
+    (id: string) => {
+      void api.cancelInspectArchive(id).catch(() => {
+        if (mountedRef.current) void message.warning(t('停止归档检查未确认，请稍后核对后台状态。'));
+      });
+    },
+    [message],
+  );
+  const cancelActive = useCallback(
+    (owner?: string) => {
+      const current = activeRequestRef.current;
+      if (!current || (owner !== undefined && current.owner !== owner)) return;
+      activeRequestRef.current = null;
+      cancelRequest(current.id);
+    },
+    [cancelRequest],
+  );
 
-  const load = useCallback(async (path: string, secret: string | null, owner: string) => {
-    cancelActive();
-    const seq = ++loadSeqRef.current;
-    const request = { id: crypto.randomUUID(), owner };
-    activeRequestRef.current = request;
-    applySeqRef.current = null;
-    setApplyingPassword(false);
-    setLoading(true);
-    setInspection(null);
-    setError(null);
-    setNeedPassword(false);
-    if (!secret) {
-      setPassword('');
-    }
-    setSearch('');
-    setExpandedKeys(null);
-    setCheckedKeys([]);
-    setSelectedOutputRoot(null);
-    setExtractionPasswordError(null);
-    try {
-      const result = await api.inspectArchive(path, secret, request.id);
-      if (seq !== loadSeqRef.current) return;
-      setInspection(result);
+  const load = useCallback(
+    async (path: string, secret: string | null, owner: string) => {
+      cancelActive();
+      const seq = ++loadSeqRef.current;
+      const request = { id: crypto.randomUUID(), owner };
+      activeRequestRef.current = request;
+      applySeqRef.current = null;
+      setApplyingPassword(false);
+      setLoading(true);
+      setInspection(null);
       setError(null);
       setNeedPassword(false);
-    } catch (cause) {
-      if (seq !== loadSeqRef.current) return;
-      const message = cause instanceof Error ? cause.message : String(cause);
-      if (message.includes('NeedsPassword')) {
-        setNeedPassword(true);
+      if (!secret) {
+        setPassword('');
+      }
+      setSearch('');
+      setExpandedKeys(null);
+      setCheckedKeys([]);
+      setSelectedOutputRoot(null);
+      setExtractionPasswordError(null);
+      try {
+        const result = await api.inspectArchive(path, secret, request.id);
+        if (seq !== loadSeqRef.current) return;
+        setInspection(result);
         setError(null);
-      } else {
-        setError(message);
+        setNeedPassword(false);
+      } catch (cause) {
+        if (seq !== loadSeqRef.current) return;
+        const message = cause instanceof Error ? cause.message : String(cause);
+        if (message.includes('NeedsPassword')) {
+          setNeedPassword(true);
+          setError(null);
+        } else {
+          setError(message);
+        }
+      } finally {
+        if (seq === loadSeqRef.current) {
+          if (activeRequestRef.current === request) activeRequestRef.current = null;
+          setLoading(false);
+        }
       }
-    } finally {
-      if (seq === loadSeqRef.current) {
-        if (activeRequestRef.current === request) activeRequestRef.current = null;
-        setLoading(false);
-      }
-    }
-  }, [cancelActive]);
+    },
+    [cancelActive],
+  );
 
   const handleClose = useCallback(() => {
     loadSeqRef.current += 1;
@@ -240,7 +300,9 @@ function ArchiveBrowserContent({ job, close }: ArchiveBrowserProps) {
         setLoading(false);
         setApplyingPassword(false);
       });
-      return () => { disposed = true; };
+      return () => {
+        disposed = true;
+      };
     }
     queueMicrotask(() => {
       if (!disposed) void load(currentPath, null, currentJobId);
@@ -257,7 +319,9 @@ function ArchiveBrowserContent({ job, close }: ArchiveBrowserProps) {
     if (!inspection) return [];
     if (!query) return inspection.entries;
     return inspection.entries.filter(
-      entry => entry.path.toLowerCase().includes(query) || (entry.rawPath && entry.rawPath.toLowerCase().includes(query)),
+      (entry) =>
+        entry.path.toLowerCase().includes(query) ||
+        (entry.rawPath && entry.rawPath.toLowerCase().includes(query)),
     );
   }, [inspection, query]);
   // buildTree reads the external translation state; language invalidates its cached labels.
@@ -269,26 +333,50 @@ function ArchiveBrowserContent({ job, close }: ArchiveBrowserProps) {
   // hides. With a query, select exactly the matched entries instead.
   const selectableKeys = useMemo(() => {
     if (!query) return allKeys;
-    const keys = matched.map(entry => entry.path.replace(/\\/g, "/").replace(/\/+$/, ""));
+    const keys = matched.map((entry) => entry.path.replace(/\\/g, '/').replace(/\/+$/, ''));
     return Array.from(new Set(keys.filter(Boolean)));
   }, [query, matched, allKeys]);
   const expanded = useMemo(() => {
     if (expandedKeys !== null) return expandedKeys;
     if (allKeys.length <= 200) return allKeys;
-    return tree.filter(node => node.children?.length).slice(0, 20).map(node => String(node.key));
+    return tree
+      .filter((node) => node.children?.length)
+      .slice(0, 20)
+      .map((node) => String(node.key));
   }, [allKeys, expandedKeys, tree]);
 
-  const isNonStandardEncoding = inspection?.detectedEncoding && !['UTF-8', 'ASCII'].includes(inspection.detectedEncoding.toUpperCase());
+  const isNonStandardEncoding =
+    inspection?.detectedEncoding &&
+    !['UTF-8', 'ASCII'].includes(inspection.detectedEncoding.toUpperCase());
 
   const stats = inspection && (
     <Space wrap size={12}>
-      <Typography.Text type="secondary">{t("{count} 项", { count: inspection.totalEntries })}</Typography.Text>
-      <Typography.Text type="secondary">{inspection.totalSizeKnown ? t("共 {p0}", { p0: formatBytes(inspection.totalSize) }) : t("总展开大小未知")}</Typography.Text>
-      {inspection.encryptedEntries > 0 && <Typography.Text type="secondary">{t("加密 {count} 项", { count: inspection.encryptedEntries })}</Typography.Text>}
-      {isNonStandardEncoding && (
-        <Tag color="cyan">{t("编码: {encoding} (自动修正)", { encoding: inspection.detectedEncoding ?? '' })}</Tag>
+      <Typography.Text type="secondary">
+        {t('{count} 项', { count: inspection.totalEntries })}
+      </Typography.Text>
+      <Typography.Text type="secondary">
+        {inspection.totalSizeKnown
+          ? t('共 {p0}', { p0: formatBytes(inspection.totalSize) })
+          : t('总展开大小未知')}
+      </Typography.Text>
+      {inspection.encryptedEntries > 0 && (
+        <Typography.Text type="secondary">
+          {t('加密 {count} 项', { count: inspection.encryptedEntries })}
+        </Typography.Text>
       )}
-      {query && <Typography.Text type="secondary">{t("命中 {matched} / {total} 项", { matched: matched.length, total: inspection.totalEntries })}</Typography.Text>}
+      {isNonStandardEncoding && (
+        <Tag color="cyan">
+          {t('编码: {encoding} (自动修正)', { encoding: inspection.detectedEncoding ?? '' })}
+        </Tag>
+      )}
+      {query && (
+        <Typography.Text type="secondary">
+          {t('命中 {matched} / {total} 项', {
+            matched: matched.length,
+            total: inspection.totalEntries,
+          })}
+        </Typography.Text>
+      )}
     </Space>
   );
 
@@ -300,19 +388,23 @@ function ArchiveBrowserContent({ job, close }: ArchiveBrowserProps) {
     setApplyingPassword(true);
     try {
       await api.savePassword({
-        name: t("{p0} 密码", { p0: job.source.displayName }),
+        name: t('{p0} 密码', { p0: job.source.displayName }),
         secret: password,
         groups: job.options.passwordGroup ? [job.options.passwordGroup] : [],
-        notes: t("归档预览确认密码"),
+        notes: t('归档预览确认密码'),
         enabled: true,
       });
       if (loadSeqRef.current !== seq) return;
       await api.retry(job.id);
       if (loadSeqRef.current === seq) handleClose();
     } catch (cause) {
-      if (loadSeqRef.current === seq) setError(cause instanceof Error ? cause.message : String(cause));
+      if (loadSeqRef.current === seq)
+        setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      if (loadSeqRef.current === seq) { applySeqRef.current = null; setApplyingPassword(false); }
+      if (loadSeqRef.current === seq) {
+        applySeqRef.current = null;
+        setApplyingPassword(false);
+      }
     }
   };
 
@@ -321,7 +413,10 @@ function ArchiveBrowserContent({ job, close }: ArchiveBrowserProps) {
     const seq = loadSeqRef.current;
     if (extractSeqRef.current === seq) return;
     const connectionVersion = api.getConnectionVersion?.() ?? 0;
-    const current = () => mountedRef.current && loadSeqRef.current === seq && connectionVersion === (api.getConnectionVersion?.() ?? 0);
+    const current = () =>
+      mountedRef.current &&
+      loadSeqRef.current === seq &&
+      connectionVersion === (api.getConnectionVersion?.() ?? 0);
     extractSeqRef.current = seq;
     setExtractingSelected(true);
     let outputRoot = selectedOutputRoot ?? job.options.outputRoot;
@@ -341,10 +436,19 @@ function ArchiveBrowserContent({ job, close }: ArchiveBrowserProps) {
         flatten: false,
       });
       if (!current()) return;
-      void message.success(t("已成功提取 {count} 个文件至 {path}", { count: res.extractedFiles.length, path: res.outputDirectory }));
+      void message.success(
+        t('已成功提取 {count} 个文件至 {path}', {
+          count: res.extractedFiles.length,
+          path: res.outputDirectory,
+        }),
+      );
       if (nativeEngine) {
-        void api.openPath(res.outputDirectory).catch(cause => {
-          void message.warning(t("提取已完成，但无法打开输出目录：{error}", { error: cause instanceof Error ? cause.message : String(cause) }));
+        void api.openPath(res.outputDirectory).catch((cause) => {
+          void message.warning(
+            t('提取已完成，但无法打开输出目录：{error}', {
+              error: cause instanceof Error ? cause.message : String(cause),
+            }),
+          );
         });
       }
       handleClose();
@@ -352,7 +456,8 @@ function ArchiveBrowserContent({ job, close }: ArchiveBrowserProps) {
       if (!current()) return;
       const detail = cause instanceof Error ? cause.message : String(cause);
       if (detail.startsWith('NeedsPassword')) setExtractionPasswordError('required');
-      else if (detail.startsWith('PasswordMismatchOrCorrupt')) setExtractionPasswordError('mismatchOrCorrupt');
+      else if (detail.startsWith('PasswordMismatchOrCorrupt'))
+        setExtractionPasswordError('mismatchOrCorrupt');
       else void message.error(detail);
     } finally {
       if (extractSeqRef.current === seq) extractSeqRef.current = null;
@@ -362,16 +467,18 @@ function ArchiveBrowserContent({ job, close }: ArchiveBrowserProps) {
 
   return (
     <Modal
-      title={t("浏览归档内容 — {p0}", { p0: job?.source.displayName ?? '' })}
+      title={t('浏览归档内容 — {p0}', { p0: job?.source.displayName ?? '' })}
       open={!!job}
       onCancel={handleClose}
       destroyOnHidden
       width={720}
       footer={
         <Space>
-          <Button onClick={handleClose}>{t("关闭")}</Button>
+          <Button onClick={handleClose}>{t('关闭')}</Button>
           {inspection && !!password && !extractionPasswordError && (
-            <Button type="primary" loading={applyingPassword} onClick={() => void applyPassword()}>{t("应用此密码并重试解压")}</Button>
+            <Button type="primary" loading={applyingPassword} onClick={() => void applyPassword()}>
+              {t('应用此密码并重试解压')}
+            </Button>
           )}
           {inspection && nativeEngine && (
             <Button
@@ -379,7 +486,7 @@ function ArchiveBrowserContent({ job, close }: ArchiveBrowserProps) {
               loading={extractingSelected}
               onClick={() => void handleExtractSelected(true)}
             >
-              {t("提取所选至...")}
+              {t('提取所选至...')}
             </Button>
           )}
           {inspection && (
@@ -389,31 +496,55 @@ function ArchiveBrowserContent({ job, close }: ArchiveBrowserProps) {
               loading={extractingSelected}
               onClick={() => void handleExtractSelected(false)}
             >
-              {t("提取所选条目 ({count})", { count: checkedKeys.length })}
+              {t('提取所选条目 ({count})', { count: checkedKeys.length })}
             </Button>
           )}
         </Space>
       }
     >
-      {!connected && <Alert type="info" showIcon title={t("浏览器预览模式")} description={t("归档浏览需要在桌面版中运行。")} />}
+      {!connected && (
+        <Alert
+          type="info"
+          showIcon
+          title={t('浏览器预览模式')}
+          description={t('归档浏览需要在桌面版中运行。')}
+        />
+      )}
       {connected && (
-        <Space orientation="vertical" style={{ width: '100%' }}>
+        <Space direction="vertical" style={{ width: '100%' }}>
           {extractionPasswordError && (
             <Alert
               type="warning"
               showIcon
-              title={extractionPasswordError === 'required' ? t("提取所选条目需要密码") : t("密码不匹配或归档已损坏")}
+              title={
+                extractionPasswordError === 'required'
+                  ? t('提取所选条目需要密码')
+                  : t('密码不匹配或归档已损坏')
+              }
               description={
-                <Space orientation="vertical" style={{ width: '100%' }}>
-                  <Typography.Text>{t("输入密码后重试提取；若仍失败，请检查密码或归档完整性。密码仅用于本次提取，不会保存到密码库。")}</Typography.Text>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Typography.Text>
+                    {t(
+                      '输入密码后重试提取；若仍失败，请检查密码或归档完整性。密码仅用于本次提取，不会保存到密码库。',
+                    )}
+                  </Typography.Text>
                   <Space.Compact style={{ width: '100%' }}>
                     <Input.Password
-                      aria-label={t("所选条目的解压密码")}
+                      aria-label={t('所选条目的解压密码')}
                       value={password}
-                      onChange={event => setPassword(event.target.value)}
-                      onPressEnter={() => { if (password.length && checkedKeys.length) void handleExtractSelected(); }}
+                      onChange={(event) => setPassword(event.target.value)}
+                      onPressEnter={() => {
+                        if (password.length && checkedKeys.length) void handleExtractSelected();
+                      }}
                     />
-                    <Button type="primary" disabled={!password.length || checkedKeys.length === 0} loading={extractingSelected} onClick={() => void handleExtractSelected()}>{t("使用该密码提取所选")}</Button>
+                    <Button
+                      type="primary"
+                      disabled={!password.length || checkedKeys.length === 0}
+                      loading={extractingSelected}
+                      onClick={() => void handleExtractSelected()}
+                    >
+                      {t('使用该密码提取所选')}
+                    </Button>
                   </Space.Compact>
                 </Space>
               }
@@ -423,17 +554,26 @@ function ArchiveBrowserContent({ job, close }: ArchiveBrowserProps) {
             <Alert
               type="warning"
               showIcon
-              title={t("此归档需要密码才能列出内容")}
+              title={t('此归档需要密码才能列出内容')}
               description={
                 <Space.Compact style={{ width: '100%', marginTop: 8 }}>
                   <Input.Password
-                    aria-label={t("归档密码")}
+                    aria-label={t('归档密码')}
                     value={password}
-                    placeholder={t("输入归档密码后重试")}
-                    onChange={event => setPassword(event.target.value)}
-                    onPressEnter={() => { if (password.length && job) void load(job.source.path, password, job.id); }}
+                    placeholder={t('输入归档密码后重试')}
+                    onChange={(event) => setPassword(event.target.value)}
+                    onPressEnter={() => {
+                      if (password.length && job) void load(job.source.path, password, job.id);
+                    }}
                   />
-                  <Button disabled={!password.length} onClick={() => { if (job) void load(job.source.path, password, job.id); }}>{t("使用该密码浏览")}</Button>
+                  <Button
+                    disabled={!password.length}
+                    onClick={() => {
+                      if (job) void load(job.source.path, password, job.id);
+                    }}
+                  >
+                    {t('使用该密码浏览')}
+                  </Button>
                 </Space.Compact>
               }
             />
@@ -442,58 +582,92 @@ function ArchiveBrowserContent({ job, close }: ArchiveBrowserProps) {
             <Alert
               type="error"
               showIcon
-              title={t("无法读取归档内容")}
+              title={t('无法读取归档内容')}
               description={error}
-              action={<Button size="small" onClick={() => { if (job) void load(job.source.path, password || null, job.id); }}>{t("重试")}</Button>}
+              action={
+                <Button
+                  size="small"
+                  onClick={() => {
+                    if (job) void load(job.source.path, password || null, job.id);
+                  }}
+                >
+                  {t('重试')}
+                </Button>
+              }
             />
           )}
           {loading && (
             <div style={{ textAlign: 'center', padding: '32px 0' }}>
               <Spin />
-              <div className="muted" style={{ marginTop: 8 }}>{t("等待可用资源或读取归档目录中…")}</div>
+              <div className="muted" style={{ marginTop: 8 }}>
+                {t('等待可用资源或读取归档目录中…')}
+              </div>
             </div>
           )}
           {!loading && inspection && (
             <>
               {stats}
+              {inspection.entries.length >= 10000 &&
+                inspection.totalEntries > inspection.entries.length && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    title={t('归档条目较多，树形视图仅显示前 {count} 项', {
+                      count: inspection.entries.length,
+                    })}
+                    description={t(
+                      '为保障界面流畅，未完全加载的条目不包含在上方选择中。如需解压全部文件，请使用队列直接解压整个归档。',
+                    )}
+                    style={{ marginBottom: 8 }}
+                  />
+                )}
               <Input
-                aria-label={t("搜索归档条目")}
+                aria-label={t('搜索归档条目')}
                 allowClear
                 value={search}
                 prefix={<SearchOutlined aria-hidden />}
-                placeholder={t("按名称或路径搜索，例如 folder/ 或 *.txt")}
-                onChange={event => { setSearch(event.target.value); setExpandedKeys(null); }}
+                placeholder={t('按名称或路径搜索，例如 folder/ 或 *.txt')}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setExpandedKeys(null);
+                }}
               />
               <Space wrap size={8} style={{ width: '100%', justifyContent: 'space-between' }}>
                 <Space size={8}>
                   <Button size="small" onClick={() => setCheckedKeys(selectableKeys)}>
-                    {query ? t("全选命中项") : t("全选")}
+                    {query ? t('全选命中项') : t('全选')}
                   </Button>
-                  <Button size="small" disabled={checkedKeys.length === 0} onClick={() => setCheckedKeys([])}>{t("清空选择")}</Button>
+                  <Button
+                    size="small"
+                    disabled={checkedKeys.length === 0}
+                    onClick={() => setCheckedKeys([])}
+                  >
+                    {t('清空选择')}
+                  </Button>
                   {checkedKeys.length > 0 && (
-                    <Tag color="blue">{t("已选 {count} 项", { count: checkedKeys.length })}</Tag>
+                    <Tag color="blue">{t('已选 {count} 项', { count: checkedKeys.length })}</Tag>
                   )}
                 </Space>
               </Space>
               {matched.length ? (
                 <Tree
-                  aria-label={t("归档条目树")}
+                  aria-label={t('归档条目树')}
                   showLine
                   checkable
                   selectable={false}
                   checkedKeys={checkedKeys}
-                  onCheck={keys => {
+                  onCheck={(keys) => {
                     const next = Array.isArray(keys) ? keys : keys.checked;
                     setCheckedKeys(next.map(String));
                   }}
                   treeData={tree}
                   expandedKeys={expanded}
-                  onExpand={nextKeys => setExpandedKeys(nextKeys.map(String))}
+                  onExpand={(nextKeys) => setExpandedKeys(nextKeys.map(String))}
                   height={380}
                   style={{ maxHeight: 380, overflow: 'auto' }}
                 />
               ) : (
-                <Empty description={query ? t("没有匹配的条目") : t("归档内没有条目")} />
+                <Empty description={query ? t('没有匹配的条目') : t('归档内没有条目')} />
               )}
             </>
           )}

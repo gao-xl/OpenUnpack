@@ -10,7 +10,12 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('node_modules/antd') || id.includes('node_modules/@ant-design') || id.includes('node_modules/@rc-component') || id.includes('node_modules/rc-')) {
+          if (
+            id.includes('node_modules/antd') ||
+            id.includes('node_modules/@ant-design') ||
+            id.includes('node_modules/@rc-component') ||
+            id.includes('node_modules/rc-')
+          ) {
             return 'antd-vendor';
           }
         },

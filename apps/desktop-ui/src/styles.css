@@ -33,6 +33,7 @@
   --ou-bg-canvas: #f8fafc;
   --ou-bg-card: #ffffff;
   --ou-bg-subtle: #f1f5f9;
+  --ou-bg-input: #f1f5f9;
   --ou-bg-hover: rgba(37, 99, 235, 0.04);
   
   /* 边框与线条 (极细 0.5px/1px) */
@@ -42,7 +43,9 @@
   
   /* 文字层级 */
   --ou-text-title: #0f172a;
+  --ou-text-color: #0f172a;
   --ou-text-body: #334155;
+  --ou-text-secondary: #475569;
   --ou-text-muted: #64748b;
   --ou-text-faint: #94a3b8;
   --ou-text-white: #ffffff;
@@ -65,9 +68,15 @@ body[data-theme='dark'] {
 
   /* 深色下提亮语义色，保证 ≥4.5:1 对比度 */
   --ou-success: #4ade80;
+  --ou-success-bg: rgba(74, 222, 128, 0.14);
+  --ou-success-border: rgba(74, 222, 128, 0.32);
   --ou-danger: #f87171;
   --ou-warning: #fbbf24;
+  --ou-warning-bg: rgba(251, 191, 36, 0.14);
+  --ou-warning-border: rgba(251, 191, 36, 0.32);
   --ou-accent: #a78bfa;
+  --ou-accent-bg: rgba(167, 139, 250, 0.14);
+  --ou-accent-border: rgba(167, 139, 250, 0.32);
   --ou-info: #60a5fa;
 
   --ou-sidebar-bg: #090d16;
@@ -80,6 +89,7 @@ body[data-theme='dark'] {
   --ou-bg-canvas: #0b0f19;
   --ou-bg-card: #111827;
   --ou-bg-subtle: #161f30;
+  --ou-bg-input: #161f30;
   --ou-bg-hover: rgba(59, 130, 246, 0.08);
 
   --ou-border-color: #1e293b;
@@ -87,12 +97,202 @@ body[data-theme='dark'] {
   --ou-border-subtle: rgba(255, 255, 255, 0.06);
 
   --ou-text-title: #f1f5f9;
+  --ou-text-color: #f1f5f9;
   --ou-text-body: #cbd5e1;
+  --ou-text-secondary: #94a3b8;
   --ou-text-muted: #94a3b8;
   --ou-text-faint: #64748b;
 
   --ou-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --ou-shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* ==========================================================================
+   皮肤系统 Token 变量映射 (Win11 / Win98 / Modern / Cyberpunk)
+   ========================================================================== */
+
+/* Win11 Fluent (浅色) */
+[data-skin='win11'],
+.skin-win11 {
+  --ou-font-sans: 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --ou-radius: 6px;
+  --ou-radius-sm: 4px;
+  --ou-radius-lg: 8px;
+  --ou-primary: #0067c0;
+  --ou-primary-hover: #1882d9;
+  --ou-primary-bg: #eff6fc;
+  --ou-primary-border: #b3d6f2;
+  --ou-sidebar-bg: #f3f3f3;
+  --ou-bg-canvas: #f3f3f3;
+  --ou-bg-card: #ffffff;
+  --ou-border-color: #e5e5e5;
+}
+
+/* Win11 Fluent (深色) */
+[data-skin='win11'][data-theme='dark'],
+.skin-win11.theme-dark,
+body[data-skin='win11'][data-theme='dark'] {
+  --ou-primary: #4cc2ff;
+  --ou-primary-hover: #68cdff;
+  --ou-primary-bg: rgba(76, 194, 255, 0.12);
+  --ou-primary-border: rgba(76, 194, 255, 0.28);
+  --ou-sidebar-bg: #181818;
+  --ou-bg-canvas: #1c1c1c;
+  --ou-bg-card: #242424;
+  --ou-bg-subtle: #2d2d2d;
+  --ou-bg-input: #2d2d2d;
+  --ou-border-color: #333333;
+}
+
+/* Win98 Classic (浅色) */
+[data-skin='win98'],
+.skin-win98 {
+  --ou-font-sans: 'MS Sans Serif', 'Tahoma', 'Segoe UI', 'SimSun', sans-serif;
+  --ou-radius: 0px;
+  --ou-radius-sm: 0px;
+  --ou-radius-lg: 0px;
+  --ou-primary: #000080;
+  --ou-primary-hover: #1020a0;
+  --ou-primary-bg: #e0e0f0;
+  --ou-primary-border: #808080;
+  --ou-sidebar-bg: #c0c0c0;
+  --ou-sidebar-text: #000000;
+  --ou-sidebar-active-bg: #000080;
+  --ou-sidebar-active-text: #ffffff;
+  --ou-sidebar-border: #808080;
+  --ou-bg-canvas: #c0c0c0;
+  --ou-bg-card: #ffffff;
+  --ou-bg-subtle: #d4d0c8;
+  --ou-bg-input: #dfdfdf;
+  --ou-border-color: #808080;
+  --ou-border-secondary: #dfdfdf;
+  --ou-text-title: #000000;
+  --ou-text-color: #000000;
+  --ou-text-body: #000000;
+  --ou-text-secondary: #333333;
+  --ou-text-muted: #444444;
+}
+
+/* Win98 Classic (深色) */
+[data-skin='win98'][data-theme='dark'],
+.skin-win98.theme-dark,
+body[data-skin='win98'][data-theme='dark'] {
+  --ou-font-sans: 'MS Sans Serif', 'Tahoma', 'Segoe UI', 'SimSun', sans-serif;
+  --ou-radius: 0px;
+  --ou-radius-sm: 0px;
+  --ou-radius-lg: 0px;
+  --ou-primary: #3a75c4;
+  --ou-primary-hover: #4e8be0;
+  --ou-primary-bg: rgba(58, 117, 196, 0.15);
+  --ou-primary-border: #505560;
+  --ou-sidebar-bg: #181b20;
+  --ou-sidebar-text: #f0f2f5;
+  --ou-sidebar-active-bg: #3a75c4;
+  --ou-sidebar-active-text: #ffffff;
+  --ou-sidebar-border: #505560;
+  --ou-bg-canvas: #181b20;
+  --ou-bg-card: #0e1014;
+  --ou-bg-subtle: #242830;
+  --ou-bg-input: #242830;
+  --ou-border-color: #505560;
+  --ou-border-secondary: #383c44;
+  --ou-text-title: #f0f2f5;
+  --ou-text-color: #f0f2f5;
+  --ou-text-body: #d4d8de;
+  --ou-text-secondary: #b0b6be;
+  --ou-text-muted: #9aa0a6;
+}
+
+/* Modern Minimal (浅色) */
+[data-skin='modern'],
+.skin-modern {
+  --ou-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --ou-radius: 6px;
+  --ou-radius-sm: 4px;
+  --ou-radius-lg: 8px;
+  --ou-primary: #4f46e5;
+  --ou-primary-hover: #6366f1;
+  --ou-primary-bg: #eef2ff;
+  --ou-primary-border: #c7d2fe;
+  --ou-sidebar-bg: #f8fafc;
+  --ou-bg-canvas: #f8fafc;
+  --ou-bg-card: #ffffff;
+  --ou-bg-input: #f1f5f9;
+  --ou-border-color: #e2e8f0;
+  --ou-border-secondary: #f1f5f9;
+}
+
+/* Modern Minimal (深色) */
+[data-skin='modern'][data-theme='dark'],
+.skin-modern.theme-dark,
+body[data-skin='modern'][data-theme='dark'] {
+  --ou-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --ou-radius: 6px;
+  --ou-radius-sm: 4px;
+  --ou-radius-lg: 8px;
+  --ou-primary: #6366f1;
+  --ou-primary-hover: #818cf8;
+  --ou-primary-bg: rgba(99, 102, 241, 0.15);
+  --ou-sidebar-bg: #09090b;
+  --ou-bg-canvas: #09090b;
+  --ou-bg-card: #121215;
+  --ou-bg-subtle: #18181b;
+  --ou-bg-input: #18181b;
+  --ou-border-color: #27272a;
+  --ou-border-secondary: #1e1e22;
+}
+
+/* Cyberpunk (浅色) */
+[data-skin='cyberpunk'],
+.skin-cyberpunk {
+  --ou-font-sans: 'Rajdhani', 'Cascadia Code', 'JetBrains Mono', 'Segoe UI', monospace, sans-serif;
+  --ou-radius: 2px;
+  --ou-radius-sm: 0px;
+  --ou-radius-lg: 3px;
+  --ou-primary: #ff0055;
+  --ou-primary-hover: #ff2a75;
+  --ou-primary-bg: rgba(255, 0, 85, 0.08);
+  --ou-primary-border: #00c3d9;
+  --ou-sidebar-bg: #f0f2f7;
+  --ou-bg-canvas: #f0f2f7;
+  --ou-bg-card: #ffffff;
+  --ou-bg-input: #e8ecf4;
+  --ou-border-color: #00c3d9;
+  --ou-border-secondary: #e2e8f0;
+}
+
+/* Cyberpunk (深色) */
+[data-skin='cyberpunk'][data-theme='dark'],
+.skin-cyberpunk.theme-dark,
+body[data-skin='cyberpunk'][data-theme='dark'] {
+  --ou-font-sans: 'Rajdhani', 'Cascadia Code', 'JetBrains Mono', 'Segoe UI', monospace, sans-serif;
+  --ou-radius: 2px;
+  --ou-radius-sm: 0px;
+  --ou-radius-lg: 3px;
+  --ou-primary: #00f0ff;
+  --ou-primary-hover: #3df3ff;
+  --ou-primary-bg: rgba(0, 240, 255, 0.12);
+  --ou-primary-border: rgba(0, 240, 255, 0.35);
+  --ou-accent: #ff0055;
+  --ou-warning: #fcee0a;
+  --ou-success: #00ff66;
+  --ou-sidebar-bg: #08090e;
+  --ou-sidebar-text: #e6f4ff;
+  --ou-sidebar-muted: #596982;
+  --ou-sidebar-active-bg: rgba(0, 240, 255, 0.16);
+  --ou-sidebar-active-text: #00f0ff;
+  --ou-sidebar-border: #1c253b;
+  --ou-bg-canvas: #08090e;
+  --ou-bg-card: #0f121d;
+  --ou-bg-subtle: #171b2b;
+  --ou-bg-input: #171b2b;
+  --ou-border-color: #1c253b;
+  --ou-border-secondary: #121826;
+  --ou-text-title: #e6f4ff;
+  --ou-text-color: #e6f4ff;
+  --ou-text-body: #8da0bd;
+  --ou-text-secondary: #8da0bd;
+  --ou-text-muted: #596982;
 }
 
 *, *::before, *::after {
@@ -253,6 +453,7 @@ html, body, #root {
   -webkit-app-region: drag;
 }
 
+.header-bar h1,
 .header-bar h2 {
   margin: 0;
   color: var(--ou-text-title);
@@ -481,11 +682,699 @@ html, body, #root {
   }
 }
 
+/* 全屏拖拽悬停视觉反馈 */
+.drag-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(37, 99, 235, 0.14);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px dashed var(--ou-primary);
+  border-radius: 12px;
+  margin: 10px;
+  pointer-events: none;
+  animation: ou-fade-in 0.15s ease-out;
+}
+
+.drag-overlay-box {
+  background: var(--ou-bg-card);
+  padding: 36px 52px;
+  border-radius: var(--ou-radius-lg);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.22);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+@keyframes ou-fade-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* 精简遥测指标条 (Compact Telemetry Chips) */
+.telemetry-bar-compact {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+
+.telemetry-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  background: var(--ou-bg-card);
+  border: 1px solid var(--ou-border-color);
+  border-radius: var(--ou-radius-sm);
+  color: var(--ou-text-secondary);
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+
+.telemetry-chip strong {
+  font-family: var(--ou-font-mono);
+  font-weight: 600;
+  color: var(--ou-text-title);
+  font-variant-numeric: tabular-nums;
+}
+
+.telemetry-chip.chip-running {
+  background: var(--ou-primary-bg);
+  border-color: var(--ou-primary-border);
+  color: var(--ou-primary);
+}
+
+.telemetry-chip.chip-running strong {
+  color: var(--ou-primary);
+}
+
+.telemetry-chip.chip-completed {
+  background: var(--ou-success-bg);
+  border-color: var(--ou-success-border);
+  color: var(--ou-success);
+}
+
+.telemetry-chip.chip-completed strong {
+  color: var(--ou-success);
+}
+
+.telemetry-chip.chip-errors {
+  background: var(--ou-warning-bg);
+  border-color: var(--ou-warning-border);
+  color: var(--ou-warning);
+}
+
+.telemetry-chip.chip-errors strong {
+  color: var(--ou-warning);
+}
+
+/* 批次上下文操作栏 (Contextual Selection Bar) */
+.selection-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: var(--ou-primary-bg);
+  border: 1px solid var(--ou-primary-border);
+  border-radius: var(--ou-radius);
+  animation: ou-fade-in 0.15s ease-out;
+}
+
+/* 设置页快捷预设工具条 */
+.settings-presets-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  background: var(--ou-bg-card);
+  border: 1px solid var(--ou-border-color);
+  border-radius: var(--ou-radius);
+}
+
+
+/* 批次总体动态进度看板 */
+.batch-progress-card {
+  background: var(--ou-bg-card);
+  border: 1px solid var(--ou-border-color);
+  border-radius: var(--ou-radius-lg);
+  padding: 16px 20px;
+  margin-bottom: 14px;
+  box-shadow: var(--ou-shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all 0.2s ease;
+}
+
+.batch-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.batch-progress-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ou-text-title);
+}
+
+.batch-progress-stats {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--ou-text-muted);
+}
+
+.batch-stat-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.batch-stat-highlight {
+  font-family: var(--ou-font-mono);
+  font-weight: 600;
+  color: var(--ou-text-title);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 动态条纹流动与微脉冲 */
+@keyframes ou-progress-active {
+  0% { background-position: 0 0; }
+  100% { background-position: 40px 0; }
+}
+
+.ou-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ou-primary);
+  display: inline-block;
+  box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.6);
+  animation: ou-pulse 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+.ou-pulse-dot.success {
+  background: var(--ou-success);
+  box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.6);
+}
+
+@keyframes ou-pulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.6);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(37, 99, 235, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+  }
+}
+
+.stage-progress-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stage-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.stage-data-bytes {
+  font-family: var(--ou-font-mono);
+  font-size: 11px;
+  color: var(--ou-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   各皮肤材质质感与立体微动效 (Task t2)
+   ========================================================================== */
+
+/* 1. 通用按钮触觉微动效 (Universal Button Tactile Micro-Interactions) */
+.ant-btn {
+  position: relative;
+  transition: transform 0.12s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  user-select: none;
+}
+.ant-btn:active {
+  transform: translateY(1px);
+}
+
+/* 2. 进度条流光与动态效果 (Progress Bar Streamer & Shimmer) */
+.ant-progress-inner {
+  position: relative;
+  overflow: hidden;
+}
+.ant-progress-bg {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.ant-progress-bg::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.28) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: ou-streamer 2.2s infinite linear;
+  pointer-events: none;
+}
+
+@keyframes ou-streamer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* 3. 呼吸微动效与状态徽标 (Breathing Feedback & Pulses) */
+.ou-breathe,
+.ou-status-breathe {
+  animation: ou-breathe 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes ou-breathe {
+  0%, 100% {
+    opacity: 0.9;
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 8px 3px rgba(37, 99, 235, 0.22);
+  }
+}
+
+/* ==========================================================================
+   Win11 Fluent: 云母半透与柔和高光圆角
+   ========================================================================== */
+[data-skin='win11'] .header-bar,
+.skin-win11 .header-bar {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: rgba(255, 255, 255, 0.8) !important;
+}
+
+[data-skin='win11'][data-theme='dark'] .header-bar,
+.skin-win11.theme-dark .header-bar,
+body[data-skin='win11'][data-theme='dark'] .header-bar {
+  background: rgba(28, 28, 28, 0.82) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-skin='win11'] .sidebar,
+.skin-win11 .sidebar {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: rgba(243, 243, 243, 0.85) !important;
+}
+
+[data-skin='win11'][data-theme='dark'] .sidebar,
+.skin-win11.theme-dark .sidebar,
+body[data-skin='win11'][data-theme='dark'] .sidebar {
+  background: rgba(24, 24, 24, 0.88) !important;
+}
+
+/* Win11 亚克力微光卡片 */
+[data-skin='win11'] .telemetry-card,
+[data-skin='win11'] .summary-card,
+[data-skin='win11'] .section-card,
+[data-skin='win11'] .batch-progress-card,
+[data-skin='win11'] .settings-panel,
+.skin-win11 .telemetry-card,
+.skin-win11 .summary-card,
+.skin-win11 .section-card,
+.skin-win11 .batch-progress-card,
+.skin-win11 .settings-panel {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.04), inset 0 1px 0 0 rgba(255, 255, 255, 0.7);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+[data-skin='win11'][data-theme='dark'] .telemetry-card,
+[data-skin='win11'][data-theme='dark'] .summary-card,
+[data-skin='win11'][data-theme='dark'] .section-card,
+[data-skin='win11'][data-theme='dark'] .batch-progress-card,
+[data-skin='win11'][data-theme='dark'] .settings-panel,
+.skin-win11.theme-dark .telemetry-card,
+.skin-win11.theme-dark .summary-card,
+.skin-win11.theme-dark .section-card,
+.skin-win11.theme-dark .batch-progress-card,
+.skin-win11.theme-dark .settings-panel {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+}
+
+[data-skin='win11'] .telemetry-card:hover,
+.skin-win11 .telemetry-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06), inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+}
+
+/* Win11 按钮流体质感 */
+[data-skin='win11'] .ant-btn-primary,
+.skin-win11 .ant-btn-primary {
+  box-shadow: 0 1px 2px rgba(0, 103, 192, 0.25), inset 0 1px 0 0 rgba(255, 255, 255, 0.2);
+}
+[data-skin='win11'] .ant-btn:hover,
+.skin-win11 .ant-btn:hover {
+  transform: translateY(-0.5px);
+}
+[data-skin='win11'] .ant-btn:active,
+.skin-win11 .ant-btn:active {
+  transform: translateY(0.5px) scale(0.985);
+}
+
+/* ==========================================================================
+   Win98 Classic: 经典 3D 双斜面浮雕边框与像素复古质感
+   ========================================================================== */
+/* Win98 经典 3D 凸起边框 (Raised 3D Frame) */
+[data-skin='win98'] .telemetry-card,
+[data-skin='win98'] .summary-card,
+[data-skin='win98'] .section-card,
+[data-skin='win98'] .batch-progress-card,
+[data-skin='win98'] .settings-panel,
+.skin-win98 .telemetry-card,
+.skin-win98 .summary-card,
+.skin-win98 .section-card,
+.skin-win98 .batch-progress-card,
+.skin-win98 .settings-panel {
+  border-radius: 0 !important;
+  background: #c0c0c0 !important;
+  border: 1px solid #dfdfdf !important;
+  box-shadow: inset 1px 1px 0px #ffffff, inset -1px -1px 0px #808080, inset 2px 2px 0px #dfdfdf, inset -2px -2px 0px #000000 !important;
+  color: #000000 !important;
+}
+
+[data-skin='win98'][data-theme='dark'] .telemetry-card,
+[data-skin='win98'][data-theme='dark'] .summary-card,
+[data-skin='win98'][data-theme='dark'] .section-card,
+[data-skin='win98'][data-theme='dark'] .batch-progress-card,
+[data-skin='win98'][data-theme='dark'] .settings-panel,
+.skin-win98.theme-dark .telemetry-card,
+.skin-win98.theme-dark .summary-card,
+.skin-win98.theme-dark .section-card,
+.skin-win98.theme-dark .batch-progress-card,
+.skin-win98.theme-dark .settings-panel {
+  background: #242830 !important;
+  border: 1px solid #383c44 !important;
+  box-shadow: inset 1px 1px 0px #505560, inset -1px -1px 0px #101216, inset 2px 2px 0px #383c44, inset -2px -2px 0px #08090c !important;
+  color: #f0f2f5 !important;
+}
+
+/* Win98 凹陷 3D 边框 (Sunken 3D Frame) 用于列表、输入框与拖拽靶区 */
+[data-skin='win98'] .ant-table-wrapper,
+[data-skin='win98'] .dropzone-container,
+[data-skin='win98'] .ant-input,
+[data-skin='win98'] .ant-input-affix-wrapper,
+.skin-win98 .ant-table-wrapper,
+.skin-win98 .dropzone-container,
+.skin-win98 .ant-input,
+.skin-win98 .ant-input-affix-wrapper {
+  border-radius: 0 !important;
+  border: 1px solid #808080 !important;
+  background: #ffffff !important;
+  box-shadow: inset 1px 1px 0px #808080, inset -1px -1px 0px #ffffff, inset 2px 2px 0px #000000, inset -2px -2px 0px #dfdfdf !important;
+}
+
+[data-skin='win98'][data-theme='dark'] .ant-table-wrapper,
+[data-skin='win98'][data-theme='dark'] .dropzone-container,
+[data-skin='win98'][data-theme='dark'] .ant-input,
+[data-skin='win98'][data-theme='dark'] .ant-input-affix-wrapper,
+.skin-win98.theme-dark .ant-table-wrapper,
+.skin-win98.theme-dark .dropzone-container,
+.skin-win98.theme-dark .ant-input,
+.skin-win98.theme-dark .ant-input-affix-wrapper {
+  background: #0e1014 !important;
+  border: 1px solid #505560 !important;
+  box-shadow: inset 1px 1px 0px #101216, inset -1px -1px 0px #505560, inset 2px 2px 0px #08090c, inset -2px -2px 0px #383c44 !important;
+}
+
+/* Win98 3D 按键 (Raised / Sunken on Active) */
+[data-skin='win98'] .ant-btn,
+.skin-win98 .ant-btn {
+  border-radius: 0 !important;
+  border: 1px solid #000000 !important;
+  background: #c0c0c0 !important;
+  color: #000000 !important;
+  box-shadow: inset 1px 1px 0px #ffffff, inset -1px -1px 0px #808080, inset 2px 2px 0px #dfdfdf, inset -2px -2px 0px #000000 !important;
+  font-family: var(--ou-font-sans) !important;
+  text-shadow: none !important;
+}
+
+[data-skin='win98'] .ant-btn-primary,
+.skin-win98 .ant-btn-primary {
+  font-weight: 700 !important;
+}
+
+[data-skin='win98'] .ant-btn:active,
+.skin-win98 .ant-btn:active {
+  box-shadow: inset 1px 1px 0px #000000, inset -1px -1px 0px #ffffff, inset 2px 2px 0px #808080, inset -2px -2px 0px #dfdfdf !important;
+  transform: translate(1px, 1px) !important;
+}
+
+[data-skin='win98'][data-theme='dark'] .ant-btn,
+.skin-win98.theme-dark .ant-btn {
+  background: #242830 !important;
+  color: #f0f2f5 !important;
+  border: 1px solid #101216 !important;
+  box-shadow: inset 1px 1px 0px #505560, inset -1px -1px 0px #101216, inset 2px 2px 0px #383c44, inset -2px -2px 0px #08090c !important;
+}
+
+[data-skin='win98'][data-theme='dark'] .ant-btn:active,
+.skin-win98.theme-dark .ant-btn:active {
+  box-shadow: inset 1px 1px 0px #101216, inset -1px -1px 0px #505560, inset 2px 2px 0px #08090c, inset -2px -2px 0px #383c44 !important;
+  transform: translate(1px, 1px) !important;
+}
+
+/* Win98 经典海军蓝标题栏 */
+[data-skin='win98'] .brand,
+.skin-win98 .brand {
+  background: linear-gradient(90deg, #000080 0%, #1084d0 100%) !important;
+  color: #ffffff !important;
+  border-bottom: 2px solid #808080;
+}
+[data-skin='win98'] .brand-mark,
+.skin-win98 .brand-mark {
+  border-radius: 0 !important;
+  background: #c0c0c0 !important;
+  color: #000000 !important;
+  border: 1px solid #000000 !important;
+  box-shadow: inset 1px 1px 0px #ffffff, inset -1px -1px 0px #808080;
+}
+[data-skin='win98'] .brand-name,
+.skin-win98 .brand-name {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.5px;
+}
+
+/* Win98 经典分块式进度条 */
+[data-skin='win98'] .ant-progress-bg,
+.skin-win98 .ant-progress-bg {
+  border-radius: 0 !important;
+  background: repeating-linear-gradient(
+    90deg,
+    #000080,
+    #000080 8px,
+    transparent 8px,
+    transparent 10px
+  ) !important;
+}
+[data-skin='win98'] .ant-progress-bg::after,
+.skin-win98 .ant-progress-bg::after {
+  display: none !important;
+}
+[data-skin='win98'] .ant-progress-inner,
+.skin-win98 .ant-progress-inner {
+  border-radius: 0 !important;
+  box-shadow: inset 1px 1px 0px #808080, inset -1px -1px 0px #ffffff !important;
+  background: #ffffff !important;
+  border: 1px solid #808080 !important;
+}
+
+/* ==========================================================================
+   Cyberpunk Neon: 霓虹矩阵与科技切角
+   ========================================================================== */
+/* 科技矩阵网格背景 */
+[data-skin='cyberpunk'] .page-content,
+.skin-cyberpunk .page-content {
+  background-image:
+    linear-gradient(rgba(0, 240, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.04) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Cyberpunk 霓虹发光卡片与切角 */
+[data-skin='cyberpunk'] .telemetry-card,
+[data-skin='cyberpunk'] .summary-card,
+[data-skin='cyberpunk'] .section-card,
+[data-skin='cyberpunk'] .batch-progress-card,
+[data-skin='cyberpunk'] .settings-panel,
+.skin-cyberpunk .telemetry-card,
+.skin-cyberpunk .summary-card,
+.skin-cyberpunk .section-card,
+.skin-cyberpunk .batch-progress-card,
+.skin-cyberpunk .settings-panel {
+  border: 1px solid rgba(0, 240, 255, 0.35) !important;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.12), inset 0 0 8px rgba(0, 240, 255, 0.04);
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+[data-skin='cyberpunk'] .telemetry-card:hover,
+.skin-cyberpunk .telemetry-card:hover {
+  border-color: #00f0ff !important;
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.3), inset 0 0 12px rgba(0, 240, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+/* Cyberpunk 按钮高能电光 */
+[data-skin='cyberpunk'] .ant-btn-primary,
+.skin-cyberpunk .ant-btn-primary {
+  border: 1px solid #00f0ff !important;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.5), inset 0 0 6px rgba(0, 240, 255, 0.25);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+[data-skin='cyberpunk'] .ant-btn-primary:hover,
+.skin-cyberpunk .ant-btn-primary:hover {
+  box-shadow: 0 0 18px rgba(0, 240, 255, 0.8), inset 0 0 10px rgba(0, 240, 255, 0.4);
+  transform: translateY(-1px);
+}
+[data-skin='cyberpunk'] .ant-btn-primary:active,
+.skin-cyberpunk .ant-btn-primary:active {
+  box-shadow: 0 0 6px rgba(0, 240, 255, 0.9), inset 0 0 12px rgba(0, 240, 255, 0.6);
+  transform: translate(1px, 1px);
+}
+
+/* Cyberpunk 高速赛博光束进度条 */
+[data-skin='cyberpunk'] .ant-progress-bg,
+.skin-cyberpunk .ant-progress-bg {
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.7) !important;
+  background: linear-gradient(90deg, #00f0ff, #fcee0a, #ff0055, #00f0ff) !important;
+  background-size: 300% 100% !important;
+  animation: ou-cyber-beam 2.8s linear infinite !important;
+}
+@keyframes ou-cyber-beam {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+
+/* Cyberpunk 品牌霓虹光晕 */
+[data-skin='cyberpunk'] .brand-mark,
+.skin-cyberpunk .brand-mark {
+  background: #00f0ff !important;
+  color: #08090e !important;
+  box-shadow: 0 0 12px #00f0ff, 0 0 24px rgba(0, 240, 255, 0.4);
+}
+[data-skin='cyberpunk'] .brand-name,
+.skin-cyberpunk .brand-name {
+  color: #00f0ff !important;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+}
+
+/* ==========================================================================
+   Modern Minimal: 纯粹工程质感与发丝线
+   ========================================================================== */
+[data-skin='modern'] .telemetry-card,
+[data-skin='modern'] .summary-card,
+[data-skin='modern'] .section-card,
+[data-skin='modern'] .batch-progress-card,
+[data-skin='modern'] .settings-panel,
+.skin-modern .telemetry-card,
+.skin-modern .summary-card,
+.skin-modern .section-card,
+.skin-modern .batch-progress-card,
+.skin-modern .settings-panel {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: all 0.15s ease;
+}
+[data-skin='modern'][data-theme='dark'] .telemetry-card,
+[data-skin='modern'][data-theme='dark'] .summary-card,
+[data-skin='modern'][data-theme='dark'] .section-card,
+[data-skin='modern'][data-theme='dark'] .batch-progress-card,
+[data-skin='modern'][data-theme='dark'] .settings-panel,
+.skin-modern.theme-dark .telemetry-card,
+.skin-modern.theme-dark .summary-card,
+.skin-modern.theme-dark .section-card,
+.skin-modern.theme-dark .batch-progress-card,
+.skin-modern.theme-dark .settings-panel {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+[data-skin='modern'] .telemetry-card:hover,
+.skin-modern .telemetry-card:hover {
+  border-color: rgba(79, 70, 229, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+[data-skin='modern'] .ant-btn:active,
+.skin-modern .ant-btn:active {
+  transform: translateY(1px);
+}
+
+/* ==========================================================================
+   无障碍与动效偏好 (Accessibility & Reduced Motion)
+   ========================================================================== */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+  html, body {
     scroll-behavior: auto !important;
+  }
+  .sidebar,
+  .sidebar .ant-menu-item,
+  .telemetry-card,
+  .dropzone-container,
+  .ou-pulse-dot,
+  .ou-breathe,
+  .ou-status-breathe,
+  .ant-btn,
+  .ant-progress-bg,
+  .ant-progress-bg::after {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+/* Win98 皮肤天然禁用动态微动效以保证硬核像素质感 */
+[data-skin='win98'] .ant-progress-bg,
+[data-skin='win98'] .ant-progress-bg::after,
+[data-skin='win98'] .ou-breathe,
+[data-skin='win98'] .ou-status-breathe,
+[data-skin='win98'] .ou-pulse-dot,
+.skin-win98 .ant-progress-bg,
+.skin-win98 .ant-progress-bg::after,
+.skin-win98 .ou-breathe,
+.skin-win98 .ou-status-breathe,
+.skin-win98 .ou-pulse-dot {
+  animation: none !important;
+}
+
+/* 高对比度模式适配 (Windows High Contrast / forced-colors) */
+@media (forced-colors: active) {
+  .telemetry-card,
+  .skin-card,
+  .dropzone-container,
+  .ant-btn,
+  .ant-table,
+  .ant-segmented,
+  .ant-input,
+  .ant-select-selector,
+  .ant-progress-bg {
+    border: 1px solid ButtonBorder !important;
+  }
+
+  *:focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px !important;
   }
 }

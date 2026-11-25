@@ -1,4 +1,4 @@
-param([int]$AppPid,[string]$SelectedPath,[switch]$Cancel)
+﻿param([int]$AppPid,[string]$SelectedPath,[switch]$Cancel)
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes

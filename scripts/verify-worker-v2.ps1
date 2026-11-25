@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param([string]$WorkerExecutable, [string]$EnginePath)
 $ErrorActionPreference = 'Stop'
 $taskRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -79,7 +79,7 @@ try {
     Send-V2 'exit' 'active-operation' 9
     Assert-V2 ($taskProcess.WaitForExit(10000)) 'matching exit confirms real Worker termination'
     Assert-V2 ($taskProcess.StandardOutput.ReadToEnd().Length -eq 0 -and $taskProcess.StandardError.ReadToEnd().Length -eq 0) 'stdout and stderr contain no request secrets'
-    $taskChecks | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskFolder 'results.json') -Encoding utf8NoBOM
+    [IO.File]::WriteAllText((Join-Path $taskFolder 'results.json'), ($taskChecks | ConvertTo-Json) + "`n", [Text.UTF8Encoding]::new($false))
     Write-Output "PASS native v2 controls: $($taskChecks.Count) assertions. Evidence: $taskFolder"
 } finally {
     if ($script:taskWriter) { $script:taskWriter.Dispose() }; if ($script:taskReader) { $script:taskReader.Dispose() }

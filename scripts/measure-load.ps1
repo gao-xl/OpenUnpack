@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory)][string]$Worker,
     [ValidateSet('ssd','hdd','cpu','controls','snapshots','all')][string]$Profile = 'ssd',
     [ValidateRange(1,5)][int[]]$Levels = @(1,2,3,5),
@@ -42,7 +42,7 @@ try {
         if (-not $DebugBuild) { $taskBuildArguments += '--release' }
         $taskBuild = @(& cargo @taskBuildArguments 2> (Join-Path $taskRun 'build-stderr.log'))
         $taskBuildExit = $LASTEXITCODE
-        $taskBuild | Set-Content -LiteralPath (Join-Path $taskRun 'build.jsonl') -Encoding utf8NoBOM
+        Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskRun 'build.jsonl') -Content (($taskBuild -join "`n") + "`n")
         if ($taskBuildExit -ne 0) { throw "Load fixture build failed; see $taskRun" }
         $taskArtifacts = @($taskBuild | ForEach-Object {
             try { $taskMessage = $_ | ConvertFrom-Json -ErrorAction Stop } catch { return }
@@ -52,7 +52,7 @@ try {
         $TestExecutable = $taskArtifacts[0]
     }
     $taskExecutable = (Resolve-Path -LiteralPath $TestExecutable).ProviderPath
-    @{
+    $invocationSummary = @{
         startedAt = [DateTimeOffset]::UtcNow.ToString('o')
         profile = $Profile; levels = $Levels; tasksPerLevel = 10; payloadMiBPerTask = $MiB
         fixtureParent = $taskParent; hddParent = $HddParent
@@ -63,7 +63,8 @@ try {
         logicalProcessors = [Environment]::ProcessorCount
         sampling = 'Native counters inside the measured process, 100 ms; direct-child PID plus creation identity.'
         constraints = 'Run alone without builds. No system cache flush or power changes. Native GUI is outside this measurement.'
-    } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $taskRun 'invocation.json') -Encoding utf8NoBOM
+    }
+    Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskRun 'invocation.json') -Content (($invocationSummary | ConvertTo-Json -Depth 5) + "`n")
     $taskTests = switch ($Profile) {
         'ssd' { @('synthetic_load_matrix') }
         'hdd' { @('synthetic_hdd_cache_matrix') }

@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][string]$HostExe, [Parameter(Mandatory)][string]$SetupExe,
+﻿param([Parameter(Mandatory)][string]$HostExe, [Parameter(Mandatory)][string]$SetupExe,
       [Parameter(Mandatory)][string]$EvidenceDirectory, [string]$ExpectedSignerThumbprint,
       [switch]$AllowUnsigned)
 . (Join-Path $PSScriptRoot 'common.ps1')
@@ -91,7 +91,7 @@ $taskPassed = $taskFiles.Count -eq 2 -and @($taskFiles | Where-Object { -not $_.
     matchingUnexpiredPrivateKeyCertificatePresent = $taskSigningCertificatePresent;
     signingReadinessScope = 'Certificate metadata only; private-key accessibility and signing are not tested. Already signed artifacts can be verified without a local signing key.';
     codeSigningCertificates = $taskCertificateRows.ToArray(); certificateStoreErrors = $taskStoreErrors.ToArray() } |
-    ConvertTo-Json -Depth 7 | Set-Content -LiteralPath (Join-Path $taskEvidence 'release-signatures.json') -Encoding utf8NoBOM
+    ConvertTo-Json -Depth 7 | ForEach-Object { Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskEvidence 'release-signatures.json') -Content ($_ + "`n") }
 if (-not $taskPassed) {
     throw '发行签名门禁失败；详情见 release-signatures.json。未签名候选不满足发行条件（开源无签名分发请显式追加 -AllowUnsigned，改用 SHA-256 完整性模式）。'
 }

@@ -1,98 +1,152 @@
 import type { ThemeConfig } from 'antd';
 import { theme } from 'antd';
+import type { SkinId } from './types';
+import { SKIN_TOKENS, DEFAULT_SKIN } from './presets';
 
-export function getAppTheme(isDark: boolean): ThemeConfig {
-  return {
+export function getAppTheme(skin: SkinId, isDark: boolean, reducedMotion?: boolean): ThemeConfig;
+export function getAppTheme(isDark: boolean, reducedMotion?: boolean): ThemeConfig;
+export function getAppTheme(arg1: SkinId | boolean, arg2?: boolean, arg3?: boolean): ThemeConfig {
+  let skin: SkinId = DEFAULT_SKIN;
+  let isDark = false;
+  let reducedMotion = false;
+
+  if (typeof arg1 === 'string') {
+    skin = arg1;
+    isDark = !!arg2;
+    reducedMotion = !!arg3;
+  } else {
+    skin = DEFAULT_SKIN;
+    isDark = !!arg1;
+    reducedMotion = !!arg2;
+  }
+
+  const skinTokensSet = SKIN_TOKENS[skin] ?? SKIN_TOKENS[DEFAULT_SKIN];
+  const t = isDark ? skinTokensSet.dark : skinTokensSet.light;
+
+  // Win98 authentic feel: turn off animations
+  const effectiveMotion = skin === 'win98' ? false : !reducedMotion;
+
+  const baseConfig: ThemeConfig = {
     algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
     token: {
-      fontFamily: "'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-      colorPrimary: isDark ? '#3b82f6' : '#2563eb',
-      colorPrimaryHover: isDark ? '#60a5fa' : '#3b82f6',
-      colorSuccess: isDark ? '#22c55e' : '#16a34a',
-      colorWarning: isDark ? '#f59e0b' : '#d97706',
-      colorError: isDark ? '#ef4444' : '#dc2626',
-      colorInfo: isDark ? '#38bdf8' : '#0284c7',
+      motion: effectiveMotion,
+      fontFamily: t.fontFamily,
+      colorPrimary: t.colorPrimary,
+      colorPrimaryHover: t.colorPrimaryHover,
+      colorPrimaryActive: t.colorPrimaryActive,
+      colorSuccess: t.colorSuccess,
+      colorWarning: t.colorWarning,
+      colorError: t.colorError,
+      colorInfo: t.colorInfo,
 
-      // 背景层次
-      colorBgLayout: isDark ? '#0b0f19' : '#f8fafc',
-      colorBgContainer: isDark ? '#111827' : '#ffffff',
-      colorBgElevated: isDark ? '#1a2234' : '#ffffff',
-      colorBgSpotlight: isDark ? '#1f293d' : '#0f172a',
+      colorBgLayout: t.colorBgLayout,
+      colorBgContainer: t.colorBgContainer,
+      colorBgElevated: t.colorBgElevated,
+      colorBgSpotlight: t.colorBgSpotlight,
 
-      // 文字层次
-      colorText: isDark ? '#f1f5f9' : '#0f172a',
-      colorTextSecondary: isDark ? '#94a3b8' : '#475569',
-      colorTextTertiary: isDark ? '#64748b' : '#94a3b8',
-      colorTextQuaternary: isDark ? '#475569' : '#cbd5e1',
+      colorText: t.colorText,
+      colorTextSecondary: t.colorTextSecondary,
+      colorTextTertiary: t.colorTextTertiary,
+      colorTextQuaternary: t.colorTextQuaternary,
 
-      // 边框层次
-      colorBorder: isDark ? '#1e293b' : '#e2e8f0',
-      colorBorderSecondary: isDark ? '#172033' : '#edf2f7',
+      colorBorder: t.colorBorder,
+      colorBorderSecondary: t.colorBorderSecondary,
 
-      // 几何与排版
-      borderRadius: 6,
-      borderRadiusSM: 4,
-      borderRadiusLG: 8,
-      fontSize: 13,
-      controlHeight: 32,
-      controlHeightSM: 26,
-      controlHeightLG: 38,
-      wireframe: false,
+      borderRadius: t.borderRadius,
+      borderRadiusSM: t.borderRadiusSM,
+      borderRadiusLG: t.borderRadiusLG,
+      fontSize: t.fontSize,
+      controlHeight: t.controlHeight,
+      controlHeightSM: t.controlHeightSM,
+      controlHeightLG: t.controlHeightLG,
+      wireframe: t.wireframe,
     },
     components: {
       Button: {
-        controlHeight: 32,
-        controlHeightSM: 26,
-        paddingInline: 12,
-        borderRadius: 6,
-        defaultBorderColor: isDark ? '#334155' : '#cbd5e1',
-        defaultHoverBorderColor: isDark ? '#3b82f6' : '#2563eb',
+        controlHeight: t.controlHeight,
+        controlHeightSM: t.controlHeightSM,
+        controlHeightLG: t.controlHeightLG,
+        paddingInline: skin === 'win98' ? 14 : 12,
+        borderRadius: t.borderRadius,
+        defaultBorderColor:
+          skin === 'win98' ? (isDark ? '#505560' : '#808080') : isDark ? '#334155' : '#cbd5e1',
+        defaultHoverBorderColor: t.colorPrimaryHover,
       },
       Table: {
-        headerBg: isDark ? '#161f30' : '#f1f5f9',
-        headerColor: isDark ? '#cbd5e1' : '#475569',
-        headerSplitColor: 'transparent',
-        rowHoverBg: isDark ? 'rgba(59, 130, 246, 0.08)' : 'rgba(37, 99, 235, 0.04)',
-        borderColor: isDark ? '#1e293b' : '#f1f5f9',
-        cellPaddingBlock: 10,
-        cellPaddingBlockSM: 6,
-        cellPaddingInline: 12,
-        cellPaddingInlineSM: 8,
+        headerBg:
+          skin === 'win98'
+            ? isDark
+              ? '#242830'
+              : '#d4d0c8'
+            : skin === 'cyberpunk'
+              ? isDark
+                ? '#141824'
+                : '#eaedf5'
+              : isDark
+                ? '#161f30'
+                : '#f1f5f9',
+        headerColor: isDark ? '#cbd5e1' : '#334155',
+        headerSplitColor: skin === 'win98' ? (isDark ? '#383c44' : '#808080') : 'transparent',
+        rowHoverBg:
+          skin === 'cyberpunk'
+            ? isDark
+              ? 'rgba(0, 240, 255, 0.08)'
+              : 'rgba(255, 0, 85, 0.06)'
+            : isDark
+              ? 'rgba(59, 130, 246, 0.08)'
+              : 'rgba(37, 99, 235, 0.04)',
+        borderColor: t.colorBorder,
+        cellPaddingBlock: skin === 'win98' ? 6 : 10,
+        cellPaddingBlockSM: 4,
+        cellPaddingInline: skin === 'win98' ? 8 : 12,
+        cellPaddingInlineSM: 6,
       },
       Menu: {
-        itemBorderRadius: 6,
-        itemMarginInline: 8,
-        itemMarginBlock: 4,
-        itemHeight: 36,
+        itemBorderRadius: t.borderRadius,
+        itemMarginInline: skin === 'win98' ? 2 : 8,
+        itemMarginBlock: skin === 'win98' ? 2 : 4,
+        itemHeight: skin === 'win98' ? 30 : 36,
         activeBarBorderWidth: 0,
         darkItemBg: 'transparent',
         darkSubMenuItemBg: 'transparent',
-        darkItemSelectedBg: 'rgba(59, 130, 246, 0.15)',
-        darkItemSelectedColor: '#ffffff',
-        itemSelectedBg: 'rgba(37, 99, 235, 0.08)',
-        itemSelectedColor: '#2563eb',
+        darkItemSelectedBg:
+          skin === 'win98'
+            ? '#000080'
+            : skin === 'cyberpunk'
+              ? 'rgba(0, 240, 255, 0.16)'
+              : 'rgba(59, 130, 246, 0.15)',
+        darkItemSelectedColor: skin === 'cyberpunk' ? '#00f0ff' : '#ffffff',
+        itemSelectedBg:
+          skin === 'win98'
+            ? '#000080'
+            : skin === 'cyberpunk'
+              ? 'rgba(255, 0, 85, 0.12)'
+              : 'rgba(37, 99, 235, 0.08)',
+        itemSelectedColor: skin === 'win98' ? '#ffffff' : t.colorPrimary,
       },
       Card: {
-        borderRadiusLG: 8,
-        colorBorderSecondary: isDark ? '#1e293b' : '#e2e8f0',
+        borderRadiusLG: t.borderRadiusLG,
+        colorBorderSecondary: t.colorBorderSecondary,
       },
       Progress: {
-        remainingColor: isDark ? '#1e293b' : '#e2e8f0',
-        lineBorderRadius: 3,
+        remainingColor: isDark ? t.colorBorder : '#e2e8f0',
+        lineBorderRadius: skin === 'win98' || skin === 'cyberpunk' ? 0 : 3,
       },
       Tag: {
-        borderRadiusSM: 4,
-        defaultBg: isDark ? '#1e293b' : '#f1f5f9',
+        borderRadiusSM: t.borderRadiusSM,
+        defaultBg: isDark ? t.colorBgElevated : '#f1f5f9',
         defaultColor: isDark ? '#cbd5e1' : '#475569',
       },
       Input: {
-        activeBorderColor: '#3b82f6',
-        hoverBorderColor: '#60a5fa',
-        borderRadius: 6,
+        activeBorderColor: t.colorPrimary,
+        hoverBorderColor: t.colorPrimaryHover,
+        borderRadius: t.borderRadius,
       },
       Alert: {
-        borderRadiusLG: 6,
+        borderRadiusLG: t.borderRadius,
       },
     },
   };
+
+  return baseConfig;
 }

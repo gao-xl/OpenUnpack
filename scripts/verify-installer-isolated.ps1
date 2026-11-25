@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][string]$SetupExe, [Parameter(Mandatory)][string]$ProductName,
+﻿param([Parameter(Mandatory)][string]$SetupExe, [Parameter(Mandatory)][string]$ProductName,
       [Parameter(Mandatory)][string]$EvidenceDirectory, [string]$ExpectedPayloadDirectory,
       [switch]$PreserveSyntheticData)
 . (Join-Path $PSScriptRoot 'common.ps1')
@@ -11,12 +11,18 @@ function Get-OpenUnpackInstallerPayload {
     $null = Assert-OpenUnpackOwnedPath -Path $taskPayloadRoot -Parent ([IO.Path]::GetDirectoryName($taskPayloadRoot))
     $taskManifest = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::OrdinalIgnoreCase)
     foreach ($taskFile in Get-ChildItem -LiteralPath $taskPayloadRoot -File -Recurse -Force) {
-        $taskRelative = [IO.Path]::GetRelativePath($taskPayloadRoot, $taskFile.FullName).Replace('\', '/')
+        $taskRootPrefix = $taskPayloadRoot.TrimEnd('\', '/') + '\'
+        $taskRelative = if ($taskFile.FullName.StartsWith($taskRootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+            $taskFile.FullName.Substring($taskRootPrefix.Length).Replace('\', '/')
+        } else {
+            $taskFile.FullName.Replace('\', '/')
+        }
         # These directories contain NSIS plugins and the WebView bootstrapper, not installed application files.
         if ($ExtractedSetup -and $taskRelative.Split('/')[0] -in @('$PLUGINSDIR', '$TEMP')) { continue }
-        if (-not $taskManifest.TryAdd($taskRelative, (Get-FileHash -LiteralPath $taskFile.FullName -Algorithm SHA256).Hash.ToLowerInvariant())) {
+        if ($taskManifest.ContainsKey($taskRelative)) {
             throw '安装载荷存在大小写冲突。'
         }
+        $taskManifest.Add($taskRelative, (Get-FileHash -LiteralPath $taskFile.FullName -Algorithm SHA256).Hash.ToLowerInvariant())
     }
     foreach ($taskRequired in @('openunpack-desktop.exe', 'uninstall.exe', 'LICENSE', 'THIRD_PARTY_NOTICES.md')) {
         if (-not $taskManifest.ContainsKey($taskRequired)) { throw "安装载荷不完整：$taskRequired" }
@@ -62,7 +68,7 @@ if ($ExpectedPayloadDirectory) {
     Assert-OpenUnpackInstallerPayload -Expected $taskExpectedPayload -Actual $taskSuppliedPayload
 }
 @{ setupSha256 = $taskSetupSha256; extractionDirectory = $taskExtracted; files = $taskExpectedPayload } |
-    ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $taskEvidence 'expected-installed-payload.json') -Encoding utf8NoBOM
+    ConvertTo-Json -Depth 5 | ForEach-Object { Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskEvidence 'expected-installed-payload.json') -Content ($_ + "`n") }
 $taskData = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA $ProductName))
 $taskProgramParent = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'Programs'))
 $taskProgram = [IO.Path]::GetFullPath((Join-Path $taskProgramParent $ProductName))
@@ -76,7 +82,7 @@ $taskSetupRuns = [Collections.Generic.List[object]]::new()
 function Test-Step([string]$Name, [scriptblock]$Body) {
     try { & $Body; $taskRows.Add(@{ name = $Name; status = 'passed' }) }
     catch { $taskRows.Add(@{ name = $Name; status = 'failed'; message = $_.Exception.Message }); throw }
-    finally { $taskRows | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $taskEvidence 'installer-results.json') -Encoding utf8NoBOM }
+    finally { Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskEvidence 'installer-results.json') -Content (($taskRows | ConvertTo-Json -Depth 5) + "`n") }
     Write-Output "PASS $Name"
 }
 function Invoke-Setup([string[]]$Arguments, [bool]$ExpectedSuccess = $true) {
@@ -84,19 +90,19 @@ function Invoke-Setup([string[]]$Arguments, [bool]$ExpectedSuccess = $true) {
     $taskProcess = Start-Process -FilePath $taskSetup -ArgumentList $Arguments -WindowStyle Hidden -PassThru
     if (-not $taskProcess.WaitForExit(60000)) { throw "安装进程未退出，保留现场 PID $($taskProcess.Id)" }
     $taskSetupRuns.Add(@{ arguments = $Arguments; exitCode = $taskProcess.ExitCode; expectedSuccess = $ExpectedSuccess })
-    $taskSetupRuns | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $taskEvidence 'setup-executions.json') -Encoding utf8NoBOM
+    Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskEvidence 'setup-executions.json') -Content (($taskSetupRuns | ConvertTo-Json -Depth 5) + "`n")
     if ($ExpectedSuccess -and $taskProcess.ExitCode -ne 0) { throw "安装失败：$($taskProcess.ExitCode)" }
     if (-not $ExpectedSuccess -and $taskProcess.ExitCode -ne 2) { throw "未收到数据目录阻断退出码：$($taskProcess.ExitCode)" }
 }
 New-OpenUnpackDirectory $taskData
-Set-Content -LiteralPath (Join-Path $taskData '.openunpack-audit-owner') -Value $ProductName -Encoding utf8NoBOM
+Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskData '.openunpack-audit-owner') -Content ($ProductName + "`n")
 # Synthetic bytes, not a personal database or vault.
-Set-Content -LiteralPath (Join-Path $taskData 'jobs.sqlite') -Value 'synthetic-old-jobs' -Encoding utf8NoBOM
-Set-Content -LiteralPath (Join-Path $taskData 'passwords.vault') -Value 'synthetic-old-vault' -Encoding utf8NoBOM
-Set-Content -LiteralPath (Join-Path $taskData 'jobs.sqlite-wal') -Value 'synthetic-old-wal' -Encoding utf8NoBOM
-Set-Content -LiteralPath (Join-Path $taskData 'passwords.vault.bak') -Value 'synthetic-old-backup' -Encoding utf8NoBOM
+Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskData 'jobs.sqlite') -Content "synthetic-old-jobs`n"
+Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskData 'passwords.vault') -Content "synthetic-old-vault`n"
+Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskData 'jobs.sqlite-wal') -Content "synthetic-old-wal`n"
+Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskData 'passwords.vault.bak') -Content "synthetic-old-backup`n"
 $taskBefore = @(Get-ChildItem -LiteralPath $taskData -File | ForEach-Object { @{ name = $_.Name; sha256 = (Get-FileHash -LiteralPath $_.FullName).Hash } })
-$taskBefore | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskEvidence 'data-before.json') -Encoding utf8NoBOM
+Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskEvidence 'data-before.json') -Content (($taskBefore | ConvertTo-Json) + "`n")
 function Assert-DataPreserved {
     foreach ($taskFile in $taskBefore) {
         if ((Get-FileHash -LiteralPath (Join-Path $taskData $taskFile.name)).Hash -ne $taskFile.sha256) { throw '旧数据摘要改变。' }
@@ -116,14 +122,14 @@ try {
     Set-Item -LiteralPath $taskProductKey -Value $taskData
     Test-Step 'legacy recorded directory skipped and Programs default selected' {
         Invoke-Setup -Arguments @('/S', '/NS')
-        foreach ($taskFile in @('openunpack-desktop.exe', 'uninstall.exe', 'worker/OpenUnpack.Worker.exe', 'worker/7z.dll')) {
+        foreach ($taskFile in @('openunpack-desktop.exe', 'uninstall.exe', 'tools/7zip/7z.exe', 'tools/7zip/7z.dll')) {
             if (-not (Test-Path -LiteralPath (Join-Path $taskProgram $taskFile) -PathType Leaf)) { throw "安装资源缺失：$taskFile" }
         }
         if ((Get-Item -LiteralPath $taskProductKey).GetValue('') -ne $taskProgram) { throw '安装目录注册值不正确。' }
         $taskInstalledPayload = Get-OpenUnpackInstallerPayload -Directory $taskProgram
         Assert-OpenUnpackInstallerPayload -Expected $taskExpectedPayload -Actual $taskInstalledPayload
-        @{ files = $taskInstalledPayload; count = $taskInstalledPayload.Count; setupSha256 = $taskSetupSha256 } |
-            ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $taskEvidence 'installed-payload.json') -Encoding utf8NoBOM
+        $installedSummary = @{ files = $taskInstalledPayload; count = $taskInstalledPayload.Count; setupSha256 = $taskSetupSha256 }
+        Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskEvidence 'installed-payload.json') -Content (($installedSummary | ConvertTo-Json -Depth 5) + "`n")
         Assert-DataPreserved
     }
     Test-Step 'repeat installer preserves data and registered program directory' {
@@ -141,8 +147,8 @@ try {
         if (Test-Path -LiteralPath $taskUninstallKey) { throw '卸载注册值残留。' }
         Assert-DataPreserved
     }
-    @{ productName = $ProductName; programDirectory = $taskProgram; dataDirectory = $taskData; setupSha256 = $taskSetupSha256; payloadFiles = $taskExpectedPayload.Count; preserveSyntheticData = [bool]$PreserveSyntheticData; scope = 'Same-machine isolated product, legacy directory simulation, repeat installation and uninstall, complete same-NSIS payload hashes; not clean-machine or cross-version data migration acceptance.' } |
-        ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskEvidence 'installer-scope.json') -Encoding utf8NoBOM
+    $scopeSummary = @{ productName = $ProductName; programDirectory = $taskProgram; dataDirectory = $taskData; setupSha256 = $taskSetupSha256; payloadFiles = $taskExpectedPayload.Count; preserveSyntheticData = [bool]$PreserveSyntheticData; scope = 'Same-machine isolated product, legacy directory simulation, repeat installation and uninstall, complete same-NSIS payload hashes; not clean-machine or cross-version data migration acceptance.' }
+    Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskEvidence 'installer-scope.json') -Content (($scopeSummary | ConvertTo-Json) + "`n")
     $taskCompleted = $true
 } finally {
     # Preserve failed installation evidence. Cleanup only this fresh synthetic data
@@ -158,8 +164,8 @@ try {
             Remove-Item -LiteralPath $taskCheckedData -Recurse -Force
             if (Test-Path -LiteralPath $taskProductKey) { Remove-Item -LiteralPath $taskProductKey -Recurse -Force }
         } catch {
-            @{ status = 'retained'; message = $_.Exception.Message; dataDirectory = $taskData } |
-                ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskEvidence 'cleanup-result.json') -Encoding utf8NoBOM
+            $cleanupSummary = @{ status = 'retained'; message = $_.Exception.Message; dataDirectory = $taskData }
+            Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskEvidence 'cleanup-result.json') -Content (($cleanupSummary | ConvertTo-Json) + "`n")
             Write-Warning '合成现场清理未完成；验收结果保持独立，详情见 cleanup-result.json。'
         }
     }

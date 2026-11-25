@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Builds a Windows x64 headless Host, CLI and self-contained Worker directory.
 #>
@@ -38,7 +38,7 @@ try {
     $taskMetadata = & cargo metadata --format-version 1 --no-deps --locked
     if ($LASTEXITCODE -ne 0) { throw '无法确定 Cargo 构建输出目录。' }
     $taskTarget = ($taskMetadata | ConvertFrom-Json).target_directory
-    if (-not $taskTarget -or -not [IO.Path]::IsPathFullyQualified($taskTarget)) {
+    if (-not $taskTarget -or -not [IO.Path]::IsPathRooted($taskTarget)) {
         throw 'Cargo 输出目录无效。'
     }
 

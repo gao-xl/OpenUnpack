@@ -5,7 +5,8 @@ const t = (key: string) => key;
 
 describe('humanizeVaultError', () => {
   it('replaces the portable-mode error with cause and resolution', () => {
-    const raw = 'PORTABLE_VAULT_DISABLED: portable vault detected but portable mode is disabled; set OPENUNPACK_PORTABLE_VAULT=1 to open it.';
+    const raw =
+      'PORTABLE_VAULT_DISABLED: portable vault detected but portable mode is disabled; set OPENUNPACK_PORTABLE_VAULT=1 to open it.';
     const message = humanizeVaultError(raw, t);
     expect(message).toContain('OPENUNPACK_PORTABLE_VAULT=1');
     expect(message).toContain('.vault.key');

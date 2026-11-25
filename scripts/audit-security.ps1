@@ -1,4 +1,4 @@
-param(
+﻿param(
     [switch]$Offline,
     [switch]$DenyWarnings,
     [switch]$InstallCargoAudit,
@@ -23,7 +23,7 @@ try {
         $taskRuntimePolicy = Get-OpenUnpackRuntimePolicy
         $taskRuntimeIdentity = @{ status = 'failed'; workerDirectory = $WorkerDirectory; reason = 'Published runtime identity validation did not complete.' }
         $taskRuntimeIdentity = Get-OpenUnpackPublishedRuntime -WorkerDirectory $WorkerDirectory -Policy $taskRuntimePolicy
-        $taskRuntimeIdentity | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $taskLogs 'runtime-identity.json') -Encoding utf8NoBOM
+        Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskLogs 'runtime-identity.json') -Content (($taskRuntimeIdentity | ConvertTo-Json -Depth 8) + "`n")
         if ($Offline) {
             $taskRuntimeStatus = @{ status = 'skipped'; checked = $false; version = $taskRuntimeIdentity.version;
                 reason = 'Offline: local reviewed identity passed; current official servicing metadata was not queried.' }
@@ -32,7 +32,7 @@ try {
                 source = $taskRuntimePolicy.releaseMetadataUrl; reason = 'Official runtime metadata query or validation did not complete.' }
             $taskRuntimeMetadata = (Invoke-WebRequest -Uri $taskRuntimePolicy.releaseMetadataUrl -TimeoutSec 60 -ErrorAction Stop).Content
             if ($taskRuntimeMetadata -is [byte[]]) { $taskRuntimeMetadata = [Text.Encoding]::UTF8.GetString($taskRuntimeMetadata) }
-            $taskRuntimeMetadata | Set-Content -LiteralPath (Join-Path $taskLogs 'dotnet-runtime-releases.json') -Encoding utf8NoBOM -NoNewline
+            Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskLogs 'dotnet-runtime-releases.json') -Content $taskRuntimeMetadata
             $taskRuntimeStatus = Get-OpenUnpackRuntimeSecurityStatus -RuntimeVersion $taskRuntimeIdentity.version -MetadataJson $taskRuntimeMetadata -Policy $taskRuntimePolicy
             if ($taskRuntimeStatus.status -ne 'passed') { throw 'Published runtime is behind a later official security release; review and republish before release.' }
         }
@@ -123,9 +123,9 @@ try {
     $taskAllMetadataJson = $taskAllMetadataRaw -join "`n"
     $taskAuditGraph = Get-OpenUnpackWindowsAuditExceptions -MetadataJson $taskMetadataJson -AllMetadataJson $taskAllMetadataJson
     $taskIgnoredAdvisories = @($taskAuditGraph.ignored_advisories)
-    $taskMetadataJson | Set-Content -LiteralPath (Join-Path $taskLogs 'cargo-windows-metadata.json') -Encoding utf8NoBOM -NoNewline
-    $taskAllMetadataJson | Set-Content -LiteralPath (Join-Path $taskLogs 'cargo-all-metadata.json') -Encoding utf8NoBOM -NoNewline
-    $taskAuditGraph | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $taskLogs 'cargo-windows-audit-scope.json') -Encoding utf8NoBOM
+    Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskLogs 'cargo-windows-metadata.json') -Content $taskMetadataJson
+    Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskLogs 'cargo-all-metadata.json') -Content $taskAllMetadataJson
+    Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskLogs 'cargo-windows-audit-scope.json') -Content (($taskAuditGraph | ConvertTo-Json -Depth 8) + "`n")
     foreach ($taskKnown in $taskIgnoredAdvisories) {
         $auditArgs.Add('--ignore'); $auditArgs.Add($taskKnown.id)
     }
@@ -134,14 +134,20 @@ try {
     Write-Host "-> cargo-audit pass: 0 vulnerabilities found." -ForegroundColor Green
 
     $taskNpmStatus = 'skipped'
+    $taskNpmProjects = @()
     if (-not $Offline) {
-        $taskNpmRaw = @(& npm --prefix (Join-Path $taskRoot 'apps/desktop-ui') audit --json 2>&1)
-        $taskNpmExit = $LASTEXITCODE
-        $taskNpmReport = ($taskNpmRaw -join "`n") | ConvertFrom-Json -ErrorAction Stop
-        if ($taskNpmExit -ne 0 -or -not $taskNpmReport.PSObject.Properties['metadata'] -or
-            -not $taskNpmReport.metadata.PSObject.Properties['vulnerabilities'] -or
-            $taskNpmReport.metadata.vulnerabilities.total -ne 0) {
-            throw 'npm advisory query failed, returned an incomplete report, or found vulnerabilities.'
+        foreach ($taskNpmDir in @('apps/desktop-ui', 'apps/mcp-connector')) {
+            $taskNpmPath = Join-Path $taskRoot $taskNpmDir
+            if (-not (Test-Path -LiteralPath (Join-Path $taskNpmPath 'package-lock.json') -PathType Leaf)) { continue }
+            $taskNpmRaw = @(& npm --prefix $taskNpmPath audit --json 2>&1)
+            $taskNpmExit = $LASTEXITCODE
+            $taskNpmReport = ($taskNpmRaw -join "`n") | ConvertFrom-Json -ErrorAction Stop
+            if ($taskNpmExit -ne 0 -or -not $taskNpmReport.PSObject.Properties['metadata'] -or
+                -not $taskNpmReport.metadata.PSObject.Properties['vulnerabilities'] -or
+                $taskNpmReport.metadata.vulnerabilities.total -ne 0) {
+                throw "npm advisory query failed, returned an incomplete report, or found vulnerabilities in $taskNpmDir."
+            }
+            $taskNpmProjects += @{ project = $taskNpmDir; status = 'passed'; vulnerabilities = 0 }
         }
         $taskNpmStatus = 'passed'
     }
@@ -170,15 +176,15 @@ try {
             ignored_advisories = $taskIgnoredAdvisories
             target_graph = $taskAuditGraph
         }
-        npm_dependencies = @{ status = $taskNpmStatus; checked = (-not $Offline) }
+        npm_dependencies = @{ status = $taskNpmStatus; checked = (-not $Offline); projects = $taskNpmProjects }
     }
-    $auditSummary | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $taskLogs 'security-audit.json') -Encoding utf8NoBOM
+    Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskLogs 'security-audit.json') -Content (($auditSummary | ConvertTo-Json -Depth 10) + "`n")
 
     Write-Host "`n=== Security Audit Complete: Status=$overallStatus. ===" -ForegroundColor Green
 } catch {
-    @{ status = 'failed'; at = [DateTimeOffset]::UtcNow.ToString('o'); failure_reason = $_.Exception.Message;
-        dotnet_dependencies = @{ status = $dotnetVulnStatus }; dotnet_runtime_identity = $taskRuntimeIdentity; dotnet_runtime_servicing = $taskRuntimeStatus } |
-        ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $taskLogs 'security-audit.json') -Encoding utf8NoBOM
+    $failureSummary = @{ status = 'failed'; at = [DateTimeOffset]::UtcNow.ToString('o'); failure_reason = $_.Exception.Message;
+        dotnet_dependencies = @{ status = $dotnetVulnStatus }; dotnet_runtime_identity = $taskRuntimeIdentity; dotnet_runtime_servicing = $taskRuntimeStatus }
+    Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskLogs 'security-audit.json') -Content (($failureSummary | ConvertTo-Json -Depth 10) + "`n")
     throw
 } finally {
     Pop-Location

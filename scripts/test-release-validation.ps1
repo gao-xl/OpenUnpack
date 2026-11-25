@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'common.ps1')
 Assert-OpenUnpackWindows
@@ -7,7 +7,9 @@ Assert-OpenUnpackWindows
 foreach ($taskScript in @('verify-installer-isolated.ps1', 'verify-release-signatures.ps1')) {
     $taskTokens = $null
     $taskParseErrors = $null
-    $taskAst = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot $taskScript), [ref]$taskTokens, [ref]$taskParseErrors)
+    $taskScriptPath = Join-Path $PSScriptRoot $taskScript
+    $taskContent = [IO.File]::ReadAllText($taskScriptPath, [System.Text.Encoding]::UTF8)
+    $taskAst = [Management.Automation.Language.Parser]::ParseInput($taskContent, $taskScriptPath, [ref]$taskTokens, [ref]$taskParseErrors)
     if ($taskParseErrors.Count -ne 0) { throw "PowerShell parsing failed: $taskScript" }
     foreach ($taskFunction in $taskAst.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
         if ($taskFunction.Name -in @('Get-OpenUnpackInstallerPayload', 'Assert-OpenUnpackInstallerPayload', 'Get-OpenUnpackSignaturePolicyErrors')) {
@@ -109,6 +111,6 @@ foreach ($taskInvalid in @(
         if (@(Get-OpenUnpackSignaturePolicyErrors $taskInvalid.status $taskInvalid.thumbprint $taskInvalid.eku $taskInvalid.pin).Count -eq 0) { throw 'Invalid synthetic signature metadata passed.' }
     }
 }
-@{ status = 'passed'; scope = 'Synthetic validation-policy fixtures only; no installer execution, signing or clean-machine acceptance.'; checks = $taskChecks.ToArray() } |
-    ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $taskTestRoot 'results.json') -Encoding utf8NoBOM
+$taskSummaryJson = @{ status = 'passed'; scope = 'Synthetic validation-policy fixtures only; no installer execution, signing or clean-machine acceptance.'; checks = $taskChecks.ToArray() } | ConvertTo-Json -Depth 5
+[IO.File]::WriteAllText((Join-Path $taskTestRoot 'results.json'), $taskSummaryJson, [System.Text.UTF8Encoding]::new($false))
 Write-Output ("PASS $($taskChecks.Count) release validation cases; retained synthetic fixtures: $taskTestRoot")

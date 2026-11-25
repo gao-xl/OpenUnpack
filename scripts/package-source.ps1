@@ -1,4 +1,4 @@
-param([string]$Version = '0.1.0')
+﻿param([string]$Version = '0.1.0')
 . (Join-Path $PSScriptRoot 'common.ps1')
 Assert-OpenUnpackWindows
 if ($Version -notmatch '^\d+\.\d+\.\d+([-.][A-Za-z0-9.-]+)?$') { throw '版本格式无效。' }
@@ -40,7 +40,13 @@ foreach ($tree in @('apps', 'crates', 'src', 'tests', 'scripts', 'docs', '.githu
     $directory = Join-Path $taskRoot $tree
     if (-not (Test-Path -LiteralPath $directory)) { continue }
     foreach ($file in Get-ChildItem -LiteralPath $directory -File -Recurse -Force) {
-        $relative = [IO.Path]::GetRelativePath($taskRoot, $file.FullName).Replace('\', '/')
+        $full = [IO.Path]::GetFullPath($file.FullName)
+        $rootBase = [IO.Path]::GetFullPath($taskRoot).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+        $relative = if ($full.StartsWith($rootBase, [StringComparison]::OrdinalIgnoreCase)) {
+            $full.Substring($rootBase.Length).Replace('\', '/')
+        } else {
+            [IO.Path]::GetFileName($full)
+        }
         if ($tree -eq 'docs' -and $relative -notin $taskSourcePolicy.documentationFiles) { continue }
         $taskExcluded = @($taskSourcePolicy.excludedPaths | Where-Object { $relative -eq $_ -or $relative.StartsWith($_ + '/', [StringComparison]::Ordinal) }).Count -gt 0
         if ($taskExcluded) { continue }
@@ -52,7 +58,8 @@ foreach ($tree in @('apps', 'crates', 'src', 'tests', 'scripts', 'docs', '.githu
         Copy-Item -LiteralPath $file.FullName -Destination $destination
     }
 }
-Invoke-OpenUnpackTool node @((Join-Path $PSScriptRoot 'audit-source.mjs'), $taskStage)
+$taskAuditArgs = @((Join-Path $PSScriptRoot 'audit-source.mjs'), $taskStage)
+Invoke-OpenUnpackTool node @taskAuditArgs
 Write-OpenUnpackChecksums $taskStage
 $taskZip = Join-Path $taskRelease ('OpenUnpack-' + $Version + '-source.zip')
 if (Test-Path -LiteralPath $taskZip) { Remove-Item -LiteralPath (Assert-OpenUnpackOwnedPath -Path $taskZip -Parent $taskRelease) -Force }

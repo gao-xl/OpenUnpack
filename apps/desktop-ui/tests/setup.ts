@@ -11,10 +11,16 @@ Object.defineProperty(window, 'matchMedia', {
     removeListener() {},
     addEventListener() {},
     removeEventListener() {},
-    dispatchEvent() { return false; }
-  }))
+    dispatchEvent() {
+      return false;
+    },
+  })),
 });
-globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+globalThis.ResizeObserver = class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
 HTMLElement.prototype.scrollIntoView = () => {};
 const getStyle = window.getComputedStyle;
-window.getComputedStyle = element => getStyle(element);
+window.getComputedStyle = (element) => getStyle(element);

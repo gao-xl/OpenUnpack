@@ -21,7 +21,15 @@ const requireFromUi = createRequire(new URL('../apps/desktop-ui/package.json', i
 const ts = requireFromUi('typescript');
 
 const ROOT = process.argv[2] ?? 'apps/desktop-ui/src';
-const JSX_INTERACTIVE = new Set(['button', 'a', 'input', 'select', 'textarea', 'summary', 'option']);
+const JSX_INTERACTIVE = new Set([
+  'button',
+  'a',
+  'input',
+  'select',
+  'textarea',
+  'summary',
+  'option',
+]);
 const findings = [];
 
 function walk(dir) {
@@ -38,7 +46,7 @@ function walk(dir) {
 
 function attribute(node, name) {
   return node.attributes.properties.find(
-    property => ts.isJsxAttribute(property) && property.name.getText() === name,
+    (property) => ts.isJsxAttribute(property) && property.name.getText() === name,
   );
 }
 
@@ -52,8 +60,14 @@ function report(file, node, rule, message) {
 }
 
 function inspect(file) {
-  const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const visit = node => {
+  const source = ts.createSourceFile(
+    file,
+    readFileSync(file, 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const visit = (node) => {
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
       const tag = tagName(node);
       const lower = tag.toLowerCase();
@@ -61,12 +75,23 @@ function inspect(file) {
       // own keyboard handling; only native lowercase tags are judged here.
       const native = /^[a-z][a-z0-9]*$/.test(tag);
       if (lower === 'img' && !attribute(node, 'alt')) {
-        report(file, node, 'a11y-img-alt', '<img> requires an alt attribute (use alt="" for decorative images).');
+        report(
+          file,
+          node,
+          'a11y-img-alt',
+          '<img> requires an alt attribute (use alt="" for decorative images).',
+        );
       }
       if (attribute(node, 'onClick')) {
-        const hasKeyboardPath = attribute(node, 'role') || attribute(node, 'tabIndex') || attribute(node, 'onKeyDown');
+        const hasKeyboardPath =
+          attribute(node, 'role') || attribute(node, 'tabIndex') || attribute(node, 'onKeyDown');
         if (native && !JSX_INTERACTIVE.has(lower) && !hasKeyboardPath) {
-          report(file, node, 'a11y-click-target', `<${tag}> has onClick but no role/tabIndex/onKeyDown; keyboard users cannot reach it.`);
+          report(
+            file,
+            node,
+            'a11y-click-target',
+            `<${tag}> has onClick but no role/tabIndex/onKeyDown; keyboard users cannot reach it.`,
+          );
         }
       }
     }
@@ -80,9 +105,11 @@ walk(ROOT);
 for (const finding of findings) {
   const location = relative(process.cwd(), finding.file);
   const level = finding.rule === 'a11y-img-alt' ? 'error' : 'warning';
-  console.log(`${location}:${finding.line}:${finding.column} ${level} ${finding.rule} ${finding.message}`);
+  console.log(
+    `${location}:${finding.line}:${finding.column} ${level} ${finding.rule} ${finding.message}`,
+  );
 }
 
-const errors = findings.filter(finding => finding.rule === 'a11y-img-alt').length;
+const errors = findings.filter((finding) => finding.rule === 'a11y-img-alt').length;
 console.log(`a11y: ${errors} error(s), ${findings.length - errors} warning(s) across ${ROOT}`);
 process.exit(errors > 0 ? 1 : 0);

@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'runtime-policy.ps1')
 $taskPolicy = Get-OpenUnpackRuntimePolicy

@@ -1,4 +1,4 @@
-param([switch]$SkipInstall, [switch]$WorkerProtocol, [switch]$SkipPrepare, [switch]$SkipSecurityAudit, [switch]$SkipMcpTest)
+﻿param([switch]$SkipInstall, [switch]$WorkerProtocol, [switch]$SkipPrepare, [switch]$SkipSecurityAudit, [switch]$SkipMcpTest)
 . (Join-Path $PSScriptRoot 'common.ps1')
 Assert-OpenUnpackWindows
 Import-OpenUnpackMsvc
@@ -44,8 +44,8 @@ try {
     }
     # Single-stack native Rust integration suites.
     Invoke-OpenUnpackTool cargo @('test', '--workspace', '--locked', '--no-fail-fast', '--', '--test-threads=1')
-    @{ status = 'passed'; at = [DateTimeOffset]::UtcNow.ToString('o'); scope = 'Synthetic archives, current-user DPAPI, native Rust microkernel, frontend unit tests. No physical HDD/SSD or clean-machine installation acceptance.' } |
-        ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskLogs 'summary.json') -Encoding utf8NoBOM
+    $verifySummary = @{ status = 'passed'; at = [DateTimeOffset]::UtcNow.ToString('o'); scope = 'Synthetic archives, current-user DPAPI, native Rust microkernel, frontend unit tests. No physical HDD/SSD or clean-machine installation acceptance.' }
+    Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskLogs 'summary.json') -Content (($verifySummary | ConvertTo-Json) + "`n")
 } finally {
     [Environment]::SetEnvironmentVariable('OPENUNPACK_TEST_WORKER', $taskPreviousWorker, 'Process')
     [Environment]::SetEnvironmentVariable('OPENUNPACK_TEST_ENGINE', $taskPreviousEngine, 'Process')

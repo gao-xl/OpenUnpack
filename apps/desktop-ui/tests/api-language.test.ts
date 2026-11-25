@@ -13,7 +13,13 @@ afterEach(() => vi.unstubAllGlobals());
 test('language changes preserve selection order and recover after a failed update', async () => {
   vi.stubGlobal('window', { __TAURI_INTERNALS__: {} });
   let finishFirst!: () => void;
-  invoke.mockImplementationOnce(() => new Promise<void>(resolve => { finishFirst = resolve; }))
+  invoke
+    .mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishFirst = resolve;
+        }),
+    )
     .mockRejectedValueOnce('native update failed')
     .mockResolvedValueOnce(undefined);
   const { api } = await import('../src/api');

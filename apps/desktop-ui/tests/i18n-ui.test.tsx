@@ -4,7 +4,10 @@ import userEvent from '@testing-library/user-event';
 import App from '../src/App';
 import { languageStorageKey, setLanguage } from '../src/i18n';
 
-afterEach(() => { act(() => setLanguage('zh-CN')); localStorage.removeItem(languageStorageKey); });
+afterEach(() => {
+  act(() => setLanguage('zh-CN'));
+  localStorage.removeItem(languageStorageKey);
+});
 
 it('switches all navigation and the mounted settings page without losing an unsaved draft', async () => {
   const user = userEvent.setup();

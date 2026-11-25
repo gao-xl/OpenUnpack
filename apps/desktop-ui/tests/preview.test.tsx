@@ -17,7 +17,9 @@ describe('浏览器预览与本地能力分离', () => {
   it('浏览器中的扫描、复制和合并会明确拒绝，完全不调用原生IPC', async () => {
     await expect(api.scan(['C:\\fixtures\\a.zip'])).rejects.toThrow('界面预览');
     await expect(api.copyPassword('fixture-pw')).rejects.toThrow('界面预览');
-    await expect(api.confirmRestoreBackup('C:\\fixtures\\backup', 'fixture passphrase', 'fixture-token')).rejects.toThrow('界面预览');
+    await expect(
+      api.confirmRestoreBackup('C:\\fixtures\\backup', 'fixture passphrase', 'fixture-token'),
+    ).rejects.toThrow('界面预览');
     expect(invoke).not.toHaveBeenCalled();
   });
 });

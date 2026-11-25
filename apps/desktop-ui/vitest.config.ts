@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    preserveSymlinks: true,
+  },
   test: {
     globals: true,
     environment: 'jsdom',
@@ -10,6 +13,6 @@ export default defineConfig({
     fileParallelism: false,
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.test.{ts,tsx}'],
-    testTimeout: 60000
-  }
+    testTimeout: 60000,
+  },
 });

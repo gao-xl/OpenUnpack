@@ -1,4 +1,4 @@
-# Scoped structural checks always run; -RunCargoTest adds real Rust -> C# -> Rust checks.
+﻿# Scoped structural checks always run; -RunCargoTest adds real Rust -> C# -> Rust checks.
 param([switch]$RunCargoTest)
 . (Join-Path $PSScriptRoot 'common.ps1')
 $taskRoot = Get-OpenUnpackRoot

@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'security-audit-policy.ps1')
 $valid = '{"version":1,"projects":[{"path":"synthetic.csproj"}]}'

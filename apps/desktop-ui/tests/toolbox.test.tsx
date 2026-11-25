@@ -18,7 +18,7 @@ describe('本地目录整理工具箱 IPC 契约与安全隔离', () => {
     };
     await expect(api.previewToolbox(opts)).rejects.toThrow('界面预览');
     await expect(
-      api.executeToolbox({ options: opts, approvedPaths: ['C:\\file.tar.gz.tar'], token: null })
+      api.executeToolbox({ options: opts, approvedPaths: ['C:\\file.tar.gz.tar'], token: null }),
     ).rejects.toThrow('界面预览');
     expect(invoke).not.toHaveBeenCalled();
   });
