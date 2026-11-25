@@ -159,6 +159,7 @@ const nativeCommands = new Set([
   'get_shell_context_menu_status',
   'set_shell_context_menu_status',
   'take_pending_open_paths',
+  'submit_native_input',
 ]);
 const engineLocalCommands = new Set(['copy_password', 'open_path', 'execute_post_action']);
 const daemonOnlyCommands = new Set(['start_selected_jobs', 'add_archive', 'submit_input']);
@@ -410,6 +411,7 @@ function setDaemonConnection(url: string | null, token: string | null) {
   connectionEpoch += 1;
   activeDaemon = next;
   syncProgressListener();
+  syncNeedPasswordListener();
   try {
     localStorage.removeItem(tokenKey);
     if (next) {
@@ -476,50 +478,64 @@ const progressListeners = new Set<(update: JobProgressUpdatePayload) => void>();
 const needPasswordListeners = new Set<(event: NeedPasswordEventPayload) => void>();
 
 /**
- * 原生 `job-progress` 事件监听器生命周期管理。
+ * 原生 Tauri 事件监听器生命周期管理。
  *
  * 原生监听只在「桌面 + 非守护进程」模式有意义；守护进程模式由 `subscribe()`
- * 的 WebSocket 推送进度。此前监听器在 `onProgress()` 每次调用时都 `listen`
- * 却从不 `unlisten`，且只在注册那一刻判定连接模式，导致：
- *   1) 原生监听器重复注册、永不释放；
- *   2) 若初始化时已处于守护进程模式，切回原生后进度完全缺失。
- * 这里用单一监听器 + 连接模式同步来消除上述问题。
+ * 的 WebSocket 推送事件。使用单一监听器与代际令牌消除重复注册和切模式漏听问题。
  */
-let nativeProgressUnlisten: (() => void) | null = null;
-let nativeProgressSetup: Promise<void> | null = null;
-let progressListenerGeneration = 0;
+function createNativeEventBridge<T>(
+  eventName: string,
+  hasListeners: () => boolean,
+  dispatch: (payload: T) => void,
+) {
+  let nativeUnlisten: (() => void) | null = null;
+  let nativeSetup: Promise<void> | null = null;
+  let listenerGeneration = 0;
 
-function syncProgressListener() {
-  progressListenerGeneration += 1;
-  const generation = progressListenerGeneration;
-  if (!isDesktop || activeDaemon) {
-    // 非原生模式：拆除既有原生监听，进度改由 WebSocket 快照/事件驱动。
-    const cleanup = nativeProgressUnlisten;
-    nativeProgressUnlisten = null;
-    nativeProgressSetup = null;
-    cleanup?.();
-    return;
-  }
-  // 原生模式：确保恰好存在一个原生监听器。
-  if (nativeProgressUnlisten || nativeProgressSetup) return;
-  nativeProgressSetup = (async () => {
-    try {
-      const unlisten = await listen<JobProgressUpdatePayload>('job-progress', (event) => {
-        if (!event?.payload) return;
-        progressListeners.forEach((listener) => listener(event.payload));
-      });
-      // 异步建立期间连接模式可能再次切换：仅当代际未变且仍处原生模式时才落定，
-      // 否则立即拆除，避免复活陈旧监听器或让过期 setup 覆盖新监听器的句柄。
-      if (generation === progressListenerGeneration && isDesktop && !activeDaemon)
-        nativeProgressUnlisten = unlisten;
-      else unlisten();
-    } catch {
-      /* 监听器不可用；快照仍是权威来源。 */
-    } finally {
-      if (generation === progressListenerGeneration) nativeProgressSetup = null;
+  return () => {
+    listenerGeneration += 1;
+    const generation = listenerGeneration;
+    if (!isDesktop || activeDaemon || !hasListeners()) {
+      const cleanup = nativeUnlisten;
+      nativeUnlisten = null;
+      nativeSetup = null;
+      cleanup?.();
+      return;
     }
-  })();
+    if (nativeUnlisten || nativeSetup) return;
+    nativeSetup = (async () => {
+      try {
+        const unlisten = await listen<T>(eventName, (event) => {
+          if (!event?.payload) return;
+          dispatch(event.payload);
+        });
+        if (generation === listenerGeneration && isDesktop && !activeDaemon && hasListeners())
+          nativeUnlisten = unlisten;
+        else unlisten();
+      } catch {
+        /* 监听器不可用；快照仍是权威来源。 */
+      } finally {
+        if (generation === listenerGeneration) nativeSetup = null;
+      }
+    })();
+  };
 }
+
+const syncProgressListener = createNativeEventBridge<JobProgressUpdatePayload>(
+  'job-progress',
+  () => progressListeners.size > 0,
+  (payload) => {
+    progressListeners.forEach((listener) => listener(payload));
+  },
+);
+
+const syncNeedPasswordListener = createNativeEventBridge<NeedPasswordEventPayload>(
+  'need-password',
+  () => needPasswordListeners.size > 0,
+  (payload) => {
+    needPasswordListeners.forEach((listener) => listener(payload));
+  },
+);
 /**
  * 类型化的 API 门面：方法名与宿主命令 / 守护进程路由一一对应。
  * 桌面模式走 Tauri invoke，守护进程模式走同源 HTTP。
@@ -656,15 +672,24 @@ export const api = {
       'submit_input',
       { jobId, inputType, value },
     ),
+  submitNativeInput: (jobId: string, value: string) =>
+    callNative<boolean>('submit_native_input', { jobId, inputType: 'password', value }),
   onProgress: (callback: (update: JobProgressUpdatePayload) => void) => {
     progressListeners.add(callback);
     // 原生模式建立单一 Tauri 监听；守护进程模式由 subscribe() 的 WebSocket 分发。
     syncProgressListener();
-    return () => progressListeners.delete(callback);
+    return () => {
+      progressListeners.delete(callback);
+      syncProgressListener();
+    };
   },
   onNeedPassword: (callback: (event: NeedPasswordEventPayload) => void) => {
     needPasswordListeners.add(callback);
-    return () => needPasswordListeners.delete(callback);
+    syncNeedPasswordListener();
+    return () => {
+      needPasswordListeners.delete(callback);
+      syncNeedPasswordListener();
+    };
   },
   async subscribe(
     callback: (snapshot: AppSnapshot) => void,

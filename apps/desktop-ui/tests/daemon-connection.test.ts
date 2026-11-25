@@ -365,3 +365,32 @@ it('stale daemon URL in localStorage does not hijack native desktop startup when
   expect(native.invoke).toHaveBeenCalledWith('queue_snapshot', undefined);
   expect(fetch).not.toHaveBeenCalled();
 });
+
+it('native need-password listener and submitNativeInput bridge work in desktop mode', async () => {
+  desktop();
+  const unlisten = vi.fn();
+  native.listen.mockResolvedValueOnce(unlisten);
+  native.invoke.mockResolvedValueOnce(true);
+  const { api } = await import('../src/api');
+
+  const cb = vi.fn();
+  const stop = api.onNeedPassword(cb);
+  await Promise.resolve();
+  expect(native.listen).toHaveBeenCalledWith('need-password', expect.any(Function));
+
+  const handler = native.listen.mock.calls[0][1] as (event: {
+    payload: { jobId: string; archivePath?: string };
+  }) => void;
+  handler({ payload: { jobId: 'job-pwd', archivePath: 'C:/tmp/secret.7z' } });
+  expect(cb).toHaveBeenCalledWith({ jobId: 'job-pwd', archivePath: 'C:/tmp/secret.7z' });
+
+  await expect(api.submitNativeInput('job-pwd', 's3cr3t')).resolves.toBe(true);
+  expect(native.invoke).toHaveBeenCalledWith('submit_native_input', {
+    jobId: 'job-pwd',
+    inputType: 'password',
+    value: 's3cr3t',
+  });
+
+  stop();
+  expect(unlisten).toHaveBeenCalledTimes(1);
+});

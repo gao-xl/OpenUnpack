@@ -495,6 +495,12 @@
           "markdownDescription": "Enables the start_jobs command without any pre-configured scope."
         },
         {
+          "description": "Enables the submit_native_input command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-submit-native-input",
+          "markdownDescription": "Enables the submit_native_input command without any pre-configured scope."
+        },
+        {
           "description": "Enables the take_pending_open_paths command without any pre-configured scope.",
           "type": "string",
           "const": "allow-take-pending-open-paths",
@@ -817,6 +823,12 @@
           "type": "string",
           "const": "deny-start-jobs",
           "markdownDescription": "Denies the start_jobs command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the submit_native_input command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-submit-native-input",
+          "markdownDescription": "Denies the submit_native_input command without any pre-configured scope."
         },
         {
           "description": "Denies the take_pending_open_paths command without any pre-configured scope.",

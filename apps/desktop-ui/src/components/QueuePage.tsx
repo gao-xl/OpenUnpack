@@ -397,12 +397,33 @@ export default function QueuePage({
   const [submittingPassword, setSubmittingPassword] = useState(false);
   const passwordDraftEpoch = useRef(0);
   const passwordRequestEpoch = useRef<number | null>(null);
+  const jobsRef = useRef(snapshot.jobs);
+  const passwordJobRef = useRef(passwordJob);
+  useEffect(() => {
+    jobsRef.current = snapshot.jobs;
+  }, [snapshot.jobs]);
+  useEffect(() => {
+    passwordJobRef.current = passwordJob;
+  }, [passwordJob]);
   const closePassword = useCallback(() => {
     passwordDraftEpoch.current += 1;
     passwordRequestEpoch.current = null;
     setPasswordJob(null);
     setInputPassword('');
     setSubmittingPassword(false);
+  }, []);
+  useEffect(() => {
+    const unlisten = api.onNeedPassword?.((event) => {
+      if (!event?.jobId || passwordJobRef.current) return;
+      const target = jobsRef.current.find((job) => job.id === event.jobId);
+      if (!target) return;
+      passwordDraftEpoch.current += 1;
+      passwordRequestEpoch.current = null;
+      setInputPassword('');
+      setSubmittingPassword(false);
+      setPasswordJob(target);
+    });
+    return () => unlisten?.();
   }, []);
   useEffect(
     () => () => {
@@ -522,9 +543,19 @@ export default function QueuePage({
           )
             return;
         }
-        if (daemon) await api.submitInput(passwordJob.id, 'password', secret);
-        else if (saveToVault) await api.retry(passwordJob.id);
-        else await api.retry(passwordJob.id, false, secret);
+        if (daemon) {
+          await api.submitInput(passwordJob.id, 'password', secret);
+        } else if (passwordJob.status === 'running' && api.submitNativeInput) {
+          const resumed = await api.submitNativeInput(passwordJob.id, secret);
+          if (!resumed) {
+            if (saveToVault) await api.retry(passwordJob.id);
+            else await api.retry(passwordJob.id, false, secret);
+          }
+        } else if (saveToVault) {
+          await api.retry(passwordJob.id);
+        } else {
+          await api.retry(passwordJob.id, false, secret);
+        }
         if (passwordDraftEpoch.current === epoch) closePassword();
       } finally {
         if (passwordDraftEpoch.current === epoch) {

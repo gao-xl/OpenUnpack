@@ -100,7 +100,6 @@ impl ArchiveExtractor for ZipExtractor {
                 Err(e) if permits_zip_cli_fallback(&e) && cli_engine::has_7z_cli() => {
                     cli_engine::inspect_cli(&p, pwd.as_deref(), max_entries, max_total_bytes)
                         .await
-                        .map_err(|_| e)
                 }
                 Err(e) => Err(e),
             }
@@ -138,9 +137,7 @@ impl ArchiveExtractor for ZipExtractor {
                 }
                 Ok(res) => Ok(res),
                 Err(e) if permits_zip_cli_fallback(&e) && cli_engine::has_7z_cli() => {
-                    cli_engine::probe_cli(&p, &cands, &cancel)
-                        .await
-                        .map_err(|_| e)
+                    cli_engine::probe_cli(&p, &cands, &cancel).await
                 }
                 Err(e) => Err(e),
             }
@@ -175,9 +172,8 @@ impl ArchiveExtractor for ZipExtractor {
                     (files, salvaged)
                 }
                 Err(e) if permits_zip_cli_fallback(&e) && cli_engine::has_7z_cli() => {
-                    let files = cli_engine::extract_cli(&req_clone, &dest_clone, progress, cancel)
-                        .await
-                        .map_err(|_| e)?;
+                    let files =
+                        cli_engine::extract_cli(&req_clone, &dest_clone, progress, cancel).await?;
                     let salvaged = files.iter().any(|f| f.is_corrupted);
                     (files, salvaged)
                 }

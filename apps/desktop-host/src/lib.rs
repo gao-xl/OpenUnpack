@@ -399,7 +399,57 @@ fn path_contains_or_equal(base: &Path, target: &Path) -> bool {
     }
 }
 
+#[cfg(windows)]
+const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+#[cfg(windows)]
+const IO_REPARSE_TAG_MOUNT_POINT: u32 = 0xA000_0003;
+#[cfg(windows)]
+const IO_REPARSE_TAG_SYMLINK: u32 = 0xA000_000C;
+#[cfg(windows)]
+const IO_REPARSE_TAG_LX_SYMLINK: u32 = 0xA000_001D;
+
+/// Permits cloud file placeholders (OneDrive / ProjFS / Dedup) on Windows while
+/// blocking symlinks, NTFS junctions, and arbitrary custom reparse points.
+#[cfg(windows)]
+fn is_allowed_cloud_reparse_tag(tag: u32) -> bool {
+    (tag & 0xFFFF_0FFF) == 0x9000_001A
+        || matches!(tag, 0x8000_0013 | 0x8000_0021 | 0x9000_001C)
+}
+
+#[cfg(windows)]
+fn query_reparse_tag(path: &Path) -> Option<u32> {
+    use std::iter::once;
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+    use windows_sys::Win32::Storage::FileSystem::{FindClose, FindFirstFileW, WIN32_FIND_DATAW};
+
+    let mut wide: Vec<u16> = path.as_os_str().encode_wide().chain(once(0)).collect();
+    if wide.len() <= 1 {
+        return None;
+    }
+    // Trim trailing directory separator so FindFirstFileW queries the directory entry itself.
+    while wide.len() > 2 && matches!(wide[wide.len() - 2], 47 | 92) && wide[wide.len() - 3] != 58 {
+        let nul = wide.pop().unwrap_or(0);
+        wide.pop();
+        wide.push(nul);
+    }
+    let mut data: WIN32_FIND_DATAW = unsafe { std::mem::zeroed() };
+    let handle = unsafe { FindFirstFileW(wide.as_ptr(), &mut data) };
+    if handle == INVALID_HANDLE_VALUE {
+        return None;
+    }
+    unsafe { FindClose(handle) };
+    if (data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0 {
+        Some(data.dwReserved0)
+    } else {
+        None
+    }
+}
+
 fn verify_no_reparse_ancestors(path: &Path) -> Result<(), String> {
+    #[cfg(windows)]
+    use std::os::windows::fs::MetadataExt;
+
     let mut current = Some(path);
     while let Some(segment) = current {
         if segment.as_os_str().is_empty() {
@@ -408,6 +458,32 @@ fn verify_no_reparse_ancestors(path: &Path) -> Result<(), String> {
         if segment.exists() {
             let meta =
                 fs::symlink_metadata(segment).map_err(|_| "Native operation failed".to_string())?;
+            #[cfg(windows)]
+            {
+                let has_reparse_attr = (meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+                if meta.file_type().is_symlink() || has_reparse_attr {
+                    let allowed = match query_reparse_tag(segment) {
+                        Some(tag)
+                            if !matches!(
+                                tag,
+                                IO_REPARSE_TAG_SYMLINK
+                                    | IO_REPARSE_TAG_MOUNT_POINT
+                                    | IO_REPARSE_TAG_LX_SYMLINK
+                            ) && is_allowed_cloud_reparse_tag(tag) =>
+                        {
+                            true
+                        }
+                        _ => false,
+                    };
+                    if !allowed {
+                        return Err(format!(
+                            "Path or ancestor is a symlink/reparse point: {}",
+                            segment.display()
+                        ));
+                    }
+                }
+            }
+            #[cfg(not(windows))]
             if meta.file_type().is_symlink() {
                 return Err(format!(
                     "Path or ancestor is a symlink/reparse point: {}",
@@ -1755,6 +1831,14 @@ pub(crate) async fn core_extract_selective(
 }
 
 pub(crate) async fn core_open_path(state: &AppState, path: String) -> Result<(), String> {
+    core_open_path_scoped(state, path, false).await
+}
+
+async fn core_open_path_scoped(
+    state: &AppState,
+    path: String,
+    allow_native_access: bool,
+) -> Result<(), String> {
     let trimmed = path.trim();
     if trimmed.is_empty() {
         return Err("Invalid path parameter: empty path".to_string());
@@ -1766,9 +1850,18 @@ pub(crate) async fn core_open_path(state: &AppState, path: String) -> Result<(),
         return Err("Invalid path parameter: starts with command switch".to_string());
     }
     let coord = state.coordinator.clone();
+    let access = state.access.clone();
     spawn_blocking(move || -> Result<(), String> {
-        coord.authorize_open(Path::new(&path))?;
         let canon = canonicalize_existing(&path)?;
+        let allowed_by_coordinator = coord.authorize_open(Path::new(&path)).is_ok();
+        let allowed_by_native = allow_native_access
+            && !allowed_by_coordinator
+            && access
+                .lock()
+                .is_ok_and(|guard| guard.is_readable(&canon) || guard.is_writable_dir(&canon));
+        if !allowed_by_coordinator && !allowed_by_native {
+            coord.authorize_open(Path::new(&path))?;
+        }
         let target_dir = if canon.is_dir() {
             canon
         } else {
@@ -1906,7 +1999,25 @@ async fn open_path(
     path: String,
 ) -> Result<(), String> {
     verify_frontend_window(&window)?;
-    core_open_path(&state, path).await
+    core_open_path_scoped(&state, path, true).await
+}
+
+#[tauri::command]
+async fn submit_native_input(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+    job_id: String,
+    input_type: String,
+    value: String,
+) -> Result<bool, String> {
+    verify_frontend_window(&window)?;
+    if input_type != "password" {
+        return Err("Unsupported input type".to_string());
+    }
+    if value.is_empty() || value.len() > 4096 {
+        return Err("Password input out of bounds".to_string());
+    }
+    state.coordinator.submit_input(&job_id, value)
 }
 
 pub(crate) async fn core_pick_files(state: &AppState, folder: bool) -> Result<Vec<String>, String> {
@@ -2810,12 +2921,26 @@ pub fn run() {
                 let app_handle = app.handle().clone();
                 let mut sub = coordinator.subscribe();
                 let mut progress_sub = coordinator.subscribe_progress();
+                let mut need_input_sub = coordinator.subscribe_need_input();
                 let app_progress_handle = app.handle().clone();
+                let app_need_input_handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     loop {
                         match progress_sub.recv().await {
                             Ok(update) => {
                                 let _ = app_progress_handle.emit_to("main", "job-progress", update);
+                            }
+                            Err(RecvError::Lagged(_)) => continue,
+                            Err(RecvError::Closed) => break,
+                        }
+                    }
+                });
+                tauri::async_runtime::spawn(async move {
+                    loop {
+                        match need_input_sub.recv().await {
+                            Ok(event) => {
+                                let _ =
+                                    app_need_input_handle.emit_to("main", "need-password", event);
                             }
                             Err(RecvError::Lagged(_)) => continue,
                             Err(RecvError::Closed) => break,
@@ -2950,6 +3075,7 @@ pub fn run() {
                 get_shell_context_menu_status,
                 set_shell_context_menu_status,
                 take_pending_open_paths,
+                submit_native_input,
             ])
             .run(generate_context!())
             .expect("error while running OpenUnpack desktop application");
@@ -3513,6 +3639,36 @@ mod tests {
         }
         let guard = access.lock().unwrap().clone();
         assert!(guard.is_writable_dir(&parent_canon));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn reparse_tag_policy_allows_cloud_placeholders_and_rejects_junctions() {
+        use super::{is_allowed_cloud_reparse_tag, verify_no_reparse_ancestors};
+        assert!(is_allowed_cloud_reparse_tag(0x9000_001A));
+        assert!(is_allowed_cloud_reparse_tag(0x9000_301A));
+        assert!(is_allowed_cloud_reparse_tag(0x8000_0021));
+        assert!(!is_allowed_cloud_reparse_tag(0xA000_0003));
+        assert!(!is_allowed_cloud_reparse_tag(0xA000_000C));
+
+        let temp = tempfile::tempdir().unwrap();
+        let target = temp.path().join("target_dir");
+        let junction = temp.path().join("junction_dir");
+        fs::create_dir_all(&target).unwrap();
+        let status = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(&junction)
+            .arg(&target)
+            .output()
+            .unwrap()
+            .status;
+        if status.success() {
+            assert!(
+                verify_no_reparse_ancestors(&junction).is_err(),
+                "NTFS junction should be rejected by verify_no_reparse_ancestors"
+            );
+            assert!(verify_no_reparse_ancestors(&target).is_ok());
+        }
     }
 }
 

@@ -11,11 +11,14 @@ use std::{
     process::Stdio,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
     },
     time::Duration,
 };
 use tokio::process::Command;
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// Timeout for archive integrity probe operations.
 const CLI_PROBE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -26,12 +29,34 @@ const CLI_DEFAULT_TIMEOUT: Duration = Duration::from_secs(3600);
 /// Upper bound on captured 7-Zip stderr. Only the classification keywords are
 /// needed, so a hostile archive cannot grow the buffer through error spam.
 const STDERR_CAPTURE_LIMIT: usize = 8 * 1024;
+/// Ensures full `7z.exe` binaries sit alongside their required `7z.dll`.
+fn has_required_7z_dll(bin_path: &Path) -> bool {
+    let is_modular_7z = bin_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.eq_ignore_ascii_case("7z.exe"));
+    if is_modular_7z {
+        bin_path.with_file_name("7z.dll").is_file()
+    } else {
+        true
+    }
+}
+
+/// Builds a `7z` child command configured to hide any transient console window
+/// on Windows desktop runs (`CREATE_NO_WINDOW`).
+pub(crate) fn configure_7z_cmd(bin: &Path) -> Command {
+    let mut cmd = Command::new(bin);
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd
+}
+
 pub fn find_7z_binary() -> Option<PathBuf> {
     if let Ok(custom) = std::env::var("OPENUNPACK_7Z_PATH") {
         let p = PathBuf::from(custom);
         // Only trust an explicit absolute path: a relative value resolves against
         // the current working directory, which an opened archive folder controls.
-        if p.is_absolute() && p.is_file() {
+        if p.is_absolute() && p.is_file() && has_required_7z_dll(&p) {
             return Some(p);
         }
     }
@@ -51,6 +76,7 @@ pub fn find_7z_binary() -> Option<PathBuf> {
         for candidate in relative_candidates {
             if let Ok(canonical) = candidate.canonicalize()
                 && canonical.is_file()
+                && has_required_7z_dll(&canonical)
             {
                 return Some(canonical);
             }
@@ -61,6 +87,7 @@ pub fn find_7z_binary() -> Option<PathBuf> {
     let manifest_tool = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools/7zip/7z.exe");
     if manifest_tool.is_file()
         && let Ok(canonical) = manifest_tool.canonicalize()
+        && has_required_7z_dll(&canonical)
     {
         return Some(canonical);
     }
@@ -75,6 +102,7 @@ pub fn find_7z_binary() -> Option<PathBuf> {
         let p = Path::new(rel);
         if p.is_file()
             && let Ok(canonical) = p.canonicalize()
+            && has_required_7z_dll(&canonical)
         {
             return Some(canonical);
         }
@@ -95,7 +123,7 @@ pub fn find_7z_binary() -> Option<PathBuf> {
     ];
     for candidate in absolute_candidates {
         let p = Path::new(candidate);
-        if p.is_file() {
+        if p.is_file() && has_required_7z_dll(p) {
             return Some(p.to_path_buf());
         }
     }
@@ -115,7 +143,7 @@ pub fn find_7z_binary() -> Option<PathBuf> {
         }
         for name in names {
             let candidate = dir.join(name);
-            if candidate.is_file() {
+            if candidate.is_file() && has_required_7z_dll(&candidate) {
                 return Some(candidate);
             }
         }
@@ -199,12 +227,38 @@ struct GuardedOutput {
 /// window), so the deadline is always `CLI_DEFAULT_TIMEOUT` — a long
 /// password-protected unpack must never inherit the probe cap and be pushed
 /// into a mid-run argv fallback that re-exposes the secret on the command line.
+type ProgressSink = Arc<dyn Fn(u8) + Send + Sync>;
+
+/// Extracts the leading integer percentage (`0..=100`) from one `-bsp1`
+/// carriage-return segment (e.g. `"  42% - dir/file"` or `"100%"`), without
+/// misreading `%` characters embedded later inside a filename.
+pub(crate) fn parse_7z_progress_percent(segment: &str) -> Option<u8> {
+    let trimmed = segment.trim_start();
+    let (digits, _) = trimmed.split_once('%')?;
+    if digits.is_empty() || digits.len() > 3 || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let pct = digits.parse::<u8>().ok()?;
+    (pct <= 100).then_some(pct)
+}
+
 async fn run_7z_guarded(
+    cmd: Command,
+    password: Option<&str>,
+    volume: Option<(&Path, u64)>,
+    timeout: Duration,
+    cancel: &AtomicBool,
+) -> Result<GuardedOutput, String> {
+    run_7z_guarded_with_progress(cmd, password, volume, timeout, cancel, None).await
+}
+
+async fn run_7z_guarded_with_progress(
     mut cmd: Command,
     password: Option<&str>,
     volume: Option<(&Path, u64)>,
     timeout: Duration,
     cancel: &AtomicBool,
+    on_percent: Option<ProgressSink>,
 ) -> Result<GuardedOutput, String> {
     if cancel.load(Ordering::Acquire) {
         return Err("Cancelled".into());
@@ -222,7 +276,7 @@ async fn run_7z_guarded(
     // Held until this function returns: dropping the guard closes the job
     // handle, and KILL_ON_JOB_CLOSE then reaps 7-Zip even when the host dies.
     let _job = ProcessJob::attach(&child);
-    let stdout_task = tokio::spawn(drain_bounded(child.stdout.take()));
+    let stdout_task = tokio::spawn(drain_stdout_stream(child.stdout.take(), on_percent));
     let stderr_task = tokio::spawn(drain_bounded(child.stderr.take()));
     if let Some(pwd) = password
         && let Some(mut stdin) = child.stdin.take()
@@ -383,19 +437,63 @@ async fn drain_bounded<R>(pipe: Option<R>) -> Vec<u8>
 where
     R: tokio::io::AsyncRead + Unpin,
 {
+    drain_stdout_stream(pipe, None).await
+}
+
+/// Drains a child pipe into a bounded buffer while optionally parsing `-bsp1`
+/// progress tokens separated by CR, LF, or backspace.
+async fn drain_stdout_stream<R>(pipe: Option<R>, on_percent: Option<ProgressSink>) -> Vec<u8>
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
     let Some(mut pipe) = pipe else {
         return Vec::new();
     };
     use tokio::io::AsyncReadExt;
     let mut collected = Vec::new();
+    let mut segment_buf = Vec::new();
     let mut chunk = [0u8; 4096];
     loop {
         match pipe.read(&mut chunk).await {
             Ok(0) | Err(_) => break,
             Ok(read) => {
-                let keep = (STDERR_CAPTURE_LIMIT - collected.len()).min(read);
-                collected.extend_from_slice(&chunk[..keep]);
+                let slice = &chunk[..read];
+                // Retain the bounded tail when output grows large so final
+                // failure diagnostics at the end of a long run stay intact.
+                if collected.len() + slice.len() <= STDERR_CAPTURE_LIMIT {
+                    collected.extend_from_slice(slice);
+                } else if slice.len() >= STDERR_CAPTURE_LIMIT {
+                    collected.clear();
+                    collected.extend_from_slice(&slice[slice.len() - STDERR_CAPTURE_LIMIT..]);
+                } else {
+                    let drop_n = collected.len() + slice.len() - STDERR_CAPTURE_LIMIT;
+                    collected.drain(..drop_n);
+                    collected.extend_from_slice(slice);
+                }
+                if let Some(sink) = &on_percent {
+                    for &byte in slice {
+                        if matches!(byte, b'\r' | b'\n' | 0x08) {
+                            if !segment_buf.is_empty() {
+                                let segment = super::oem_codepage::decode_oem_text(&segment_buf);
+                                if let Some(pct) = parse_7z_progress_percent(&segment) {
+                                    sink(pct);
+                                }
+                                segment_buf.clear();
+                            }
+                        } else if segment_buf.len() < 512 {
+                            segment_buf.push(byte);
+                        }
+                    }
+                }
             }
+        }
+    }
+    if let Some(sink) = &on_percent
+        && !segment_buf.is_empty()
+    {
+        let segment = super::oem_codepage::decode_oem_text(&segment_buf);
+        if let Some(pct) = parse_7z_progress_percent(&segment) {
+            sink(pct);
         }
     }
     collected
@@ -409,7 +507,7 @@ pub async fn inspect_cli(
 ) -> Result<Vec<FileRecord>, String> {
     let bin = find_7z_binary().ok_or_else(|| "7zNotFound".to_string())?;
 
-    let mut cmd = Command::new(&bin);
+    let mut cmd = configure_7z_cmd(&bin);
     cmd.arg("l").arg("-slt").arg("-sccUTF-8");
     push_password(&mut cmd, password);
     cmd.arg("--");
@@ -539,7 +637,7 @@ pub async fn probe_cli(
                     .filter(|f| !f.is_directory && f.size <= 32 * 1024 * 1024)
                     .min_by_key(|f| (f.size == 0, f.size))
                 {
-                    let mut sample_cmd = Command::new(&bin);
+                    let mut sample_cmd = configure_7z_cmd(&bin);
                     sample_cmd
                         .arg("t")
                         .arg("-p-")
@@ -585,7 +683,7 @@ pub async fn probe_cli(
         }
         Err(_) => {
             // Fallback for archives where `7z l -slt` failed (e.g. unknown format)
-            let mut null_cmd = Command::new(&bin);
+            let mut null_cmd = configure_7z_cmd(&bin);
             null_cmd
                 .arg("t")
                 .arg("-p-")
@@ -651,7 +749,7 @@ pub async fn probe_cli(
             return Err("Cancelled".into());
         }
 
-        let mut cmd = Command::new(&bin);
+        let mut cmd = configure_7z_cmd(&bin);
         if header_encrypted {
             cmd.arg("l").arg("-slt").arg("-sccUTF-8");
         } else {
@@ -726,10 +824,26 @@ fn archive_filter_args(exclusions: &[String], inclusions: &[String]) -> Vec<Stri
     args
 }
 
+/// Computes a stable compressed-byte progress denominator from the primary
+/// archive file and any registered volume files.
+fn estimate_archive_total_bytes(request: &WorkerRequest) -> u64 {
+    let mut seen = std::collections::HashSet::new();
+    let mut total = 0u64;
+    for path_str in std::iter::once(&request.archive_path).chain(request.allowed_volumes.iter()) {
+        let p = Path::new(path_str);
+        if seen.insert(p.to_path_buf())
+            && let Ok(meta) = std::fs::metadata(p)
+        {
+            total = total.saturating_add(meta.len());
+        }
+    }
+    total.max(100)
+}
+
 pub async fn extract_cli(
     request: &WorkerRequest,
     destination: &Path,
-    _progress: Arc<dyn Fn(&WorkerEvent) + Send + Sync>,
+    progress: Arc<dyn Fn(&WorkerEvent) + Send + Sync>,
     cancel: Arc<AtomicBool>,
 ) -> Result<Vec<FileRecord>, String> {
     if cancel.load(Ordering::Acquire) {
@@ -739,10 +853,11 @@ pub async fn extract_cli(
     let bin = find_7z_binary().ok_or_else(|| "7zNotFound".to_string())?;
     let password = request.password.as_deref();
 
-    let mut cmd = Command::new(&bin);
+    let mut cmd = configure_7z_cmd(&bin);
     cmd.arg("x")
         .arg(format!("-o{}", destination.display()))
         .arg("-y")
+        .arg("-bsp1")
         .arg("-sccUTF-8")
         .arg("-snl-")
         .arg("-snh-");
@@ -763,7 +878,41 @@ pub async fn extract_cli(
     }
     let volume = Some((destination, request.min_free_bytes));
 
-    let output = run_7z_guarded(cmd, password, volume, CLI_DEFAULT_TIMEOUT, &cancel).await?;
+    let total_bytes = estimate_archive_total_bytes(request);
+    let started = std::time::Instant::now();
+    let last_pct = Arc::new(AtomicU8::new(u8::MAX));
+    let last_emit_ms = Arc::new(AtomicU64::new(0));
+    let req_snapshot = request.clone();
+    let progress_cb = Arc::clone(&progress);
+    let progress_sink: ProgressSink = Arc::new(move |pct: u8| {
+        let prev = last_pct.load(Ordering::Relaxed);
+        if prev != u8::MAX && pct <= prev {
+            return;
+        }
+        let elapsed_ms = started.elapsed().as_millis() as u64;
+        let prev_ms = last_emit_ms.load(Ordering::Relaxed);
+        let due = prev == u8::MAX || pct == 100 || elapsed_ms >= prev_ms.saturating_add(100);
+        if !due {
+            return;
+        }
+        last_pct.store(pct, Ordering::Relaxed);
+        last_emit_ms.store(elapsed_ms, Ordering::Relaxed);
+        let mut ev = super::make_event(&req_snapshot, "progress");
+        ev.total_bytes = total_bytes;
+        ev.total_bytes_known = true;
+        ev.completed_bytes = ((total_bytes as u128 * u128::from(pct)) / 100) as u64;
+        progress_cb(&ev);
+    });
+
+    let output = run_7z_guarded_with_progress(
+        cmd,
+        password,
+        volume,
+        CLI_DEFAULT_TIMEOUT,
+        &cancel,
+        Some(progress_sink),
+    )
+    .await?;
     let had_warning_or_error = !output.status.success();
     if had_warning_or_error {
         let err_str = super::oem_codepage::decode_oem_text(&output.stderr);
@@ -928,7 +1077,7 @@ pub async fn extract_cli_selective(
 
     let bin = find_7z_binary().ok_or_else(|| "7zNotFound".to_string())?;
 
-    let mut cmd = Command::new(&bin);
+    let mut cmd = configure_7z_cmd(&bin);
     cmd.arg(if flatten { "e" } else { "x" })
         .arg(format!("-o{}", destination.display()))
         .arg("-y")
@@ -1248,7 +1397,7 @@ mod cancellation_and_encryption_tests {
                 .any(|r| r.relative_path.contains("secret_data.txt"))
         );
 
-        // 3. Test extract_cli
+        // 3. Test extract_cli (and verify -bsp1 streams progress without stdin leaks)
         let dest_dir = temp_dir.join("extracted_full");
         std::fs::create_dir_all(&dest_dir).unwrap();
         let mut req = WorkerRequest::default();
@@ -1257,13 +1406,29 @@ mod cancellation_and_encryption_tests {
         req.destination_directory = dest_dir.to_string_lossy().to_string();
         req.password = Some("P@ssw0rd123!".to_string());
         let cancel_arc = Arc::new(AtomicBool::new(false));
-        let progress = Arc::new(|_: &WorkerEvent| {});
+        let seen_progress = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen_progress_clone = Arc::clone(&seen_progress);
+        let progress = Arc::new(move |ev: &WorkerEvent| {
+            if ev.kind == "progress" {
+                seen_progress_clone
+                    .lock()
+                    .unwrap()
+                    .push((ev.completed_bytes, ev.total_bytes, ev.total_bytes_known));
+            }
+        });
         let extract_res = extract_cli(&req, &dest_dir, progress, cancel_arc).await;
         assert!(
             extract_res.is_ok(),
             "extract_cli failed: {:?}",
             extract_res.err()
         );
+        let events = seen_progress.lock().unwrap();
+        assert!(
+            !events.is_empty(),
+            "extract_cli -bsp1 should emit at least one progress event"
+        );
+        assert!(events.iter().all(|(done, total, known)| *known && *done <= *total && *total > 0));
+        drop(events);
         let extracted_file = dest_dir.join("secret_data.txt");
         assert!(extracted_file.exists());
         assert_eq!(
@@ -1359,5 +1524,31 @@ mod failure_classification_tests {
             failure.as_deref(),
             Some("ResourceLimit: Exceeds maxTotalBytes")
         );
+    }
+
+    #[test]
+    fn bsp1_progress_parser_handles_percentages_and_ignores_filenames() {
+        use super::parse_7z_progress_percent;
+        assert_eq!(parse_7z_progress_percent("  0%"), Some(0));
+        assert_eq!(parse_7z_progress_percent(" 42% 3 - dir/file.txt"), Some(42));
+        assert_eq!(parse_7z_progress_percent("100%"), Some(100));
+        assert_eq!(parse_7z_progress_percent("101%"), None);
+        assert_eq!(parse_7z_progress_percent("report 50%.pdf"), None);
+        assert_eq!(parse_7z_progress_percent(""), None);
+    }
+
+    #[test]
+    fn modular_7z_requires_sibling_dll() {
+        use super::has_required_7z_dll;
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("7z.exe");
+        std::fs::write(&bin, b"stub").unwrap();
+        assert!(
+            !has_required_7z_dll(&bin),
+            "7z.exe without sibling 7z.dll must be rejected"
+        );
+        std::fs::write(tmp.path().join("7z.dll"), b"dll").unwrap();
+        assert!(has_required_7z_dll(&bin));
+        assert!(has_required_7z_dll(&tmp.path().join("7za.exe")));
     }
 }

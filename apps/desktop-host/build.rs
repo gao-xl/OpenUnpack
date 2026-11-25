@@ -80,6 +80,7 @@ fn main() {
             "get_shell_context_menu_status",
             "set_shell_context_menu_status",
             "take_pending_open_paths",
+            "submit_native_input",
         ])),
     )
     .expect("无法生成桌面权限清单");
