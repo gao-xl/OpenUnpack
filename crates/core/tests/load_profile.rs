@@ -866,7 +866,8 @@ async fn synthetic_load_matrix() {
     let workspace = workspace();
     let worker = selected_worker();
     let engine = workspace.join("tools/7zip/7z.dll");
-    let seven_zip = workspace.join("tools/7zip/7z.exe");
+    let seven_zip = openunpack_infrastructure::engine::find_7z_binary()
+        .unwrap_or_else(|| workspace.join("tools/7zip/7z.exe"));
     let parent = fixture_parent();
     let mib = fixture_mib();
     let report = report_directory();
@@ -896,7 +897,8 @@ async fn synthetic_hdd_cache_matrix() {
     let workspace = workspace();
     let worker = selected_worker();
     let engine = workspace.join("tools/7zip/7z.dll");
-    let seven_zip = workspace.join("tools/7zip/7z.exe");
+    let seven_zip = openunpack_infrastructure::engine::find_7z_binary()
+        .unwrap_or_else(|| workspace.join("tools/7zip/7z.exe"));
     let hdd_parent = std::env::var_os("OPENUNPACK_LOAD_HDD_ROOT")
         .map(PathBuf::from)
         .expect("choose an existing HDD parent explicitly");
@@ -952,7 +954,8 @@ async fn synthetic_cpu_format_case() {
     let workspace = workspace();
     let worker = selected_worker();
     let engine = workspace.join("tools/7zip/7z.dll");
-    let seven_zip = workspace.join("tools/7zip/7z.exe");
+    let seven_zip = openunpack_infrastructure::engine::find_7z_binary()
+        .unwrap_or_else(|| workspace.join("tools/7zip/7z.exe"));
     let report = report_directory();
     eprintln!("LOAD_REPORT {}", report.display());
     let prepared = Prepared::new(&fixture_parent(), &seven_zip, fixture_mib(), true);
@@ -1381,7 +1384,8 @@ async fn synthetic_pause_and_cancel() {
     let workspace = workspace();
     let worker = selected_worker();
     let engine = workspace.join("tools/7zip/7z.dll");
-    let seven_zip = workspace.join("tools/7zip/7z.exe");
+    let seven_zip = openunpack_infrastructure::engine::find_7z_binary()
+        .unwrap_or_else(|| workspace.join("tools/7zip/7z.exe"));
     let report = report_directory();
     eprintln!("LOAD_REPORT {}", report.display());
     // The release host can finish a small stored archive within the Worker's

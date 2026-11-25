@@ -71,16 +71,7 @@ impl Rig {
             .unwrap();
         let worker = PathBuf::from("native-worker");
         let engine = PathBuf::from("native-engine");
-        let seven_zip = std::env::var_os("OPENUNPACK_7Z_PATH")
-            .map(PathBuf::from)
-            .or_else(|| {
-                let temp_copy = PathBuf::from(r"C:\Users\im\AppData\Local\Temp\ou-7z\7z.exe");
-                if temp_copy.is_file() {
-                    Some(temp_copy)
-                } else {
-                    None
-                }
-            })
+        let seven_zip = openunpack_infrastructure::engine::find_7z_binary()
             .unwrap_or_else(|| workspace.join("tools/7zip/7z.exe"));
         let temporary = Builder::new()
             .prefix("openunpack-pipeline-")

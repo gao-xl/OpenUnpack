@@ -434,6 +434,28 @@ fn web_root_candidates(
     candidates
 }
 
+fn is_safe_web_dir(path: &std::path::Path) -> Option<std::path::PathBuf> {
+    let meta = std::fs::symlink_metadata(path).ok()?;
+    if meta.file_type().is_symlink() || !meta.is_dir() {
+        return None;
+    }
+    let canon = path.canonicalize().ok()?;
+    canon.is_dir().then_some(canon)
+}
+
+fn is_safe_web_file(root: &std::path::Path, file: &std::path::Path) -> Option<std::path::PathBuf> {
+    let meta = std::fs::symlink_metadata(file).ok()?;
+    if meta.file_type().is_symlink() || !meta.is_file() {
+        return None;
+    }
+    let canon = file.canonicalize().ok()?;
+    if canon.starts_with(root) && canon.is_file() {
+        Some(canon)
+    } else {
+        None
+    }
+}
+
 fn resolve_web_root() -> Option<std::path::PathBuf> {
     let env_root = std::env::var("OPENUNPACK_WEB_ROOT").ok();
     let exe_dir = std::env::current_exe()
@@ -441,13 +463,20 @@ fn resolve_web_root() -> Option<std::path::PathBuf> {
         .and_then(|exe| exe.parent().map(std::path::Path::to_path_buf));
     web_root_candidates(env_root.as_deref(), exe_dir.as_deref())
         .into_iter()
-        .find(|candidate| candidate.join("index.html").is_file())
+        .find_map(|candidate| {
+            let root = is_safe_web_dir(&candidate)?;
+            let index = root.join("index.html");
+            is_safe_web_file(&root, &index)?;
+            Some(root)
+        })
 }
 
 async fn serve_index() -> Result<Response, ApiError> {
     if let Some(root) = resolve_web_root() {
         let index_file = root.join("index.html");
-        if let Ok(content) = std::fs::read_to_string(&index_file) {
+        if let Some(safe_index) = is_safe_web_file(&root, &index_file)
+            && let Ok(content) = std::fs::read_to_string(&safe_index)
+        {
             let content = content.replacen(
                 "<head>",
                 "<head><meta name=\"openunpack-web-console\" content=\"1\">",
@@ -526,36 +555,14 @@ async fn serve_index() -> Result<Response, ApiError> {
       <div class="card-desc">输入您的 API Client Token，即可在线读取解压队列与系统状态：</div>
       <div class="token-box">
         <input type="password" autocomplete="off" id="tokenInput" placeholder="输入 API Token (如 openunpack-token-...)">
-        <button onclick="fetchSnapshot()">查询状态</button>
+        <button id="fetchSnapshotBtn" type="button">查询状态</button>
       </div>
       <div style="margin-top: 1rem;">
         <pre id="output">// 点击“查询状态”读取当前活动任务...</pre>
       </div>
     </div>
   </div>
-  <script>
-    const saved = sessionStorage.getItem('openunpack_token');
-    if (saved) document.getElementById('tokenInput').value = saved;
-    async function fetchSnapshot() {
-      const token = document.getElementById('tokenInput').value.trim();
-      if (token) sessionStorage.setItem('openunpack_token', token);
-      const out = document.getElementById('output');
-      out.textContent = '正在获取状态...';
-      try {
-        const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
-        const res = await fetch('/api/v1/commands', {
-          method: 'POST',
-          redirect: 'error',
-          headers: { ...headers, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ command: 'queue_snapshot' })
-        });
-        const data = await res.json();
-        out.textContent = JSON.stringify(data, null, 2);
-      } catch (e) {
-        out.textContent = '请求失败: ' + e.message;
-      }
-    }
-  </script>
+  <script src="/assets/daemon-fallback.js"></script>
 </body>
 </html>"#;
 
@@ -566,15 +573,60 @@ async fn serve_index() -> Result<Response, ApiError> {
         .into_response())
 }
 
+const DAEMON_FALLBACK_JS: &str = r#"const saved = sessionStorage.getItem('openunpack_token');
+if (saved) {
+  const input = document.getElementById('tokenInput');
+  if (input) input.value = saved;
+}
+async function fetchSnapshot() {
+  const input = document.getElementById('tokenInput');
+  const token = input ? input.value.trim() : '';
+  if (token) sessionStorage.setItem('openunpack_token', token);
+  const out = document.getElementById('output');
+  if (!out) return;
+  out.textContent = '正在获取状态...';
+  try {
+    const headers = token ? { Authorization: 'Bearer ' + token } : {};
+    const res = await fetch('/api/v1/commands', {
+      method: 'POST',
+      redirect: 'error',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: 'queue_snapshot' }),
+    });
+    const data = await res.json();
+    out.textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    out.textContent = '请求失败: ' + (e && e.message ? e.message : String(e));
+  }
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('fetchSnapshotBtn');
+  if (btn) btn.addEventListener('click', fetchSnapshot);
+});
+"#;
+
 async fn serve_asset(Path(asset): Path<String>) -> Result<Response, ApiError> {
     if asset.contains("..") || asset.contains('/') || asset.contains('\\') || asset.contains(':') {
         return Err(ApiError::new(400, "invalid_path", "非法的资源路径。"));
     }
+    if asset == "daemon-fallback.js" {
+        return Ok((
+            [
+                (
+                    header::CONTENT_TYPE,
+                    "application/javascript; charset=utf-8",
+                ),
+                (header::CACHE_CONTROL, "public, max-age=3600"),
+            ],
+            DAEMON_FALLBACK_JS,
+        )
+            .into_response());
+    }
 
     if let Some(root) = resolve_web_root() {
         let file_path = root.join("assets").join(&asset);
-        if file_path.is_file()
-            && let Ok(bytes) = std::fs::read(&file_path)
+        if let Some(safe_file) = is_safe_web_file(&root, &file_path)
+            && let Ok(bytes) = std::fs::read(&safe_file)
         {
             let mime = match asset.rsplit('.').next() {
                 Some("js") | Some("mjs") => "application/javascript; charset=utf-8",
@@ -605,8 +657,8 @@ async fn serve_asset(Path(asset): Path<String>) -> Result<Response, ApiError> {
 async fn serve_favicon() -> Result<Response, ApiError> {
     if let Some(root) = resolve_web_root() {
         let ico = root.join("favicon.ico");
-        if ico.is_file()
-            && let Ok(bytes) = std::fs::read(&ico)
+        if let Some(safe_ico) = is_safe_web_file(&root, &ico)
+            && let Ok(bytes) = std::fs::read(&safe_ico)
         {
             return Ok(([(header::CONTENT_TYPE, "image/x-icon")], bytes).into_response());
         }
@@ -631,6 +683,10 @@ async fn swagger_asset(Path(asset): Path<String>) -> Result<Response, ApiError> 
         "swagger-ui-standalone-preset.js" => (
             "text/javascript; charset=utf-8",
             include_bytes!("../assets/swagger-ui/swagger-ui-standalone-preset.js"),
+        ),
+        "swagger-initializer.js" => (
+            "text/javascript; charset=utf-8",
+            include_bytes!("../assets/swagger-ui/swagger-initializer.js"),
         ),
         _ => return Err(ApiError::new(404, "not_found", "文档资源不存在。")),
     };
@@ -659,7 +715,7 @@ fn response_headers(response: &mut Response, origin: Option<&str>) {
         header::REFERRER_POLICY,
         HeaderValue::from_static("no-referrer"),
     );
-    headers.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"));
+    headers.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"));
     if let Some(origin) = origin.and_then(|v| HeaderValue::from_str(v).ok()) {
         headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin);
         headers.insert(header::VARY, HeaderValue::from_static("Origin"));
@@ -853,7 +909,7 @@ async fn guard(State(state): State<ServerState>, mut request: Request, next: Nex
             header::CONTENT_SECURITY_POLICY,
             HeaderValue::from_static(
                 "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; \
-                 script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; \
+                 script-src 'self'; connect-src 'self'; frame-ancestors 'none'; \
                  base-uri 'none'; form-action 'none'",
             ),
         );
@@ -1278,5 +1334,27 @@ mod web_root_policy {
         let exe = std::path::Path::new("C:/Program Files/OpenUnpack");
         let candidates = web_root_candidates(Some("   "), Some(exe));
         assert_eq!(candidates[0], exe.join("web"));
+    }
+
+    #[test]
+    fn csp_forbids_unsafe_inline_scripts_and_blocks_outside_files() {
+        let mut response = super::Response::new(axum::body::Body::empty());
+        super::response_headers(&mut response, None);
+        let csp = response
+            .headers()
+            .get(super::header::CONTENT_SECURITY_POLICY)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(csp.contains("script-src 'self';"));
+        assert!(!csp.contains("script-src 'self' 'unsafe-inline'"));
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("web");
+        let outside = dir.path().join("outside.txt");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(&outside, b"secret").unwrap();
+        assert!(super::is_safe_web_dir(&root).is_some());
+        assert!(super::is_safe_web_file(&root, &outside).is_none());
     }
 }

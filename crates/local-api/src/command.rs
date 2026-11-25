@@ -428,13 +428,29 @@ impl ApiCommand {
                     }
                 }
             }
-            Self::JobDetails { job_id }
-            | Self::RemoveJob { job_id }
-            | Self::RetryJob { job_id, .. } => {
+            Self::JobDetails { job_id } | Self::RemoveJob { job_id } => {
                 if !is_safe_identifier(job_id) {
                     errors.push(FieldError::new(
                         "jobId",
                         "任务 ID 必须是 1 至 64 位的字母、数字、连字符或下划线。",
+                    ));
+                }
+            }
+            Self::RetryJob {
+                job_id, password, ..
+            } => {
+                if !is_safe_identifier(job_id) {
+                    errors.push(FieldError::new(
+                        "jobId",
+                        "任务 ID 必须是 1 至 64 位的字母、数字、连字符或下划线。",
+                    ));
+                }
+                if let Some(pwd) = password
+                    && pwd.len() > 4096
+                {
+                    errors.push(FieldError::new(
+                        "password",
+                        "密码长度不能超过 4096 个字符。",
                     ));
                 }
             }
@@ -622,6 +638,8 @@ impl ApiCommand {
             Self::ConfirmImport { text, token, .. } => {
                 if text.trim().is_empty() {
                     errors.push(FieldError::new("text", "导入文本内容不能为空。"));
+                } else if text.len() > 10 * 1024 * 1024 {
+                    errors.push(FieldError::new("text", "导入文本内容不能超过 10 MiB。"));
                 }
                 if token.trim().is_empty() || token.len() > 64 {
                     errors.push(FieldError::new(
@@ -641,8 +659,11 @@ impl ApiCommand {
             }
             Self::PreviewRestoreBackup { path, passphrase } => {
                 check_abs_path(path, "path", &mut errors);
-                if passphrase.is_empty() {
-                    errors.push(FieldError::new("passphrase", "还原口令不能为空。"));
+                if passphrase.is_empty() || passphrase.len() > 1024 {
+                    errors.push(FieldError::new(
+                        "passphrase",
+                        "还原口令必须为 1 至 1024 个字符。",
+                    ));
                 }
             }
             Self::ConfirmRestoreBackup {
@@ -651,8 +672,11 @@ impl ApiCommand {
                 token,
             } => {
                 check_abs_path(path, "path", &mut errors);
-                if passphrase.is_empty() {
-                    errors.push(FieldError::new("passphrase", "还原口令不能为空。"));
+                if passphrase.is_empty() || passphrase.len() > 1024 {
+                    errors.push(FieldError::new(
+                        "passphrase",
+                        "还原口令必须为 1 至 1024 个字符。",
+                    ));
                 }
                 if token.trim().is_empty() || token.len() > 64 {
                     errors.push(FieldError::new(
@@ -718,7 +742,10 @@ impl ApiCommand {
                 }
             }
             Self::AddArchive {
-                path, output_dir, ..
+                path,
+                output_dir,
+                password,
+                ..
             } => {
                 check_abs_path(path, "path", &mut errors);
                 if let Some(out) = output_dir
@@ -726,16 +753,34 @@ impl ApiCommand {
                 {
                     check_abs_path(out, "outputDir", &mut errors);
                 }
+                if let Some(pwd) = password
+                    && pwd.len() > 4096
+                {
+                    errors.push(FieldError::new(
+                        "password",
+                        "密码长度不能超过 4096 个字符。",
+                    ));
+                }
             }
-            Self::SubmitInput { job_id, value, .. } => {
+            Self::SubmitInput {
+                job_id,
+                input_type,
+                value,
+            } => {
                 if !is_safe_identifier(job_id) {
                     errors.push(FieldError::new(
                         "jobId",
                         "任务 ID 必须是 1 至 64 位的字母、数字、连字符或下划线。",
                     ));
                 }
-                if value.is_empty() {
-                    errors.push(FieldError::new("value", "输入内容不能为空。"));
+                if input_type != "password" {
+                    errors.push(FieldError::new("inputType", "仅支持 password 输入类型。"));
+                }
+                if value.is_empty() || value.len() > 4096 {
+                    errors.push(FieldError::new(
+                        "value",
+                        "输入内容必须为 1 至 4096 个字符。",
+                    ));
                 }
             }
             _ => {}

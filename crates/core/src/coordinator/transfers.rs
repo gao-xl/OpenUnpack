@@ -161,7 +161,6 @@ impl Coordinator {
                         .map(|n| n.name.clone()),
                 };
                 let _ = self.progress_broadcaster.send(progress_update);
-                self.changed_locked();
             }
         }
     }

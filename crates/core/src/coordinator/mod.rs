@@ -8,6 +8,7 @@ pub mod conflict_resolver;
 mod execution;
 mod execution_extract;
 mod execution_reconcile;
+mod hooks;
 mod initialization;
 mod inplace;
 mod inspection;
@@ -25,10 +26,10 @@ mod transfers;
 mod worker_requests;
 
 use cache_budget::{BudgetClaim, BudgetError, CacheBudgetManager, RequestBudgetOwner};
+pub use hooks::trigger_on_complete_hook;
 pub use integrity::validate_settings;
 use integrity::*;
 use pipeline_helpers::*;
-pub use scheduler::trigger_on_complete_hook;
 
 #[cfg(test)]
 mod tests;
@@ -318,7 +319,10 @@ impl Drop for RecoveryOwner {
                         tracing::error!(job = %self.job_id, "recovery_exit_marker_persist_failed");
                     }
                 }
-                let _ = self.core.put(&job);
+                if let Err(err) = self.core.put(&job) {
+                    tracing::error!(job = %self.job_id, error = %err, "recovery_job_state_persist_failed");
+                    self.core.stop_batch.store(true, Ordering::Release);
+                }
             }
             return;
         }

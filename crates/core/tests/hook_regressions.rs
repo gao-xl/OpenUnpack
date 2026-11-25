@@ -49,7 +49,7 @@ async fn test_on_complete_hook_execution() {
     #[cfg(target_os = "windows")]
     {
         let bat_content = format!(
-            "@echo off\r\necho %OPENUNPACK_JOB_ID% > \"{}\"\r\necho %OPENUNPACK_STATUS% >> \"{}\"\r\n",
+            "@echo off\r\nchcp 65001 >nul\r\necho %OPENUNPACK_JOB_ID% > \"{}\"\r\necho %OPENUNPACK_STATUS% >> \"{}\"\r\n",
             marker_path.display(),
             marker_path.display()
         );
