@@ -113,4 +113,5 @@ export const commonMessages: Record<string, [string, string]> = {
     'Output delivered, subsequent processing anomaly; source preserved',
     '出力完了・後続処理例外・元ファイル保持',
   ],
+  切回本机引擎: ['Use local engine', 'ローカルエンジンに戻す'],
 };

@@ -1,6 +1,7 @@
 mod clipboard;
 mod local_api;
 mod logging;
+mod single_instance;
 use openunpack_core::coordinator::Coordinator;
 use openunpack_protocol::{
     AppSnapshot, ArchiveExtensionFixItem, ArchiveInspectionView, HistoryPageQuery, ImportPreview,
@@ -80,6 +81,42 @@ impl NativeAccess {
     pub fn is_backup_write_allowed(&self, target: &Path) -> bool {
         self.backup_write_files.contains(target)
     }
+}
+
+pub struct PendingOpenPaths(pub Mutex<Vec<String>>);
+
+fn authorize_open_paths(access: &Mutex<NativeAccess>, raw_paths: &[String]) -> Vec<String> {
+    let mut authorized = Vec::new();
+    let Ok(mut guard) = access.lock() else {
+        return authorized;
+    };
+    for raw in raw_paths {
+        let Ok(canon) = canonicalize_existing(raw) else {
+            tracing::warn!(path = %raw, "cli_or_wake_path_rejected");
+            continue;
+        };
+        let display = strip_verbatim_prefix(&canon).to_string_lossy().into_owned();
+        guard.native_drop_paths.insert(raw.clone());
+        guard.native_drop_paths.insert(display.clone());
+        guard.grant_read(canon.clone(), canon.is_dir());
+        if canon.is_dir() {
+            guard.grant_write_dir(canon.clone());
+        } else if let Some(parent) = canon.parent() {
+            guard.grant_write_dir(parent.to_path_buf());
+        }
+        authorized.push(display);
+    }
+    authorized
+}
+
+#[tauri::command]
+fn take_pending_open_paths(
+    window: WebviewWindow,
+    pending: State<'_, PendingOpenPaths>,
+) -> Result<Vec<String>, String> {
+    verify_frontend_window(&window)?;
+    let mut guard = pending.0.lock().map_err(|_| "打开路径队列状态不可用。".to_string())?;
+    Ok(std::mem::take(&mut *guard))
 }
 
 pub struct AppState {
@@ -2269,6 +2306,18 @@ async fn execute_post_action(
     }
 }
 
+fn reg_command(reg_exe: &Path) -> Command {
+    #[allow(unused_mut)]
+    let mut cmd = Command::new(reg_exe);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
 #[tauri::command]
 async fn get_shell_context_menu_status(window: Window) -> Result<bool, String> {
     verify_frontend_window(&window)?;
@@ -2277,7 +2326,7 @@ async fn get_shell_context_menu_status(window: Window) -> Result<bool, String> {
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from(r"C:\Windows"));
         let reg = system_root.join(r"System32\reg.exe");
-        let output = Command::new(reg)
+        let output = reg_command(&reg)
             .args(["query", r"HKCU\Software\Classes\*\shell\OpenUnpack"])
             .output()
             .map_err(|e| format!("查询注册表失败: {e}"))?;
@@ -2295,45 +2344,44 @@ async fn set_shell_context_menu_status(window: Window, enabled: bool) -> Result<
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from(r"C:\Windows"));
         let reg = system_root.join(r"System32\reg.exe");
+        let targets = [
+            r"HKCU\Software\Classes\*\shell\OpenUnpack",
+            r"HKCU\Software\Classes\Directory\shell\OpenUnpack",
+        ];
         if enabled {
             let current_exe =
                 std::env::current_exe().map_err(|e| format!("无法定位当前程序路径: {e}"))?;
             let exe_str = current_exe.to_string_lossy();
-            let key = r"HKCU\Software\Classes\*\shell\OpenUnpack";
-            let cmd_key = r"HKCU\Software\Classes\*\shell\OpenUnpack\command";
-
-            let status = Command::new(&reg)
-                .args(["add", key, "/ve", "/d", "使用 OpenUnpack 解压", "/f"])
-                .status()
-                .map_err(|e| format!("写入注册表主项失败: {e}"))?;
-            if !status.success() {
-                return Err("注册表添加主项失败".into());
-            }
-
-            let _ = Command::new(&reg)
-                .args([
-                    "add",
-                    key,
-                    "/v",
-                    "Icon",
-                    "/d",
-                    &format!("\"{}\"", exe_str),
-                    "/f",
-                ])
-                .status();
-
+            let icon_val = format!("\"{}\"", exe_str);
             let cmd_val = format!("\"{}\" \"%1\"", exe_str);
-            let status_cmd = Command::new(&reg)
-                .args(["add", cmd_key, "/ve", "/d", &cmd_val, "/f"])
-                .status()
-                .map_err(|e| format!("写入注册表命令项失败: {e}"))?;
-            if !status_cmd.success() {
-                return Err("注册表添加命令项失败".into());
+
+            for key in targets {
+                let cmd_key = format!(r"{key}\command");
+                let status = reg_command(&reg)
+                    .args(["add", key, "/ve", "/d", "使用 OpenUnpack 解压", "/f"])
+                    .status()
+                    .map_err(|e| format!("写入注册表主项失败: {e}"))?;
+                if !status.success() {
+                    return Err("注册表添加主项失败".into());
+                }
+
+                let _ = reg_command(&reg)
+                    .args(["add", key, "/v", "Icon", "/d", &icon_val, "/f"])
+                    .status();
+
+                let status_cmd = reg_command(&reg)
+                    .args(["add", &cmd_key, "/ve", "/d", &cmd_val, "/f"])
+                    .status()
+                    .map_err(|e| format!("写入注册表命令项失败: {e}"))?;
+                if !status_cmd.success() {
+                    return Err("注册表添加命令项失败".into());
+                }
             }
             Ok(true)
         } else {
-            let key = r"HKCU\Software\Classes\*\shell\OpenUnpack";
-            let _ = Command::new(&reg).args(["delete", key, "/f"]).status();
+            for key in targets {
+                let _ = reg_command(&reg).args(["delete", key, "/f"]).status();
+            }
             Ok(false)
         }
     })
@@ -2520,6 +2568,7 @@ fn request_exit(app: tauri::AppHandle) {
         if let Some(sequence) = sequence {
             let _ = spawn_blocking(move || clipboard::clear_if_unchanged(sequence)).await;
         }
+        single_instance::remove_wake_token(&coord.data);
         app.exit(0);
     });
 }
@@ -2567,6 +2616,17 @@ fn install_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 pub fn run() {
+    if !single_instance::is_webview2_installed() {
+        MessageDialog::new()
+            .set_title("解压工坊 OpenUnpack - 缺少运行环境")
+            .set_description(
+                "未检测到 Microsoft Edge WebView2 运行时。\n\n请重新运行安装包修复安装，或安装 Microsoft Edge WebView2 Runtime 后再启动本程序。",
+            )
+            .set_level(MessageLevel::Error)
+            .show();
+        return;
+    }
+    let initial_open_paths = single_instance::collect_cli_open_paths();
     let data_dir = match resolve_data_directory() {
         Ok(dir) => dir,
         Err(err) => {
@@ -2592,15 +2652,19 @@ pub fn run() {
         Ok(file) => file,
         Err(_err) => {
             tracing::warn!("another instance already owns the data directory");
+            if single_instance::try_notify_running_instance(&data_dir, &initial_open_paths) {
+                return;
+            }
             #[cfg(windows)]
             {
                 use windows_sys::Win32::UI::WindowsAndMessaging::{
-                    FindWindowW, SW_RESTORE, SetForegroundWindow, ShowWindow,
+                    FindWindowW, SW_RESTORE, SW_SHOW, SetForegroundWindow, ShowWindow,
                 };
                 let title: Vec<u16> = "解压工坊 OpenUnpack\0".encode_utf16().collect();
                 let hwnd = unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) };
                 if !hwnd.is_null() {
                     unsafe {
+                        ShowWindow(hwnd, SW_SHOW);
                         ShowWindow(hwnd, SW_RESTORE);
                         SetForegroundWindow(hwnd);
                     }
@@ -2633,7 +2697,7 @@ pub fn run() {
                     }
                 };
                 let coordinator = match open_coordinator_on_runtime(
-                    data_dir,
+                    data_dir.clone(),
                     worker_exe,
                     worker_dll,
                     tauri::async_runtime::handle().inner(),
@@ -2676,6 +2740,9 @@ pub fn run() {
                 }
 
                 let access_state = Arc::new(Mutex::new(native_access));
+                let authorized_cli_paths = authorize_open_paths(&access_state, &initial_open_paths);
+                app.manage(PendingOpenPaths(Mutex::new(authorized_cli_paths)));
+
                 let vault_store = Arc::new(CoordinatorVaultStore(coordinator.clone()));
                 let vault_use_cases =
                     Arc::new(openunpack_application::VaultUseCases::new(vault_store));
@@ -2698,6 +2765,37 @@ pub fn run() {
                             .unwrap_or(false),
                     ),
                 });
+
+                match single_instance::prepare_wake_token(&data_dir) {
+                    Ok(wake_token) => {
+                        let wake_app = app.handle().clone();
+                        single_instance::spawn_wake_server(
+                            &data_dir,
+                            wake_token,
+                            Arc::new(move |raw_paths| {
+                                show_main(&wake_app);
+                                if raw_paths.is_empty() {
+                                    return;
+                                }
+                                if let Some(s) = wake_app.try_state::<AppState>() {
+                                    let authorized = authorize_open_paths(&s.access, &raw_paths);
+                                    if authorized.is_empty() {
+                                        return;
+                                    }
+                                    if let Some(pending) = wake_app.try_state::<PendingOpenPaths>()
+                                        && let Ok(mut guard) = pending.0.lock()
+                                    {
+                                        guard.extend(authorized.clone());
+                                    }
+                                    let _ = wake_app.emit_to("main", "external-open-paths", authorized);
+                                }
+                            }),
+                        );
+                    }
+                    Err(err) => {
+                        tracing::warn!(error = %err, "wake_token_setup_failed");
+                    }
+                }
                 let api_manager = local_api::ApiManager::open(&coordinator.data);
                 app.manage(api_manager.clone());
                 let api_app = app.handle().clone();
@@ -2851,6 +2949,7 @@ pub fn run() {
                 execute_post_action,
                 get_shell_context_menu_status,
                 set_shell_context_menu_status,
+                take_pending_open_paths,
             ])
             .run(generate_context!())
             .expect("error while running OpenUnpack desktop application");

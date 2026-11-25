@@ -125,6 +125,10 @@ let activeDaemon: DaemonConnection | null = (() => {
       sessionStorage.setItem(tokenUrlKey, target);
     }
     localStorage.removeItem(tokenKey);
+    if (isDesktop && !webConsole && !token) {
+      // Desktop mode must never cold-boot into a stale localStorage daemon URL once sessionStorage is empty.
+      return null;
+    }
     return { url: target, token };
   } catch {
     try {
@@ -154,6 +158,7 @@ const nativeCommands = new Set([
   'execute_post_action',
   'get_shell_context_menu_status',
   'set_shell_context_menu_status',
+  'take_pending_open_paths',
 ]);
 const engineLocalCommands = new Set(['copy_password', 'open_path', 'execute_post_action']);
 const daemonOnlyCommands = new Set(['start_selected_jobs', 'add_archive', 'submit_input']);
@@ -869,6 +874,33 @@ export const api = {
     const { getCurrentWebview } = await import('@tauri-apps/api/webview');
     return getCurrentWebview().onDragDropEvent((event) => {
       if (event.payload.type === 'drop') callback(event.payload.paths);
+    });
+  },
+  async onWindowDragDrop(
+    onHover: (dragging: boolean) => void,
+    onDrop?: (paths: string[]) => void,
+  ): Promise<() => void> {
+    if (!isDesktop || activeDaemon) return () => {};
+    const { getCurrentWebview } = await import('@tauri-apps/api/webview');
+    return getCurrentWebview().onDragDropEvent((event) => {
+      if (event.payload.type === 'enter' || event.payload.type === 'over') {
+        onHover(true);
+      } else if (event.payload.type === 'leave') {
+        onHover(false);
+      } else if (event.payload.type === 'drop') {
+        onHover(false);
+        onDrop?.(event.payload.paths);
+      }
+    });
+  },
+  takePendingOpenPaths: (): Promise<string[]> =>
+    isDesktop ? callNative<string[]>('take_pending_open_paths') : Promise.resolve([]),
+  async onExternalOpenPaths(callback: (paths: string[]) => void): Promise<() => void> {
+    if (!isDesktop) return () => {};
+    return listen<string[]>('external-open-paths', (event) => {
+      if (Array.isArray(event?.payload) && event.payload.length > 0) {
+        callback(event.payload);
+      }
     });
   },
 };

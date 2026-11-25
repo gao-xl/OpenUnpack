@@ -354,3 +354,14 @@ it('formats and preserves structured native IPC errors from Tauri invoke', async
   native.invoke.mockRejectedValueOnce('raw string error');
   await expect(api.snapshot()).rejects.toThrow('raw string error');
 });
+
+it('stale daemon URL in localStorage does not hijack native desktop startup when session token is absent', async () => {
+  desktop();
+  localStorage.setItem('openunpack_daemon_url', 'http://127.0.0.1:47980');
+  native.invoke.mockResolvedValue(live);
+  const { api } = await import('../src/api');
+  expect(api.isDaemonMode()).toBe(false);
+  expect(await api.snapshot()).toEqual(live);
+  expect(native.invoke).toHaveBeenCalledWith('queue_snapshot', undefined);
+  expect(fetch).not.toHaveBeenCalled();
+});

@@ -341,7 +341,13 @@ export default function QueuePage({
   snapshot,
   run,
   openHistory,
-}: SharedProps & { openHistory?: () => void }) {
+  externalOpenRequest,
+  onConsumeExternalOpen,
+}: SharedProps & {
+  openHistory?: () => void;
+  externalOpenRequest?: { seq: number; paths: string[] } | null;
+  onConsumeExternalOpen?: () => void;
+}) {
   const { modal, notification, message } = AntApp.useApp();
   const [hideScopeAlert, setHideScopeAlert] = useState(
     () => localStorage.getItem('openunpack_dismiss_scope_alert') === 'true',
@@ -554,6 +560,18 @@ export default function QueuePage({
       }
     };
   }, [addPaths]);
+  const consumedExternalSeq = useRef<number>(0);
+  useEffect(() => {
+    if (
+      externalOpenRequest &&
+      externalOpenRequest.paths.length > 0 &&
+      externalOpenRequest.seq !== consumedExternalSeq.current
+    ) {
+      consumedExternalSeq.current = externalOpenRequest.seq;
+      addPaths(externalOpenRequest.paths, true);
+      onConsumeExternalOpen?.();
+    }
+  }, [externalOpenRequest, addPaths, onConsumeExternalOpen]);
   const pick = (folder: boolean) =>
     void run(async () => {
       const paths = await api.pickFiles(folder);

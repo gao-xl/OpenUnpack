@@ -3083,6 +3083,7 @@ name = "openunpack-desktop"
 version = "0.1.0"
 dependencies = [
  "encoding_rs",
+ "hex",
  "indexmap 1.9.3",
  "openunpack-application",
  "openunpack-core",
@@ -3093,6 +3094,7 @@ dependencies = [
  "rfd",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tauri",
  "tauri-build",
  "tempfile",
@@ -3100,6 +3102,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "uuid",
  "windows-sys 0.61.2",
  "zeroize",
 ]

@@ -495,6 +495,12 @@
           "markdownDescription": "Enables the start_jobs command without any pre-configured scope."
         },
         {
+          "description": "Enables the take_pending_open_paths command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-take-pending-open-paths",
+          "markdownDescription": "Enables the take_pending_open_paths command without any pre-configured scope."
+        },
+        {
           "description": "Denies the add_jobs command without any pre-configured scope.",
           "type": "string",
           "const": "deny-add-jobs",
@@ -811,6 +817,12 @@
           "type": "string",
           "const": "deny-start-jobs",
           "markdownDescription": "Denies the start_jobs command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the take_pending_open_paths command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-take-pending-open-paths",
+          "markdownDescription": "Denies the take_pending_open_paths command without any pre-configured scope."
         },
         {
           "description": "本机主窗口的用户操作；文件权限还须经Rust原生选择器授权。",

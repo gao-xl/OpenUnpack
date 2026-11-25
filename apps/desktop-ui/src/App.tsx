@@ -99,8 +99,48 @@ function AppShell() {
   const [compact, setCompact] = useState(() => window.innerWidth <= 1050);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const dragCounter = useRef(0);
+  const selectedKeyRef = useRef(selectedKey);
+  useEffect(() => {
+    selectedKeyRef.current = selectedKey;
+  }, [selectedKey]);
+  const [externalOpenRequest, setExternalOpenRequest] = useState<{
+    seq: number;
+    paths: string[];
+  } | null>(null);
+  const externalOpenSeq = useRef(0);
+
+  const dispatchExternalPaths = useCallback((paths: string[]) => {
+    if (!paths.length) return;
+    externalOpenSeq.current += 1;
+    setExternalOpenRequest({ seq: externalOpenSeq.current, paths });
+    setSelectedKey('queue');
+  }, []);
 
   useEffect(() => {
+    if (isDesktop && !daemon && typeof api.onWindowDragDrop === 'function') {
+      let disposed = false;
+      let stop: (() => void) | undefined;
+      void api
+        .onWindowDragDrop(
+          (dragging) => {
+            if (!disposed) setIsDraggingOver(dragging);
+          },
+          (paths) => {
+            if (disposed || !paths.length) return;
+            // QueuePage & ToolboxPage handle their own drop when active; handle cross-tab drops cleanly here.
+            if (selectedKeyRef.current !== 'queue' && selectedKeyRef.current !== 'toolbox') {
+              dispatchExternalPaths(paths);
+            }
+          },
+        )
+        .then((cleanup) => (disposed ? cleanup() : (stop = cleanup)))
+        .catch(() => {});
+      return () => {
+        disposed = true;
+        stop?.();
+      };
+    }
+
     const handleDragEnter = (e: DragEvent) => {
       e.preventDefault();
       dragCounter.current += 1;
@@ -138,7 +178,33 @@ function AppShell() {
       window.removeEventListener('dragover', handleDragOver);
       window.removeEventListener('drop', handleDrop);
     };
-  }, []);
+  }, [daemon, dispatchExternalPaths]);
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    let disposed = false;
+    let stop: (() => void) | undefined;
+    if (typeof api.takePendingOpenPaths === 'function') {
+      void api
+        .takePendingOpenPaths()
+        .then((paths) => {
+          if (!disposed && paths.length > 0) dispatchExternalPaths(paths);
+        })
+        .catch(() => {});
+    }
+    if (typeof api.onExternalOpenPaths === 'function') {
+      void api
+        .onExternalOpenPaths((paths) => {
+          if (!disposed && paths.length > 0) dispatchExternalPaths(paths);
+        })
+        .then((cleanup) => (disposed ? cleanup() : (stop = cleanup)))
+        .catch(() => {});
+    }
+    return () => {
+      disposed = true;
+      stop?.();
+    };
+  }, [dispatchExternalPaths]);
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 1050px)');
@@ -345,7 +411,14 @@ function AppShell() {
         return <SettingsPage {...sharedProps} />;
       case 'queue':
       default:
-        return <QueuePage {...sharedProps} openHistory={() => setSelectedKey('history')} />;
+        return (
+          <QueuePage
+            {...sharedProps}
+            openHistory={() => setSelectedKey('history')}
+            externalOpenRequest={externalOpenRequest}
+            onConsumeExternalOpen={() => setExternalOpenRequest(null)}
+          />
+        );
     }
   };
 
@@ -499,6 +572,20 @@ function AppShell() {
                   showIcon
                   closable
                   onClose={() => setLocalError(null)}
+                  action={
+                    isDesktop && daemon ? (
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          api.setDaemonConnection(null, null);
+                          setLocalError(null);
+                          void refresh();
+                        }}
+                      >
+                        {t('切回本机引擎')}
+                      </Button>
+                    ) : undefined
+                  }
                   style={{ marginBottom: 16 }}
                 />
               )}
