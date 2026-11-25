@@ -1,0 +1,19 @@
+# Prettier 忽略清单：与 .gitignore 的未跟踪/产物策略保持一致
+
+# 依赖与构建产物
+node_modules/
+**/dist/
+
+# Tauri 生成的 schema（机器生成，不手改）
+apps/desktop-host/gen/
+
+# vendored 第三方资源（上游锁定，不做本地格式漂移）
+crates/local-api/assets/
+assets/legal/
+
+# 本地审计工作区（.gitignore 已忽略）
+apps/desktop-ui/audit/
+
+# 数据 fixture 与测试清单（格式即契约）
+docs/plans/
+tests/fixtures/

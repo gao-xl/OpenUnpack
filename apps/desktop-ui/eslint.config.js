@@ -11,7 +11,10 @@ export default tseslint.config(
     },
     rules: {
       // Underscore-prefixed identifiers are the project's explicit "intentionally unused" marker.
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
       // React Compiler heuristics flag pre-existing effect patterns. The refactors need their own
       // behaviour-verification pass, so keep them visible as warnings instead of failing lint.
       'react-hooks/set-state-in-effect': 'warn',

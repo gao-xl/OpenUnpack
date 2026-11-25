@@ -1,19 +1,29 @@
-# Top-most EditorConfig file
+# 根级 EditorConfig：全仓库统一编辑器基线。
+# C# worker 已随纯 Rust 微内核迁移退役，原 Roslyn SAST 规则一并移除。
 root = true
 
-[*.cs]
-# Roslyn SAST Security Rules (DotNetCliSAST)
-dotnet_analyzer_diagnostic.category-Security.severity = error
+[*]
+charset = utf-8
+# 仓库启用 core.autocrlf=true：工作树保持 CRLF，入库由 git 归一为 LF。
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
 
-# P/Invoke DLL Search Path Hardening (SEC-04)
-dotnet_diagnostic.CA5392.severity = error
+# Rust：与 rustfmt.toml 保持一致
+[*.rs]
+indent_style = space
+indent_size = 4
 
-# Weak Cryptography / Hashing Detection
-dotnet_diagnostic.CA5350.severity = error
-dotnet_diagnostic.CA5351.severity = error
+# 前端与脚本类：与 .prettierrc 保持一致
+[*.{ts,tsx,js,mjs,cjs,jsx,json,jsonc,yml,yaml,toml}]
+indent_style = space
+indent_size = 2
 
-# File Path Injection & Deserialization Security
-dotnet_diagnostic.CA3003.severity = error
-dotnet_diagnostic.CA2300.severity = error
-dotnet_diagnostic.CA2301.severity = error
-dotnet_diagnostic.CA2305.severity = error
+# PowerShell 脚本
+[*.ps1]
+indent_style = space
+indent_size = 4
+
+# Markdown：行尾双空格有语义（硬换行），不做修剪
+[*.md]
+trim_trailing_whitespace = false

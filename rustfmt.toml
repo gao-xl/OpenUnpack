@@ -1,0 +1,7 @@
+# OpenUnpack Rust 代码风格基线。
+# 仅使用 rustfmt stable 选项，避免 nightly-only 配置拉高贡献门槛。
+# 与 workspace edition 保持一致，否则 rustfmt 会按旧版语义断行。
+edition = "2024"
+
+# 行宽上限；与前端 .prettierrc 的 printWidth 对齐，保持跨栈视觉一致。
+max_width = 100
