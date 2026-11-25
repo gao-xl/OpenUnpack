@@ -11,11 +11,14 @@
 //! - Content Hash Awareness: if target exists and all files match SHA-256 hashes, auto-skips without re-extraction
 
 use super::integrity::is_os_noise_entry;
-use chrono::Local;
 use openunpack_protocol::CopyFile;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+use time::{OffsetDateTime, macros::format_description};
+
+const TIMESTAMP_FORMAT: &[time::format_description::FormatItem<'_>] =
+    format_description!("[year][month][day]_[hour][minute][second]");
 
 /// Result of target conflict resolution.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,7 +114,8 @@ pub fn resolve_publication_target(
 
 /// Generates a semantic timestamp-suffixed target directory path `name_YYYYMMDD_HHMMSS`.
 pub fn timestamp_target(parent: &Path, basename: &str) -> Result<PathBuf, String> {
-    let now_str = Local::now().format("%Y%m%d_%H%M%S").to_string();
+    let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
+    let now_str = now.format(TIMESTAMP_FORMAT).unwrap_or_default();
     let initial_name = format!("{basename}_{now_str}");
     let candidate = parent.join(&initial_name);
     if !candidate.exists() {

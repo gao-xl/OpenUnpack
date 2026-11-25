@@ -58,7 +58,9 @@ use std::{
 use tokio::sync::broadcast;
 
 fn now() -> String {
-    chrono::Utc::now().to_rfc3339()
+    time::OffsetDateTime::now_utc()
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap_or_default()
 }
 fn uid() -> String {
     uuid::Uuid::new_v4().to_string()

@@ -1713,7 +1713,13 @@ fn transfer_snapshot_is_versioned_transient_and_keeps_active_speed_while_paused(
     assert_eq!(observation.total_bytes, 5000);
     assert_eq!(observation.bytes_per_second, Some(1000.0));
     assert_eq!(observation.remaining_seconds, Some(3.5));
-    assert!(chrono::DateTime::parse_from_rfc3339(&observation.updated_at).is_ok());
+    assert!(
+        time::OffsetDateTime::parse(
+            &observation.updated_at,
+            &time::format_description::well_known::Rfc3339,
+        )
+        .is_ok()
+    );
     let same = core.snapshot().unwrap();
     assert_eq!(snapshot.revision, same.revision);
     assert_eq!(

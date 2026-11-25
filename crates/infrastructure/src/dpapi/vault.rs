@@ -8,7 +8,6 @@ use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
-use chrono::Utc;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -50,6 +49,12 @@ const MAX_VAULT_ITEMS: usize = 100_000;
 // writing, and use the same bound when reopening, including old 64 MiB stores.
 const MAX_VAULT_FILE_SIZE: usize = MAX_BACKUP_PAYLOAD_SIZE + 64 * 1024;
 const MAX_BACKUP_FILE_SIZE: usize = MAX_BACKUP_PAYLOAD_SIZE * 2;
+
+fn now_rfc3339() -> String {
+    time::OffsetDateTime::now_utc()
+        .format(&time::format_description::well_known::Rfc3339)
+        .unwrap_or_default()
+}
 
 fn ct_bytes_eq(a: &[u8], b: &[u8]) -> bool {
     let mut diff = a.len() ^ b.len();
@@ -233,7 +238,7 @@ impl Vault {
             .writer
             .lock()
             .map_err(|_| ERR_MUTEX_POISONED.to_string())?;
-        let now = Utc::now().to_rfc3339();
+        let now = now_rfc3339();
         let trimmed_name = input.name.trim().to_string();
         let cleaned_groups = clean_groups(&input.groups);
         let cleaned_notes = std::mem::take(&mut input.notes);
@@ -364,7 +369,7 @@ impl Vault {
 
         item.deleted = true;
         item.secret.zeroize();
-        item.updated_at = Utc::now().to_rfc3339();
+        item.updated_at = now_rfc3339();
         cloned.generation = cloned.generation.wrapping_add(1);
 
         for ids in cloned.fingerprint_order.values_mut() {
@@ -483,8 +488,8 @@ impl Vault {
             && item.revision == event.password_revision
         {
             item.success_count = item.success_count.saturating_add(1);
-            item.last_success = Some(Utc::now().to_rfc3339());
-            item.updated_at = Utc::now().to_rfc3339();
+            item.last_success = Some(now_rfc3339());
+            item.updated_at = now_rfc3339();
 
             if let Some(ref fp) = event.fingerprint {
                 let list = cloned.fingerprint_order.entry(fp.clone()).or_default();
@@ -642,7 +647,7 @@ impl Vault {
         }
         let mut added = 0;
         let mut duplicates = 0;
-        let now = Utc::now().to_rfc3339();
+        let now = now_rfc3339();
         let mut item_count = active_item_count(&cloned);
 
         for rec in parsed_records {
@@ -957,7 +962,7 @@ impl Vault {
 
         let mut added = 0;
         let mut duplicates = 0;
-        let now = Utc::now().to_rfc3339();
+        let now = now_rfc3339();
         let mut item_count = active_item_count(&cloned);
 
         for mut b_item in backup_payload.items {
@@ -1045,7 +1050,7 @@ impl Vault {
             }
         }
         let clean = clean_groups(groups);
-        let timestamp = Utc::now().to_rfc3339();
+        let timestamp = now_rfc3339();
         for id in ids {
             let item = data.items.get_mut(id).ok_or(ERR_RECORD_NOT_FOUND)?;
             match action {
