@@ -12,7 +12,7 @@ Reset-OpenUnpackBuildDirectory -Path $taskStage -Parent $taskRelease
 
 # An explicit allowlist prevents local credentials, the Gemini gateway project, data,
 # downloaded engines and build outputs from entering the application source release.
-$taskFiles = @('Cargo.toml', 'Cargo.lock', 'LICENSE', '.gitignore', '.gitattributes', '.editorconfig', 'AGENTS.md', 'README.md', 'CONTRIBUTING.md', 'CODE_OF_CONDUCT.md', 'SECURITY.md', 'CHANGELOG.md', 'THIRD_PARTY_NOTICES.md')
+$taskFiles = @('Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'rustfmt.toml', '.prettierrc', '.prettierignore', 'LICENSE', '.gitignore', '.gitattributes', '.editorconfig', 'AGENTS.md', 'README.md', 'CONTRIBUTING.md', 'CODE_OF_CONDUCT.md', 'SECURITY.md', 'CHANGELOG.md', 'THIRD_PARTY_NOTICES.md')
 $taskFiles += @('assets/legal/swagger-ui/LICENSE', 'assets/legal/swagger-ui/NOTICE', 'assets/legal/swagger-ui/provenance.json', 'assets/legal/7zip/COPYING.LESSER-2.1.txt', 'examples/local-api.py', 'examples/local-api.ps1', 'apps/desktop-ui/eslint.config.js')
 foreach ($relative in $taskFiles) {
     $source = Join-Path $taskRoot $relative
@@ -50,7 +50,7 @@ foreach ($tree in @('apps', 'crates', 'src', 'tests', 'scripts', 'docs', '.githu
         if ($tree -eq 'docs' -and $relative -notin $taskSourcePolicy.documentationFiles) { continue }
         $taskExcluded = @($taskSourcePolicy.excludedPaths | Where-Object { $relative -eq $_ -or $relative.StartsWith($_ + '/', [StringComparison]::Ordinal) }).Count -gt 0
         if ($taskExcluded) { continue }
-        $taskSwaggerAsset = $relative -match '^crates/local-api/assets/swagger-ui/(swagger-ui-bundle|swagger-ui-standalone-preset)\.js$'
+        $taskSwaggerAsset = $relative -match '^crates/local-api/assets/swagger-ui/(swagger-ui-bundle|swagger-ui-standalone-preset|swagger-initializer)\.js$'
         if ($relative -match $taskSensitive -or ($file.Extension -notin $taskAllowedExtensions -and -not $taskFixtureFiles.ContainsKey($relative) -and -not $taskSwaggerAsset)) { continue }
         if ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "源码发布拒绝链接：$relative" }
         $destination = Join-Path $taskStage $relative
