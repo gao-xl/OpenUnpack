@@ -31,6 +31,18 @@
   - 令牌按位异或常量时间比对，阻断时序侧信道；`last_used_at` 引入 60 秒写盘节流，消除高频轮询的 JSON 重写放大与锁竞争。
 
 ### Fixed
+- **桌面端冷启动、单实例与原生拖放可用性修复**：
+  - 修复 Windows 中文工作区路径下 `vite build` 因 `%TEMP%` 锁引发的 `esbuild` 构建失败（`scripts/with-build-tmp.mjs` 统一隔离至 `artifacts/build-tmp`）。
+  - 修复前端启动时残留的 `openunpack_daemon_url`（无有效会话令牌）劫持原生桌面冷启动的问题，并在异常提示条新增“切回本机引擎”一键恢复按钮。
+  - 引入基于受限命名管道的 Win32 单实例唤醒与外部传入路径接力机制（`apps/desktop-host/src/single_instance.rs`），支持资源管理器右键/双击压缩包唤起既有窗口并自动入队（右键菜单同步注册文件 `*` 与文件夹 `Directory`），同时启动前预检 WebView2 Runtime 并显示友好指引。
+  - 修复原生窗口拖放与跨标签页拖放，避免切离“批量解压”页时文件落盘事件丢失。
+- **核心 7z 解压与桌面交互阻塞清零**：
+  - `cli_engine.rs` 为全部 7z 子进程注入 `CREATE_NO_WINDOW` 消除黑框闪烁，核对同级 `7z.dll` 完整性，增加 `-bsp1` stdout 进度段解析实现 ~100ms 节流实时进度上报，并修复 `extractor.rs` 回退掩盖真实错误（取消、缺分卷、超时、口令错）的故障。
+  - 打通原生模式即时密码交互链路：`Coordinator::subscribe_need_input` → Tauri `need-password` 事件 → `submit_native_input` IPC 与 `QueuePage` 自动弹出聚焦输入窗口。
+  - 放行工具箱“打开目录”经 `NativeAccess` 授权的本地读取/写入路径，并改进 `verify_no_reparse_ancestors` 为基于 `FindFirstFileW` 重解析标签判定，阻断 Symlink/Junction 同时兼容 OneDrive 等云端占位符目录。
+- **P2 审计债务与性能/可维护性闭环**：
+  - 修复 `QA-7` 持久化失败静默吞噬、`QA-8 / M4` 去除 Local API HTML 响应内 `script-src 'unsafe-inline'` 并加固 Web Root 符号链接/边界检查、`QA-5 / QA-9` 统一各命令长度与类型边界校验、`ARC-1` 去除进度心跳重复全量失效、`X-5 / M20` 通过 `rust-toolchain.toml` 与工作区 `rust-version = "1.88"` 锁定工具链版本。
+  - 修复中文 `%TMP%` 下 `hook_regressions` 批处理 UTF-8 代码页失败及跨测试文件中的硬编码私人临时 7z 路径；完成 `OPT-003`、`OPT-004`、`OPT-007`、`OPT-008` 性能优化与大文件拆分。
 - 修复 `zip_encoding.rs` 中探测映射在 move 后的生命周期借用冲突（E0505）。
 - 修复 `dpapi/vault.rs` 与 `store_tests.rs` 中单元与集成测试对 `Zeroizing<String>` 的类型断言（E0308）。
 - 修复 `coordinator/scheduler.rs` 中非最小化布尔表达式的 Clippy 严格警告（`nonminimal_bool`）。

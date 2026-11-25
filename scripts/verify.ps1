@@ -1,15 +1,13 @@
 ﻿param([switch]$SkipInstall, [switch]$WorkerProtocol, [switch]$SkipPrepare, [switch]$SkipSecurityAudit, [switch]$SkipMcpTest)
 . (Join-Path $PSScriptRoot 'common.ps1')
+. (Join-Path $PSScriptRoot 'runtime-policy.ps1')
 Assert-OpenUnpackWindows
 Import-OpenUnpackMsvc
 $taskRoot = Get-OpenUnpackRoot
-# 7-Zip 26.x loads its codec DLL through an ANSI path while packing fixtures, so
-# a checkout under a non-ASCII directory fails with "Codec Load Error: ... 80070005"
-# and "Unsupported archive type" while CI (ASCII path) stays green. Warn loudly
-# instead of letting the failure look like a product defect.
-if ($taskRoot -match '[^\x00-\x7F]') {
-    Write-Warning "Non-ASCII checkout path: $taskRoot. The bundled 7-Zip fixture packer may fail to load 7z.dll from this path; prefer an ASCII path or point OPENUNPACK_TEST_ENGINE / OPENUNPACK_7Z_PATH at ASCII copies."
-}
+$taskBuildTmp = Join-Path $taskRoot 'artifacts/build-tmp'
+New-OpenUnpackDirectory $taskBuildTmp
+$env:TEMP = $taskBuildTmp
+$env:TMP = $taskBuildTmp
 $taskLogs = Join-Path $taskRoot 'artifacts/verification'
 New-OpenUnpackDirectory $taskLogs
 $taskPreviousWorker = [Environment]::GetEnvironmentVariable('OPENUNPACK_TEST_WORKER', 'Process')
@@ -17,6 +15,7 @@ $taskPreviousEngine = [Environment]::GetEnvironmentVariable('OPENUNPACK_TEST_ENG
 $taskPreviousCli = [Environment]::GetEnvironmentVariable('OPENUNPACK_7Z_PATH', 'Process')
 Push-Location $taskRoot
 try {
+    $null = Get-OpenUnpackNativeEngineIdentity -EngineDirectory (Join-Path $taskRoot 'tools/7zip')
     if (-not $SkipPrepare) { & (Join-Path $PSScriptRoot 'prepare-desktop.ps1') -SkipInstall:$SkipInstall }
     Invoke-OpenUnpackTool cargo @('fetch', '--locked', '--target', 'x86_64-pc-windows-msvc')
     & (Join-Path $PSScriptRoot 'check-contracts.ps1') -RunCargoTest
@@ -24,6 +23,9 @@ try {
     & (Join-Path $PSScriptRoot 'collect-release-materials.ps1')
     if (-not $SkipSecurityAudit) {
         & (Join-Path $PSScriptRoot 'audit-security.ps1') -Offline:$SkipInstall -DenyWarnings
+    }
+    if ($WorkerProtocol) {
+        Invoke-OpenUnpackTool cargo @('test', '-p', 'openunpack-infrastructure', '--locked', '--', '--test-threads=1')
     }
     Push-Location (Join-Path $taskRoot 'apps/desktop-ui')
     try {

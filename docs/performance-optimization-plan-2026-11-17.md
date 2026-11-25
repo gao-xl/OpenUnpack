@@ -238,12 +238,12 @@
 
 | 方案 | 状态 | 修复提交 | 验证结果 | 关闭日期 |
 |---|---|---|---|---|
-| SOL-01 | RESOLVED（待提交） | | 进度 store 4/4、`tsc -b` 通过 | 2026-11-17 |
-| SOL-02 | RESOLVED（待提交） | | `tsc -b` 通过；progress-store + daemon-connection 20/20 | 2026-11-17 |
-| SOL-03 | OPEN | | | |
-| SOL-04 | PARTIAL | | watcher 7/7（`to_remove` HashSet + per-tick 目录列表缓存） | |
-| SOL-05 | PARTIAL | | snapshot/commands 20/20（`top_n_newest` 已修复并生效） | |
-| SOL-06 | RESOLVED（待提交） | | repository 6/6；architecture_convergence 5/5 | 2026-11-17 |
-| SOL-07 | PARTIAL | | scanner 17/17（仅 SFX 去重复读取） | |
-| SOL-08 | OPEN | | | |
-| SOL-09 | OPEN | | | |
+| SOL-01 | RESOLVED | `c800a34` | 全量 `vitest run`（34 文件 297/297 通过）、`tsc -b`、`eslint` | 2026-11-25 |
+| SOL-02 | RESOLVED | `c800a34` / `1b083e9` | `daemon-connection.test.ts` 与全量 `297/297` 通过 | 2026-11-25 |
+| SOL-03 | RESOLVED | `7d22652` | `openunpack-core --lib` 174 通过 + `update_versioned` 短路单测通过 | 2026-11-25 |
+| SOL-04 | RESOLVED | `7d22652` | `watcher.rs` 新增有界历史队列与指数退避单测全绿 | 2026-11-25 |
+| SOL-05 | RESOLVED（局部筛选 + `top_n_newest`） | `c800a34` | `openunpack-core --lib` 全绿 | 2026-11-25 |
+| SOL-06 | RESOLVED | `3bfe8b0` | `repository::` 6/6；`architecture_convergence` 5/5 | 2026-11-25 |
+| SOL-07 | RESOLVED | `7d22652` | `scanner::` 与全量 `openunpack-core` 测试通过 | 2026-11-25 |
+| SOL-08 | RESOLVED | `7d22652` | `check-architecture.mjs`、`tsc -b`、`eslint` 与 `297/297` 全绿 | 2026-11-25 |
+| SOL-09 | RESOLVED（负载基线保留） | `6190d95` | `load_profile.rs` 路径去硬编码，`cargo test --workspace` 与门禁剧本落地 | 2026-11-25 |

@@ -9,10 +9,9 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-Windows%20x64-0078D6?logo=windows&logoColor=white" alt="Platform">
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT">
-  <img src="https://img.shields.io/badge/Rust-1.96+-DEA584?logo=rust&logoColor=white" alt="Rust 1.96+">
-  <img src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white" alt=".NET 10">
+  <img src="https://img.shields.io/badge/Rust-1.88%2B%20(1.96%20tested)-DEA584?logo=rust&logoColor=white" alt="Rust 1.88+">
   <img src="https://img.shields.io/badge/UI-React%20%7C%20Ant%20Design-61DAFB?logo=react&logoColor=white" alt="React & Ant Design">
-  <img src="https://img.shields.io/badge/Engine-7--Zip%2026.04-orange" alt="7-Zip Engine">
+  <img src="https://img.shields.io/badge/Engine-Native%20Rust%20%2B%207--Zip%2026.04-orange" alt="Native Rust + 7-Zip Engine">
 </p>
 
 ---
@@ -73,7 +72,7 @@
 
 ## 系统架构
 
-OpenUnpack 采用严格的**跨进程隔离边界**，划分为前端界面、Rust 协调中心与 C# 原生执行 Worker 三层：
+OpenUnpack 采用**单栈纯 Rust 微内核 + 桌面宿主架构**（历史 C# / .NET Worker 进程已全面退役），划分为前端界面、Rust 宿主及核心编排引擎两层，并配合受控的官方 7-Zip 工具链协同解压：
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -82,17 +81,12 @@ OpenUnpack 采用严格的**跨进程隔离边界**，划分为前端界面、Ru
 └───────────────────────────┬────────────────────────────┘
                             │  Tauri IPC 消息通道
 ┌───────────────────────────▼────────────────────────────┐
-│              Rust 宿主与任务协调中心                    │  单一状态真源
-│     (apps/desktop-host, crates/core, crates/protocol)  │  状态机 / DPAPI / SQLite
+│              Rust 宿主与纯 Rust 微内核协调中心            │  单一状态真源
+│    (apps/desktop-host, crates/core, crates/infra...)   │  DPAPI / SQLite / 原生 ZIP/TAR/LZ4/HatchZip
 └───────────────────────────┬────────────────────────────┘
-                            │  双向独立命名管道 (命令通道 + 进度通道)
+                            │  进程组 Job Object 托管 (CREATE_NO_WINDOW + stdin/pipe)
 ┌───────────────────────────▼────────────────────────────┐
-│             C# / .NET 10 Worker 执行进程               │  独立执行进程
-│            (src/OpenUnpack.Worker & Engine)            │  隔离引擎进程生命周期
-└───────────────────────────┬────────────────────────────┘
-                            │  P/Invoke 动态加载
-┌───────────────────────────▼────────────────────────────┐
-│           官方未修改 7z.dll (7-Zip 26.04)              │  本地解码与流式解压
+│         官方未修改 7z.exe / 7z.dll (7-Zip 26.04)         │  RAR / 7z / 固实等复杂格式探测与流式进度解压
 └────────────────────────────────────────────────────────┘
 ```
 
@@ -127,13 +121,13 @@ OpenUnpack 采用严格的**跨进程隔离边界**，划分为前端界面、Ru
 
 - **操作系统**：Windows 10 / 11 64位 (x64)；
 - **运行时环境**：
-  - **Microsoft Edge WebView2 Runtime**（Windows 11 通常已自带；Windows 10 若缺失，标准安装包会在线引导安装；离线 WebView2 分发包需维护者单独构建并验证）；
-  - **.NET 运行时**：Worker 进程已内嵌自包含（Self-contained）的 .NET 10 运行时，用户**无需**单独安装 .NET SDK。
+  - **Microsoft Edge WebView2 Runtime**（Windows 11 通常已自带；桌面端启动前会预检 WebView2 安装状态并提示指引；Windows 10 若缺失，标准安装包会在线引导安装）；
+  - **纯 Rust 原生内核**：无需安装 `.NET SDK` 或任何额外外部运行时，内置纯 Rust 解码器（ZIP/TAR/LZ4/HatchZip）及经过校验的官方 `7z.exe`/`7z.dll`（位于 `tools/7zip/`）。
 
 ### 安装与运行
 
 产物默认输出至 `artifacts/release/`：
-- **便携版 (Portable)**：解压压缩包后，直接双击运行 `OpenUnpack.exe`（请保留同级目录下的 `worker/` 与物料文件夹）。用户配置与任务数据仍安全保存在本地 `%LOCALAPPDATA%\OpenUnpack` 中。
+- **便携版 (Portable)**：解压压缩包后，直接双击运行 `OpenUnpack.exe`（请保留同级目录下的 `tools/` 与许可物料文件夹）。用户配置与任务数据仍安全保存在本地 `%LOCALAPPDATA%\OpenUnpack` 中。
 - **安装版 (NSIS Installer)**：双击执行安装向导，程序默认安装在 `%LOCALAPPDATA%\Programs\OpenUnpack`，与用户数据目录物理分离，设计上在升级与卸载时保留密码库和任务记录；跨版本行为仍需针对候选验证，操作前建议导出加密备份。
 
 > **关于未签名二进制**：本项目为开源项目，发布产物**不做 Authenticode 代码签名**。首次运行时 Windows SmartScreen 可能提示"未知发布者"，属预期现象，确认来自本项目发布页即可继续。请以下载后校验 SHA-256 为准（见下）。
@@ -170,9 +164,8 @@ pwsh -File scripts/verify-release-signatures.ps1 -HostExe <OpenUnpack.exe> -Setu
 ### 环境准备
 
 1. **Windows 10/11 x64**，安装 **PowerShell 7+**；
-2. **Node.js 24.x LTS** 与 **Rust 1.96+**（`x86_64-pc-windows-msvc`）；
-3. **.NET SDK 10.0.301**（须与根目录 `global.json` 一致）；
-4. **Visual Studio 2022 C++ Build Tools**（必须包含完整 Windows SDK，脚本会通过 `vswhere` 探测 `Windows.h` 与 `ucrt.lib`）。
+2. **Node.js 24.x LTS** 与 **Rust 工具链**（`rust-toolchain.toml` 锁定 `stable`，MSRV 1.88+，`x86_64-pc-windows-msvc`）；
+3. **Visual Studio 2022 C++ Build Tools**（必须包含完整 Windows SDK，脚本会通过 `vswhere` 探测 `Windows.h` 与 `ucrt.lib`）。
 
 ### 构建与调试命令
 
@@ -207,7 +200,7 @@ cargo fetch --locked --target x86_64-pc-windows-msvc
 
 - **DPAPI 本地密保**：密码库明文受 Windows 数据保护 API 加密保护，密文密钥与当前 Windows 用户账户绑定；
 - **便携保险库需显式启用**：Windows 上仅当设置 `OPENUNPACK_PORTABLE_VAULT=1`（或提供 `OPENUNPACK_VAULT_KEY`）时才会读取同目录 `.vault.key`；仅存在密钥文件不再自动切换便携模式，避免数据目录可写者植入密钥后接管保险库。升级后首次打开既有便携库需显式设置该变量；
-- **口令传递**：实测 7-Zip 26.04 不会从重定向 stdin 读取口令（历史探针条件见 [口令通道记录](docs/audit-fix-log-2026-10-21.md)），可选 CLI 适配路径默认以 `-p<password>` 传给 7-Zip，同用户进程可能读取命令行；Windows 生产 Worker 则通过受限命名管道接收口令并调用 DLL 回调；设置 `OPENUNPACK_7Z_STDIN=1` 可启用 stdin 通道，供支持该特性的构建或不含敏感口令的场景使用；
+- **口令传递**：纯 Rust 微内核中，受控 7-Zip CLI 通道（`cli_engine.rs`）默认且唯一通过标准输入（`stdin` 管道）投递解密口令，禁止在命令行参数（`argv`）中暴露明文口令；并配合 `CREATE_NO_WINDOW` 与 Windows Job Object 实现无黑框托管及崩溃连带回收；
 - **敏感信息处理**：日志与错误不应记录密码明文或备份口令；任务数据库及历史仍包含文件名和路径，未作全盘加密；
 - **受保护的临时工作目录**：任务暂存区设置受保护 ACL，限制其他账户的访问；此措施不能抵御任意同用户恶意进程、管理员或内核控制；
 - **路径遍历与注入防护**：针对压缩包内的相对路径、绝对路径、重解析点（Symlink / Junction）及 Windows 备用数据流（ADS）设置严格的规范化检查，相对路径限制 128 层，目录租约限制 256 层，超限输入直接拒绝；
@@ -224,7 +217,7 @@ cargo fetch --locked --target x86_64-pc-windows-msvc
 
 ### 无头模式（Headless Daemon）
 
-公开支持范围为 Windows x64。无头入口仍依赖 .NET Worker 与官方 7-Zip 载荷；`build-headless.ps1` 暂保留为构建入口，其载荷组装与包级验证须完成后再分发。Docker/Linux 部署模板、未完成的浏览器扩展和异步客户端演示已退役；Rust 引擎库模块仍供实验和测试使用，当前不构成缺少 Worker 时的生产回退。
+公开支持范围为 Windows x64。无头入口运行于同一纯 Rust 微内核与官方 7-Zip 载荷之上（`OpenUnpack.exe --headless` 或 `openunpack-cli.exe`）；`build-headless.ps1` 保留为独立服务器打包入口。Docker/Linux 部署模板、未完成的浏览器扩展与 C# Worker 外部管道已退役。
 
 以 `--headless`（别名 `-d` / `--daemon`）启动时可用以下参数：
 
@@ -262,6 +255,5 @@ cargo fetch --locked --target x86_64-pc-windows-msvc
 OpenUnpack 应用程序自身源码基于 **[MIT 许可证](LICENSE)** 开源。
 
 **第三方组件合规告知**：
-- 本项目包含官方未修改的动态链接库 `7z.dll`（由 Igor Pavlov 开发），遵循 **GNU LGPL 2.1** 许可及部分 unRAR 限制条款（禁止使用该解压源码开发兼容 RAR 格式的压缩程序）；
-- 内置的独立 Worker 包含 Microsoft .NET Runtime 组件，遵循其专有的开源分发许可与版权声明；
-- 重新分发安装包或便携二进制时，必须完整保留 `LICENSE`、`THIRD_PARTY_NOTICES.md`、`worker/` 目录以及 `release-materials/` 目录下的所有许可材料与源码凭据。
+- 本项目包含官方未修改的 7-Zip 命令行及动态链接库组件（`tools/7zip/7z.exe` 与 `7z.dll`，由 Igor Pavlov 开发），遵循 **GNU LGPL 2.1** 许可及部分 unRAR 限制条款（禁止使用该解压源码开发兼容 RAR 格式的压缩程序）；
+- 重新分发安装包或便携二进制时，必须完整保留 `LICENSE`、`THIRD_PARTY_NOTICES.md`、`tools/` 目录以及 `release-materials/` 目录下的所有许可材料与源码凭据。

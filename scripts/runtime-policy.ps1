@@ -139,3 +139,46 @@ function Get-OpenUnpackRuntimeSecurityStatus {
         source = $Policy.releaseMetadataUrl; metadataSha256 = ([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($MetadataJson))).Replace('-', '').ToLowerInvariant());
         checkedAtUtc = [DateTimeOffset]::UtcNow.ToString('o'); scope = 'Runtime servicing baseline; release-level security flags are not application exploitability findings.' }
 }
+
+function Get-OpenUnpackNativeEngineIdentity {
+    param([Parameter(Mandatory)][string]$EngineDirectory, [string]$PortableRoot = '')
+    $engineDir = [IO.Path]::GetFullPath($EngineDirectory)
+    $provenancePath = Join-Path $engineDir 'provenance.json'
+    if (-not (Test-Path -LiteralPath $provenancePath -PathType Leaf)) {
+        throw "7-Zip provenance manifest missing: $provenancePath"
+    }
+    $provenance = Get-Content -Raw -LiteralPath $provenancePath | ConvertFrom-Json -ErrorAction Stop
+    $checks = @(
+        @{ Name = '7z.exe'; Expected = $provenance.exeSha256 },
+        @{ Name = '7z.dll'; Expected = $provenance.dllSha256 },
+        @{ Name = 'License.txt'; Expected = $provenance.licenseSha256 }
+    )
+    $files = [ordered]@{}
+    foreach ($item in $checks) {
+        $filePath = Join-Path $engineDir $item.Name
+        if (-not (Test-Path -LiteralPath $filePath -PathType Leaf)) {
+            throw "Pure-Rust 7-Zip payload file missing: $filePath"
+        }
+        $actual = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256).Hash.ToLowerInvariant()
+        if (-not $item.Expected -or $actual -ne ([string]$item.Expected).ToLowerInvariant()) {
+            throw "7-Zip SHA-256 mismatch for $($item.Name): expected $($item.Expected), got $actual"
+        }
+        $files[$item.Name] = @{ sha256 = $actual }
+    }
+    if ($PortableRoot) {
+        $root = [IO.Path]::GetFullPath($PortableRoot)
+        foreach ($retired in @('OpenUnpack.Worker.exe', 'OpenUnpack.Worker.runtimeconfig.json', 'coreclr.dll')) {
+            if (Test-Path -LiteralPath (Join-Path $root $retired)) {
+                throw "Retired .NET runtime file unexpectedly present in pure-Rust payload: $retired"
+            }
+        }
+    }
+    return @{
+        status = 'passed'
+        mode = 'pure-rust-microkernel'
+        sevenZipVersion = $provenance.version
+        engineDirectory = $engineDir
+        files = $files
+        checkedAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
+    }
+}

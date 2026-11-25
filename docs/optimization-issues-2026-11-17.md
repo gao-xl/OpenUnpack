@@ -16,14 +16,14 @@
 
 | 编号 | 优先级 | 状态 | 问题 | 主要影响 | 建议负责人 |
 |---|---|---|---|---|---|
-| OPT-001 | P1 | RESOLVED（待提交） | 批量进度聚合订阅可能不触发重渲染 | 用户可见进度停滞 | 前端 |
-| OPT-002 | P1 | RESOLVED（待提交） | 原生/守护进程切换后实时进度监听可能失效或串源 | 实时进度缺失、旧事件污染 | 前端 |
-| OPT-003 | P1 | OPEN | 快照 delta 只降低传输，后端仍按全量状态构建 | 大任务/大密码库下 CPU、内存和锁占用 | Core |
-| OPT-004 | P2 | PARTIAL | 目录监听重复全目录扫描且历史集合无界 | 后台 CPU、I/O、电量和长期内存 | Core |
-| OPT-005 | P2 | PARTIAL | 大历史记录下重复全量排序 | 快照和历史分页 CPU、临时分配 | Core |
-| OPT-006 | P2 | RESOLVED（待提交） | `publications.job_id` 缺少索引 | 删除、恢复和清理历史的数据库成本 | Core/SQLite |
-| OPT-007 | P2 | PARTIAL | SFX 探测重复读取，扫描对全文件执行魔数探测 | 大目录扫描 I/O 与耗时 | Core |
-| OPT-008 | P2 | OPEN | 多个上千行模块提高修改和回归成本 | 可维护性、审查效率、并行冲突 | 前端/Core |
+| OPT-001 | P1 | RESOLVED | 批量进度聚合订阅可能不触发重渲染 | 用户可见进度停滞 | 前端 |
+| OPT-002 | P1 | RESOLVED | 原生/守护进程切换后实时进度监听可能失效或串源 | 实时进度缺失、旧事件污染 | 前端 |
+| OPT-003 | P1 | RESOLVED | 快照 delta 只降低传输，后端仍按全量状态构建 | 大任务/大密码库下 CPU、内存和锁占用 | Core |
+| OPT-004 | P2 | RESOLVED | 目录监听重复全目录扫描且历史集合无界 | 后台 CPU、I/O、电量、长期内存 | Core |
+| OPT-005 | P2 | RESOLVED（局部筛选 + `top_n_newest`） | 大历史记录下重复全量排序 | 快照和历史分页 CPU、临时分配 | Core |
+| OPT-006 | P2 | RESOLVED | `publications.job_id` 缺少索引 | 删除、恢复和清理历史的数据库成本 | Core/SQLite |
+| OPT-007 | P2 | RESOLVED | SFX 探测重复读取与目录遍历多次 stat | 大目录扫描 I/O 与耗时 | Core |
+| OPT-008 | P2 | RESOLVED（阶段拆解完成） | 多个上千行模块提高修改和回归成本 | 可维护性、审查效率、并行冲突 | 前端/Core |
 
 ---
 
@@ -362,5 +362,11 @@ OPT-004 的退避/TTL、OPT-005 的历史页增量索引、OPT-007 的快速路�
 
 | 编号 | 关闭日期 | 修复提交 | 验证命令与结果 | 备注 |
 |---|---|---|---|---|
-| OPT-002 | 2026-11-17 | 待提交 | `npx tsc -b` 通过；`npx vitest run tests/progress-store.test.tsx tests/daemon-connection.test.ts` 20/20 | 原生进度监听随连接模式建立/拆除，代际计数防陈旧落定 |
-| OPT-006 | 2026-11-17 | 待提交 | `cargo test -p openunpack-core --lib -- repository::` 6/6；`--test architecture_convergence` 5/5 | v1→v2 迁移建 `idx_publications_job_state(job_id,state)` |
+| OPT-001 | 2026-11-25 | `c800a34` | `vitest run`（含 `progress-store.test.tsx`）34 文件 297/297 通过 | 聚合进度快照版本号触发重渲染 |
+| OPT-002 | 2026-11-25 | `c800a34` / `1b083e9` | `vitest run tests/daemon-connection.test.ts` 与全量 `297/297` 通过 | `createNativeEventBridge` 按连接模式/代际统管 `job-progress` 与 `need-password` |
+| OPT-003 | 2026-11-25 | `7d22652` | `cargo test -p openunpack-core --lib` 174 通过（1 ignored） | `update_versioned` 同修订 O(1) 短路 + `Vault::views_if_changed` 按 generation 复用投影 |
+| OPT-004 | 2026-11-25 | `7d22652` | `cargo test -p openunpack-core --lib`（含 `bounded_enqueue_history` / `preflight_backoff`）通过 | 新增 4096 上限 `BoundedEnqueueHistory` 与预检指数退避（封顶 32s） |
+| OPT-005 | 2026-11-25 | `c800a34` | `cargo test -p openunpack-core --lib` 通过 | `snapshot.rs` 与 `commands.rs::history_page` 均使用 `top_n_newest` 部分选择 |
+| OPT-006 | 2026-11-25 | `3bfe8b0` | `repository::` 6/6 与 `architecture_convergence` 5/5 通过 | v1→v2 迁移建 `idx_publications_job_state(job_id,state)` |
+| OPT-007 | 2026-11-25 | `7d22652` | `cargo test -p openunpack-core --lib -- scanner::` 通过 | 单次 SFX 探测缓存 + `WalkDir` 遍历消除目录及符号链接多余 stat 系统调用 |
+| OPT-008 | 2026-11-25 | `7d22652` | `check-architecture.mjs`、`tsc -b`、`eslint` 与 `297/297` 通过 | 拆分 `hooks.rs`、`headless.rs`、`QueueProgressCards.tsx`、`QueuePasswordModal.tsx`、`ToolboxConfirmModal.tsx`、`SettingsBackupModal.tsx` |

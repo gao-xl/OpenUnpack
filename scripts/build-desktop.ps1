@@ -43,6 +43,7 @@ try {
         Push-Location (Join-Path $taskRoot 'apps/desktop-host')
         try { Invoke-OpenUnpackTool (Join-Path $taskRoot 'apps/desktop-ui/node_modules/.bin/tauri.cmd') @('build', '--bundles', 'nsis', '--features', 'custom-protocol', '--config', $taskOverride, '--ci', '--', '--locked') }
         finally { Pop-Location }
+        Invoke-OpenUnpackTool cargo build -p openunpack-cli --release --locked
         $taskSetup = Join-Path $taskTarget "release/bundle/nsis/$($taskConfig.productName)_${taskVersion}_x64-setup.exe"
         if (-not (Test-Path -LiteralPath $taskSetup -PathType Leaf)) { throw 'Tauri 未输出本次版本的 NSIS 安装包。' }
         $taskSetupInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($taskSetup)

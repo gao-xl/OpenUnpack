@@ -8,10 +8,10 @@
 React / HTTP API
         ↓
 Tauri Host → Core Coordinator（单一编排与任务状态权威）
-                   ├─ Repository → SQLite v1 / JobView / publication / success outbox
+                   ├─ Repository → SQLite v1/v2 / JobView / publication / success outbox
                    ├─ Scanner / Watcher / Toolbox
-                   └─ Infrastructure
-                        ├─ WorkerClient → 受限双命名管道 → .NET Worker → Engine
+                   └─ Infrastructure（纯 Rust 微内核）
+                        ├─ WorkerClient（进程内执行协调） → 原生 ZIP/TAR/LZ4/HatchZip + 受控 7-Zip CLI (stdin + CREATE_NO_WINDOW + -bsp1)
                         ├─ DPAPI Vault
                         └─ 安全 IO / 回收 / 路由与磁盘拓扑 / 数据库租约
 
@@ -44,7 +44,7 @@ Core 下原有 Worker / Vault / paths / route / lease 路径只兼容再导出�
 
 ## 协调器职责
 
-`mod.rs` 保存任务/调度运行时与组件装配；`initialization` 负责打开与启动恢复；`snapshot` 在可见状态门内采样；`commands` 处理队列、重试、删除及配置；`inspection` 管理检查与规则预览；`state` 管理持久化和成功 outbox；`transfers` 管理测量投影；`scheduler` 负责认领和调度；`worker_requests` 负责请求；`resources` 将资源判定应用到调度状态；`execution` 驱动解压和发布阶段；`recovery` 驱动恢复；`pipeline_helpers` / `integrity` 保存相应辅助逻辑。原协调器测试保留在 `tests.rs`，发布组件的原生文件系统/SQLite 回归在 `publication/tests.rs`。
+`mod.rs` 保存任务/调度运行时与组件装配；`initialization` 负责打开与启动恢复；`snapshot` 在可见状态门内采样；`commands` 处理队列、重试、删除及配置；`inspection` 管理检查与规则预览；`state` 管理持久化和成功 outbox；`transfers` 管理测量投影；`scheduler` 负责认领和调度；`hooks` 处理终态外部钩子；`worker_requests` 负责请求；`resources` 将资源判定应用到调度状态；`execution` 驱动解压和发布阶段；`recovery` 驱动恢复；`pipeline_helpers` / `integrity` 保存相应辅助逻辑。桌面宿主中，`headless.rs` 与 `single_instance.rs` 分别承接无头守护进程和单实例命名管道唤醒及 WebView2 预检。原协调器测试保留在 `tests.rs`，发布组件的原生文件系统/SQLite 回归在 `publication/tests.rs`。
 
 在文件拆分之后，现役链进一步提取了三个私有状态组件；它们不引用 Coordinator，也不持有它的 Arc/Weak：
 
