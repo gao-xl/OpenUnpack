@@ -17,7 +17,9 @@ Push-Location $taskRoot
 try {
     $null = Get-OpenUnpackNativeEngineIdentity -EngineDirectory (Join-Path $taskRoot 'tools/7zip')
     if (-not $SkipPrepare) { & (Join-Path $PSScriptRoot 'prepare-desktop.ps1') -SkipInstall:$SkipInstall }
-    Invoke-OpenUnpackTool cargo @('fetch', '--locked', '--target', 'x86_64-pc-windows-msvc')
+    if (-not $SkipInstall) {
+        Invoke-OpenUnpackTool cargo @('fetch', '--locked', '--target', 'x86_64-pc-windows-msvc')
+    }
     & (Join-Path $PSScriptRoot 'check-contracts.ps1') -RunCargoTest
     & (Join-Path $PSScriptRoot 'test-release-validation.ps1')
     & (Join-Path $PSScriptRoot 'collect-release-materials.ps1') -Offline:$SkipInstall
