@@ -238,18 +238,29 @@ pub(super) fn unique_target(parent: &Path, name: &str) -> Result<PathBuf, String
     Err("同名目标过多，请选择另一输出目录。".into())
 }
 
-fn is_os_noise_entry(norm: &str) -> bool {
+pub(crate) fn is_os_noise_entry(norm: &str) -> bool {
     let lower = norm.to_ascii_lowercase();
     lower == "__macosx"
         || lower.starts_with("__macosx/")
+        || lower.starts_with("__macosx\\")
         || lower == ".ds_store"
         || lower.ends_with("/.ds_store")
+        || lower.ends_with("\\.ds_store")
         || lower == "thumbs.db"
         || lower.ends_with("/thumbs.db")
+        || lower.ends_with("\\thumbs.db")
         || lower == "desktop.ini"
         || lower.ends_with("/desktop.ini")
+        || lower.ends_with("\\desktop.ini")
         || lower.starts_with("._")
         || lower.contains("/._")
+        || lower.contains("\\._")
+        || lower == ".openunpack-owner.json"
+        || lower.ends_with("/.openunpack-owner.json")
+        || lower.ends_with("\\.openunpack-owner.json")
+        || lower.starts_with(".openunpack-")
+        || lower.contains("/.openunpack-")
+        || lower.contains("\\.openunpack-")
 }
 
 pub(super) fn strip_single_root_wrapper_once(files: &mut Vec<CopyFile>) -> bool {
@@ -291,11 +302,13 @@ pub(super) fn strip_single_root_wrapper_once(files: &mut Vec<CopyFile>) -> bool 
             }
 
             if norm_lower.starts_with(&prefix_lower) {
-                let stripped = &norm[canonical_root.len() + 1..];
-                if !stripped.is_empty() {
-                    let mut updated = f.clone();
-                    updated.relative_path = stripped.replace('/', "\\");
-                    new_files.push(updated);
+                if let Some((_, rest)) = norm.split_once('/') {
+                    let stripped = rest.trim_start_matches(['/', '\\']);
+                    if !stripped.is_empty() {
+                        let mut updated = f.clone();
+                        updated.relative_path = stripped.replace('/', "\\");
+                        new_files.push(updated);
+                    }
                 }
             } else if !is_os_noise_entry(&norm) {
                 new_files.push(f.clone());
@@ -583,7 +596,24 @@ pub(super) fn message(code: &str) -> String {
         "NoSpace" => "磁盘空间不足，原地解压未开始或已安全停止；压缩包仍可继续解压。",
         "TargetExists" => "目标目录已存在同名文件；原地解压无法重命名，请选择覆盖或更换输出目录。",
         "InplaceFailed" => "原地解压失败；可重试继续，或先还原压缩包再改用标准解压。",
-        _ => code,
+        _ => {
+            if let Some(detail) = code.strip_prefix("StorageError:") {
+                return format!("任务数据库读写失败：{}；请检查磁盘权限或恢复记录。", detail);
+            }
+            if let Some(detail) = code.strip_prefix("DiskFull:") {
+                return format!("磁盘空间不足：{}；请清理磁盘后重试。", detail);
+            }
+            if let Some(detail) = code.strip_prefix("FileLocked:") {
+                return format!("文件被其他进程占用：{}；请关闭占用程序后重试。", detail);
+            }
+            if let Some(detail) = code.strip_prefix("PermissionDenied:") {
+                return format!("访问被拒绝：{}；请检查目录权限或以管理员运行。", detail);
+            }
+            if let Some(structured) = crate::error::UnpackError::parse_envelope(code) {
+                return structured.display_message();
+            }
+            code
+        }
     }
     .into()
 }

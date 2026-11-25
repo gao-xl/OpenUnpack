@@ -59,7 +59,16 @@ impl Coordinator {
                     .update_visible_state(|| v.record_success(&event))
                     .is_ok()
                 {
-                    let _ = self.repository.ack_success(&event.event_id);
+                    // The success ledger is replayed on the next start when the
+                    // ack does not land, so this is not fatal — but it must be
+                    // visible instead of silently re-recording forever.
+                    if let Err(error) = self.repository.ack_success(&event.event_id) {
+                        tracing::warn!(
+                            event = %event.event_id,
+                            error = %error,
+                            "success_ledger_ack_failed"
+                        );
+                    }
                 }
             }
         }

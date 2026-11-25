@@ -911,14 +911,15 @@ pub fn check_path(path: &Path) -> Result<(), String> {
     Ok(())
 }
 pub fn relative(path: &str) -> Result<PathBuf, String> {
-    if path.split(['/', '\\']).count() > MAX_GUARDED_DEPTH {
+    let trimmed = path.trim_end_matches(['/', '\\']);
+    if trimmed.split(['/', '\\']).count() > MAX_GUARDED_DEPTH {
         return Err("ResourceLimit".into());
     }
-    if path.is_empty() || path.len() > 30000 || path.starts_with(['/', '\\']) {
+    if trimmed.is_empty() || trimmed.len() > 30000 || trimmed.starts_with(['/', '\\']) {
         return Err("UnsafePath".into());
     }
     let mut result = PathBuf::new();
-    for part in path.split(['/', '\\']) {
+    for part in trimmed.split(['/', '\\']) {
         if part.is_empty()
             || part == "."
             || part == ".."

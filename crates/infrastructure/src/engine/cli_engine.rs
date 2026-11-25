@@ -1,6 +1,9 @@
 use super::path_safety::{matches_exclusion, matches_inclusion, validate_relative_path};
+use super::process_job::ProcessJob;
 use openunpack_protocol::worker::{FileRecord, WorkerEvent, WorkerRequest};
 use sha2::{Digest, Sha256};
+#[cfg(windows)]
+use std::os::windows::fs::MetadataExt;
 use std::{
     fs::File,
     io::Read,
@@ -8,26 +11,21 @@ use std::{
     process::Stdio,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicU8, Ordering},
+        atomic::{AtomicBool, Ordering},
     },
     time::Duration,
 };
 use tokio::process::Command;
 
-/// Whether this 7-Zip build accepts a password on stdin.
-/// 0 = not probed, 1 = stdin works, 2 = unsupported (fall back to argv).
-static STDIN_PASSWORD: AtomicU8 = AtomicU8::new(0);
-/// A build that ignores stdin may block on a console prompt; bound the probe.
-const STDIN_PASSWORD_TIMEOUT: Duration = Duration::from_secs(30);
+/// Timeout for archive integrity probe operations.
+const CLI_PROBE_TIMEOUT: Duration = Duration::from_secs(30);
+/// Timeout for archive directory listing/inspection operations.
+const CLI_INSPECT_TIMEOUT: Duration = Duration::from_secs(60);
 /// Execution timeout for general CLI operations to prevent deadlocks on hang.
 const CLI_DEFAULT_TIMEOUT: Duration = Duration::from_secs(3600);
-/// Measured on 2026-10-21 (7-Zip 26.04, both `7zr` and the full `7za`): a
-/// password written to a redirected stdin is ignored and extraction fails with
-/// "Wrong password?" even when the secret is correct. Evidence:
-/// `artifacts/p2-09-stdin-proof/stdin-probe-result-*.json`. The stdin channel is
-/// therefore opt-in only, for builds that do support it.
-const STDIN_PASSWORD_ENV: &str = "OPENUNPACK_7Z_STDIN";
-
+/// Upper bound on captured 7-Zip stderr. Only the classification keywords are
+/// needed, so a hostile archive cannot grow the buffer through error spam.
+const STDERR_CAPTURE_LIMIT: usize = 8 * 1024;
 pub fn find_7z_binary() -> Option<PathBuf> {
     if let Ok(custom) = std::env::var("OPENUNPACK_7Z_PATH") {
         let p = PathBuf::from(custom);
@@ -129,180 +127,381 @@ pub fn has_7z_cli() -> bool {
     find_7z_binary().is_some()
 }
 
-fn stdin_password_supported() -> bool {
-    std::env::var(STDIN_PASSWORD_ENV).is_ok() && STDIN_PASSWORD.load(Ordering::Relaxed) != 2
-}
-
-/// Adds the password switch. In stdin mode the value is omitted entirely so the
-/// secret never reaches the process command line.
-fn push_password(cmd: &mut Command, password: Option<&str>, use_stdin: bool) {
-    match (password, use_stdin) {
-        (Some(_), true) => {
-            cmd.arg("-p");
-        }
-        (Some(pwd), false) => {
-            cmd.arg(format!("-p{pwd}"));
-        }
-        (None, _) => {
-            cmd.arg("-p-");
-        }
+/// Adds password switches for 7-Zip CLI.
+///
+/// 7-Zip prompts for a password on stdin when no `-p` switch is specified on the command line.
+/// Passing `-p` with no value sets the password to empty string `""` (which suppresses stdin prompt),
+/// while passing `-p<secret>` leaks the secret in plaintext to the process command line (visible via WMI/EDR).
+/// Passing `-p-` explicitly disables password prompting.
+///
+/// Therefore, when a password is provided (`Some`), we omit any `-p` argument from argv entirely
+/// and pipe the secret exclusively through standard input. When no password is provided (`None`),
+/// we pass `-p-` to immediately fail on password-protected archives instead of hanging on prompt.
+pub(crate) fn push_password(cmd: &mut Command, password: Option<&str>) {
+    if password.is_none() {
+        cmd.arg("-p-");
     }
 }
 
-/// Runs 7z, feeding the password on stdin when requested. `kill_on_drop` plus a
-/// timeout keeps a build that ignores stdin (and waits on a console prompt) from
-/// hanging the worker forever.
-async fn run_7z(
+/// Machine-readable reason behind a non-zero 7-Zip exit code.
+///
+/// 7-Zip exposes no error codes of its own, so the console text is the only
+/// signal. It is kept in one place: three copies of this ladder previously
+/// drifted apart, and one of them classified a password failure as corruption.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CliFailure {
+    Password,
+    MissingVolume,
+    Corrupt,
+}
+
+fn classify_cli_failure(text: &str) -> Option<CliFailure> {
+    if text.contains("Wrong password")
+        || text.contains("password")
+        || text.contains("encrypted")
+        || text.contains("Can not open encrypted archive")
+        || text.contains("Cannot open encrypted archive")
+    {
+        return Some(CliFailure::Password);
+    }
+    if text.contains("Missing volume") || text.contains("Cannot find volume") {
+        return Some(CliFailure::MissingVolume);
+    }
+    if text.contains("Can not open as archive")
+        || text.contains("Can't open as archive")
+        || text.contains("Can not open the file as")
+        || text.contains("Cannot open the file as")
+        || text.contains("Is not archive")
+        || text.contains("Headers Error")
+        || text.contains("Unexpected end")
+    {
+        return Some(CliFailure::Corrupt);
+    }
+    None
+}
+
+/// Result of a guarded 7-Zip run: bounded captures, never the full output.
+#[derive(Debug)]
+struct GuardedOutput {
+    status: std::process::ExitStatus,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
+/// Runs 7z while watching the destination's free space.
+///
+/// `7z x` gives no per-file progress here, so a decompression bomb cannot be
+/// stopped by counting bytes mid-stream. Watching the volume instead is what
+/// keeps an archive that declares a small size from filling the disk: the child
+/// is killed as soon as free space falls under the operator's safety margin.
+///
+/// This entry point is extraction-only (probing uses `run_7z` and its 30s
+/// window), so the deadline is always `CLI_DEFAULT_TIMEOUT` — a long
+/// password-protected unpack must never inherit the probe cap and be pushed
+/// into a mid-run argv fallback that re-exposes the secret on the command line.
+async fn run_7z_guarded(
     mut cmd: Command,
     password: Option<&str>,
-    use_stdin: bool,
-) -> Result<std::process::Output, String> {
-    cmd.kill_on_drop(true);
-    if !use_stdin || password.is_none() {
-        let child = cmd.spawn().map_err(|e| format!("7zExecutionFailed: {e}"))?;
-        return match tokio::time::timeout(CLI_DEFAULT_TIMEOUT, child.wait_with_output()).await {
-            Ok(result) => result.map_err(|e| format!("7zExecutionFailed: {e}")),
-            Err(_) => Err("7zExecutionTimeout".into()),
-        };
+    volume: Option<(&Path, u64)>,
+    timeout: Duration,
+    cancel: &AtomicBool,
+) -> Result<GuardedOutput, String> {
+    if cancel.load(Ordering::Acquire) {
+        return Err("Cancelled".into());
     }
-    cmd.stdin(Stdio::piped());
+
+    cmd.stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    if password.is_some() {
+        cmd.stdin(Stdio::piped());
+    } else {
+        cmd.stdin(Stdio::null());
+    }
     let mut child = cmd.spawn().map_err(|e| format!("7zExecutionFailed: {e}"))?;
-    if let Some(mut stdin) = child.stdin.take() {
+    // Held until this function returns: dropping the guard closes the job
+    // handle, and KILL_ON_JOB_CLOSE then reaps 7-Zip even when the host dies.
+    let _job = ProcessJob::attach(&child);
+    let stdout_task = tokio::spawn(drain_bounded(child.stdout.take()));
+    let stderr_task = tokio::spawn(drain_bounded(child.stderr.take()));
+    if let Some(pwd) = password
+        && let Some(mut stdin) = child.stdin.take()
+    {
         use tokio::io::AsyncWriteExt;
-        let mut line = password.unwrap_or_default().as_bytes().to_vec();
+        let mut line = pwd.as_bytes().to_vec();
         line.push(b'\n');
         let _ = stdin.write_all(&line).await;
         let _ = stdin.shutdown().await;
     }
-    match tokio::time::timeout(STDIN_PASSWORD_TIMEOUT, child.wait_with_output()).await {
-        Ok(result) => result.map_err(|e| format!("7zExecutionFailed: {e}")),
-        Err(_) => Err("7zPasswordProbeTimeout".into()),
+
+    let deadline = tokio::time::Instant::now() + timeout;
+    let mut next_space_check = tokio::time::Instant::now();
+    let status = loop {
+        match child
+            .try_wait()
+            .map_err(|e| format!("7zExecutionFailed: {e}"))?
+        {
+            Some(status) => break status,
+            None => {
+                if cancel.load(Ordering::Acquire) {
+                    let _ = child.kill().await;
+                    let _ = child.wait().await;
+                    let _ = stdout_task.await;
+                    let _ = stderr_task.await;
+                    return Err("Cancelled".into());
+                }
+                let now = tokio::time::Instant::now();
+                if now >= deadline {
+                    let _ = child.kill().await;
+                    let _ = child.wait().await;
+                    let _ = stdout_task.await;
+                    let _ = stderr_task.await;
+                    return Err("7zExecutionTimeout".to_string());
+                }
+                if let Some((path, min_free)) = volume
+                    && min_free > 0
+                    && now >= next_space_check
+                {
+                    next_space_check = now + Duration::from_millis(500);
+                    if let Ok(free) = crate::paths::free_bytes(path)
+                        && free < min_free
+                    {
+                        let _ = child.kill().await;
+                        let _ = child.wait().await;
+                        let _ = stdout_task.await;
+                        let _ = stderr_task.await;
+                        return Err(
+                            "ResourceLimit: 解压过程中磁盘剩余空间跌破「保留空闲空间」下限，已中止"
+                                .into(),
+                        );
+                    }
+                }
+                tokio::time::sleep(Duration::from_millis(25)).await;
+            }
+        }
+    };
+
+    Ok(GuardedOutput {
+        status,
+        stdout: stdout_task.await.unwrap_or_default(),
+        stderr: stderr_task.await.unwrap_or_default(),
+    })
+}
+
+/// Incremental `7z l -slt` parser.
+///
+/// The listing used to be buffered in full before parsing, so an archive that
+/// merely *declares* millions of entries could exhaust memory before any limit
+/// was consulted. Parsing line by line keeps the resident set proportional to
+/// `max_entries` instead of to the archive's claim.
+struct ListingParser {
+    files: Vec<FileRecord>,
+    cur_path: String,
+    cur_size: u64,
+    cur_is_dir: bool,
+    cur_is_encrypted: bool,
+    max_entries: u64,
+    max_total_bytes: u64,
+    total_bytes: u64,
+}
+
+impl ListingParser {
+    fn new(max_entries: u64, max_total_bytes: u64) -> Self {
+        Self {
+            files: Vec::new(),
+            cur_path: String::new(),
+            cur_size: 0,
+            cur_is_dir: false,
+            cur_is_encrypted: false,
+            max_entries,
+            max_total_bytes,
+            total_bytes: 0,
+        }
     }
+
+    fn push_line(&mut self, line: &str) -> Result<(), String> {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return self.flush();
+        }
+        if let Some(val) = trimmed.strip_prefix("Path = ") {
+            self.cur_path = val.to_string();
+        } else if let Some(val) = trimmed.strip_prefix("Size = ") {
+            self.cur_size = val.parse::<u64>().unwrap_or(0);
+        } else if let Some(val) = trimmed.strip_prefix("Folder = ") {
+            self.cur_is_dir = val == "+" || val == "1" || val.eq_ignore_ascii_case("true");
+        } else if let Some(val) = trimmed.strip_prefix("Encrypted = ") {
+            self.cur_is_encrypted = val == "+" || val == "1" || val.eq_ignore_ascii_case("true");
+        }
+        Ok(())
+    }
+
+    fn flush(&mut self) -> Result<(), String> {
+        if self.cur_path.is_empty() {
+            return Ok(());
+        }
+        let relative_path = validate_relative_path(&self.cur_path);
+        // The first block describes the archive itself and has an absolute
+        // path, so it is dropped here rather than counted against the budget.
+        if let Ok(relative_path) = relative_path {
+            if self.max_entries > 0 && self.files.len() as u64 >= self.max_entries {
+                return Err("ResourceLimit: Exceeds maxEntries".into());
+            }
+            self.total_bytes = self.total_bytes.saturating_add(self.cur_size);
+            if self.max_total_bytes > 0 && self.total_bytes > self.max_total_bytes {
+                return Err("ResourceLimit: Exceeds maxTotalBytes".into());
+            }
+            self.files.push(FileRecord {
+                relative_path,
+                size: self.cur_size,
+                size_known: true,
+                sha256: String::new(),
+                is_directory: self.cur_is_dir,
+                is_encrypted: self.cur_is_encrypted,
+                is_corrupted: false,
+            });
+        }
+        self.cur_path.clear();
+        self.cur_size = 0;
+        self.cur_is_dir = false;
+        self.cur_is_encrypted = false;
+        Ok(())
+    }
+
+    fn finish(mut self) -> Result<Vec<FileRecord>, String> {
+        self.flush()?;
+        Ok(self.files)
+    }
+}
+
+/// Drains a child pipe into a bounded buffer.
+///
+/// An unread pipe blocks the child once the OS buffer fills (~64 KiB on
+/// Windows), so every piped stream must be consumed even when its content is
+/// only kept for failure classification.
+async fn drain_bounded<R>(pipe: Option<R>) -> Vec<u8>
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    let Some(mut pipe) = pipe else {
+        return Vec::new();
+    };
+    use tokio::io::AsyncReadExt;
+    let mut collected = Vec::new();
+    let mut chunk = [0u8; 4096];
+    loop {
+        match pipe.read(&mut chunk).await {
+            Ok(0) | Err(_) => break,
+            Ok(read) => {
+                let keep = (STDERR_CAPTURE_LIMIT - collected.len()).min(read);
+                collected.extend_from_slice(&chunk[..keep]);
+            }
+        }
+    }
+    collected
 }
 
 pub async fn inspect_cli(
     archive_path: &Path,
     password: Option<&str>,
+    max_entries: u64,
+    max_total_bytes: u64,
 ) -> Result<Vec<FileRecord>, String> {
     let bin = find_7z_binary().ok_or_else(|| "7zNotFound".to_string())?;
 
-    let build = |use_stdin: bool| {
-        let mut cmd = Command::new(&bin);
-        cmd.arg("l").arg("-slt");
-        push_password(&mut cmd, password, use_stdin);
-        cmd.arg(archive_path);
-        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-        cmd
-    };
+    let mut cmd = Command::new(&bin);
+    cmd.arg("l").arg("-slt").arg("-sccUTF-8");
+    push_password(&mut cmd, password);
+    cmd.arg("--");
+    cmd.arg(archive_path);
 
-    let use_stdin = password.is_some() && stdin_password_supported();
-    let output = match run_7z(build(use_stdin), password, use_stdin).await {
-        Ok(output) if output.status.success() => {
-            if use_stdin {
-                STDIN_PASSWORD.store(1, Ordering::Relaxed);
-            }
-            output
-        }
-        Ok(_) if use_stdin => {
-            // Either the password is wrong or this build ignored stdin. Only an
-            // argv retry can tell them apart, and its outcome is what we report.
-            let retry = run_7z(build(false), password, false).await?;
-            STDIN_PASSWORD.store(
-                if retry.status.success() { 2 } else { 1 },
-                Ordering::Relaxed,
-            );
-            retry
-        }
-        Ok(output) => output,
-        Err(_) if use_stdin => {
-            STDIN_PASSWORD.store(2, Ordering::Relaxed);
-            run_7z(build(false), password, false).await?
-        }
-        Err(error) => return Err(error),
-    };
-    if !output.status.success() {
-        let err_str = String::from_utf8_lossy(&output.stderr);
-        let out_str = String::from_utf8_lossy(&output.stdout);
-        let combined = format!("{err_str}\n{out_str}");
-        if combined.contains("Wrong password")
-            || combined.contains("password")
-            || combined.contains("encrypted")
-            || combined.contains("Can not open encrypted archive")
-            || combined.contains("Cannot open encrypted archive")
-        {
-            return Err("WrongPassword".into());
-        }
-        if combined.contains("Can not open as archive")
-            || combined.contains("Can't open as archive")
-            || combined.contains("Cannot open the file as")
-            || combined.contains("Is not archive")
-            || combined.contains("Headers Error")
-            || combined.contains("Unexpected end")
-        {
-            return Err("Corrupt".into());
-        }
-        if combined.contains("Missing volume") || combined.contains("Cannot find volume") {
-            return Err("MissingVolume".into());
-        }
-        return Err("InspectFailed".into());
+    inspect_cli_once(cmd, password, max_entries, max_total_bytes).await
+}
+
+async fn inspect_cli_once(
+    mut cmd: Command,
+    password: Option<&str>,
+    max_entries: u64,
+    max_total_bytes: u64,
+) -> Result<Vec<FileRecord>, String> {
+    cmd.stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    if password.is_some() {
+        cmd.stdin(Stdio::piped());
+    } else {
+        cmd.stdin(Stdio::null());
     }
-
-    let mut files = Vec::new();
-    let stdout_str = String::from_utf8_lossy(&output.stdout);
-
-    let mut cur_path = String::new();
-    let mut cur_size: u64 = 0;
-    let mut cur_is_dir = false;
-    let mut cur_is_encrypted = false;
-
-    for line in stdout_str.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            if !cur_path.is_empty() {
-                if let Ok(rel) = validate_relative_path(&cur_path) {
-                    files.push(FileRecord {
-                        relative_path: rel,
-                        size: cur_size,
-                        size_known: true,
-                        sha256: String::new(),
-                        is_directory: cur_is_dir,
-                        is_encrypted: cur_is_encrypted,
-                        is_corrupted: false,
-                    });
-                }
-                cur_path.clear();
-                cur_size = 0;
-                cur_is_dir = false;
-                cur_is_encrypted = false;
-            }
-            continue;
-        }
-
-        if let Some(val) = trimmed.strip_prefix("Path = ") {
-            cur_path = val.to_string();
-        } else if let Some(val) = trimmed.strip_prefix("Size = ") {
-            cur_size = val.parse::<u64>().unwrap_or(0);
-        } else if let Some(val) = trimmed.strip_prefix("Folder = ") {
-            cur_is_dir = val == "+" || val == "1" || val.eq_ignore_ascii_case("true");
-        } else if let Some(val) = trimmed.strip_prefix("Encrypted = ") {
-            cur_is_encrypted = val == "+" || val == "1" || val.eq_ignore_ascii_case("true");
-        }
-    }
-
-    if !cur_path.is_empty()
-        && let Ok(rel) = validate_relative_path(&cur_path)
+    let mut child = cmd.spawn().map_err(|e| format!("7zExecutionFailed: {e}"))?;
+    let _job = ProcessJob::attach(&child);
+    let stdout_pipe = child.stdout.take();
+    let stderr_task = tokio::spawn(drain_bounded(child.stderr.take()));
+    if let Some(pwd) = password
+        && let Some(mut stdin) = child.stdin.take()
     {
-        files.push(FileRecord {
-            relative_path: rel,
-            size: cur_size,
-            size_known: true,
-            sha256: String::new(),
-            is_directory: cur_is_dir,
-            is_encrypted: cur_is_encrypted,
-            is_corrupted: false,
-        });
+        use tokio::io::AsyncWriteExt;
+        let mut line = pwd.as_bytes().to_vec();
+        line.push(b'\n');
+        let _ = stdin.write_all(&line).await;
+        let _ = stdin.shutdown().await;
     }
 
+    let parsed = tokio::time::timeout(CLI_INSPECT_TIMEOUT, async move {
+        let Some(pipe) = stdout_pipe else {
+            return Ok(Vec::new());
+        };
+        use tokio::io::AsyncBufReadExt;
+        let mut reader = tokio::io::BufReader::new(pipe);
+        let mut parser = ListingParser::new(max_entries, max_total_bytes);
+        let mut line = Vec::new();
+        loop {
+            line.clear();
+            match reader.read_until(b'\n', &mut line).await {
+                Ok(0) => break,
+                Ok(_) => {
+                    // 7-Zip writes the console code page into a redirected pipe;
+                    // decode_oem_text safely decodes UTF-8 as well as Windows OEM/ANSI codepages.
+                    let decoded_line = super::oem_codepage::decode_oem_text(&line);
+                    parser.push_line(&decoded_line)?;
+                }
+                Err(error) => return Err(format!("IoError: {error}")),
+            }
+        }
+        parser.finish()
+    })
+    .await;
+
+    let files = match parsed {
+        Ok(Ok(files)) => files,
+        Ok(Err(error)) => {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            let _ = stderr_task.await;
+            return Err(error);
+        }
+        Err(_) => {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            let _ = stderr_task.await;
+            return Err("7zExecutionTimeout".into());
+        }
+    };
+
+    let status = child
+        .wait()
+        .await
+        .map_err(|e| format!("7zExecutionFailed: {e}"))?;
+    let stderr_bytes = stderr_task.await.unwrap_or_default();
+    if !status.success() {
+        let stderr_text = super::oem_codepage::decode_oem_text(&stderr_bytes);
+        return Err(match classify_cli_failure(&stderr_text) {
+            Some(CliFailure::Password) => "WrongPassword",
+            Some(CliFailure::MissingVolume) => "MissingVolume",
+            Some(CliFailure::Corrupt) => "Corrupt",
+            None => "InspectFailed",
+        }
+        .into());
+    }
     Ok(files)
 }
 
@@ -317,75 +516,181 @@ pub async fn probe_cli(
         return Err("Cancelled".into());
     }
 
-    // 1. Probe without password to see if password is even needed
-    let mut null_cmd = Command::new(&bin);
-    null_cmd
-        .arg("t")
-        .arg("-p-")
-        .arg("-y")
-        .arg(archive_path)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true);
+    // 1. Fast metadata inspection via `7z l -slt -p-` (typically < 50ms)
+    // Avoids the full CRC32 decompression test of `7z t -p-` on large unencrypted archives.
+    let inspect_result = inspect_cli(archive_path, None, 100_000, 100 * 1024 * 1024 * 1024).await;
 
-    if let Ok(null_out) = tokio::time::timeout(STDIN_PASSWORD_TIMEOUT, null_cmd.output())
-        .await
-        .map_err(|_| "7zProbeTimeout".to_string())?
-    {
-        if null_out.status.success() {
-            return Ok(super::ProbeOutcome::NoPasswordNeeded);
+    let requires_password;
+    let mut header_encrypted = false;
+    let mut target_file: Option<String> = None;
+
+    match inspect_result {
+        Ok(files) => {
+            let mut encrypted_files: Vec<&FileRecord> = files
+                .iter()
+                .filter(|f| f.is_encrypted && !f.is_directory)
+                .collect();
+            if encrypted_files.is_empty() {
+                // Not a single entry is encrypted and headers are readable.
+                // Verify a tiny sample entry (<= 32 MiB) to confirm payload integrity in
+                // milliseconds without decompressing the entire archive.
+                if let Some(sample) = files
+                    .iter()
+                    .filter(|f| !f.is_directory && f.size <= 32 * 1024 * 1024)
+                    .min_by_key(|f| (f.size == 0, f.size))
+                {
+                    let mut sample_cmd = Command::new(&bin);
+                    sample_cmd
+                        .arg("t")
+                        .arg("-p-")
+                        .arg("-y")
+                        .arg("-sccUTF-8")
+                        .arg("--")
+                        .arg(archive_path)
+                        .arg(&sample.relative_path);
+                    if let Ok(sample_out) =
+                        run_7z_guarded(sample_cmd, None, None, CLI_PROBE_TIMEOUT, cancel).await
+                        && !sample_out.status.success()
+                    {
+                        let err_str = super::oem_codepage::decode_oem_text(&sample_out.stderr);
+                        let out_str = super::oem_codepage::decode_oem_text(&sample_out.stdout);
+                        let combined = format!("{err_str}\n{out_str}");
+                        if combined.contains("CRC Failed")
+                            || combined.contains("Data Error")
+                            || combined.contains("Unavailable data")
+                            || combined.contains("Headers Error")
+                        {
+                            return Ok(super::ProbeOutcome::Corrupt);
+                        }
+                    }
+                }
+                return Ok(super::ProbeOutcome::NoPasswordNeeded);
+            }
+            requires_password = true;
+            encrypted_files.sort_by_key(|f| (f.size == 0, f.size));
+            target_file = Some(encrypted_files[0].relative_path.clone());
         }
-        let err_str = String::from_utf8_lossy(&null_out.stderr);
-        let out_str = String::from_utf8_lossy(&null_out.stdout);
-        let combined = format!("{err_str}\n{out_str}");
-        if combined.contains("Missing volume") || combined.contains("Cannot find volume") {
+        Err(e) if e == "WrongPassword" => {
+            requires_password = true;
+            header_encrypted = true;
+        }
+        Err(e) if e == "MissingVolume" => {
             return Ok(super::ProbeOutcome::MissingVolume);
         }
-        if combined.contains("Wrong password")
-            || combined.contains("password")
-            || combined.contains("encrypted")
-            || combined.contains("Can not open encrypted archive")
-            || combined.contains("Cannot open encrypted archive")
-        {
-            // Password required; proceed to step 2 to test candidates.
-        } else if combined.contains("Can not open as archive")
-            || combined.contains("Can't open as archive")
-            || combined.contains("Cannot open the file as")
-            || combined.contains("Is not archive")
-            || combined.contains("Headers Error")
-            || combined.contains("Unexpected end")
-        {
+        Err(e) if e == "Corrupt" => {
             return Ok(super::ProbeOutcome::Corrupt);
+        }
+        Err(e) if e == "Cancelled" => {
+            return Err("Cancelled".into());
+        }
+        Err(_) => {
+            // Fallback for archives where `7z l -slt` failed (e.g. unknown format)
+            let mut null_cmd = Command::new(&bin);
+            null_cmd
+                .arg("t")
+                .arg("-p-")
+                .arg("-y")
+                .arg("-sccUTF-8")
+                .arg("--")
+                .arg(archive_path);
+
+            let null_out =
+                match run_7z_guarded(null_cmd, None, None, CLI_PROBE_TIMEOUT, cancel).await {
+                    Ok(out) => out,
+                    Err(e) if e == "Cancelled" => return Err("Cancelled".into()),
+                    Err(e) if e == "7zExecutionTimeout" => return Err("7zProbeTimeout".into()),
+                    Err(e) => return Err(e),
+                };
+
+            if null_out.status.success() {
+                return Ok(super::ProbeOutcome::NoPasswordNeeded);
+            }
+            let err_str = super::oem_codepage::decode_oem_text(&null_out.stderr);
+            let out_str = super::oem_codepage::decode_oem_text(&null_out.stdout);
+            let combined = format!("{err_str}\n{out_str}");
+            if combined.contains("Missing volume") || combined.contains("Cannot find volume") {
+                return Ok(super::ProbeOutcome::MissingVolume);
+            }
+            if combined.contains("Unsupported Method") {
+                return Ok(super::ProbeOutcome::Unsupported);
+            }
+            requires_password = combined.contains("Wrong password")
+                || combined.contains("password")
+                || combined.contains("encrypted")
+                || combined.contains("Can not open encrypted archive")
+                || combined.contains("Cannot open encrypted archive");
+            if !requires_password
+                && (combined.contains("CRC Failed")
+                    || combined.contains("Data Error")
+                    || combined.contains("Unavailable data")
+                    || combined.contains("Can not open as archive")
+                    || combined.contains("Can't open as archive")
+                    || combined.contains("Cannot open the file as")
+                    || combined.contains("Is not archive")
+                    || combined.contains("Headers Error")
+                    || combined.contains("Unexpected end"))
+            {
+                return Ok(super::ProbeOutcome::Corrupt);
+            }
         }
     }
 
-    // 2. Try each candidate password
-    let use_stdin = stdin_password_supported();
+    // 2. Try each candidate password via stdin (never on argv)
+    if candidates.is_empty() {
+        return Ok(if requires_password {
+            super::ProbeOutcome::WrongPassword
+        } else {
+            super::ProbeOutcome::Corrupt
+        });
+    }
+
+    let mut saw_status_verdict = false;
+    let mut last_error: Option<String> = None;
     for (candidate_secret, candidate_id) in candidates {
         if cancel.load(Ordering::Acquire) {
             return Err("Cancelled".into());
         }
 
         let mut cmd = Command::new(&bin);
-        cmd.arg("t")
-            .arg("-y")
-            .arg(archive_path)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-        push_password(&mut cmd, Some(candidate_secret), use_stdin);
+        if header_encrypted {
+            cmd.arg("l").arg("-slt").arg("-sccUTF-8");
+        } else {
+            cmd.arg("t").arg("-y").arg("-sccUTF-8");
+        }
+        push_password(&mut cmd, Some(candidate_secret));
+        cmd.arg("--").arg(archive_path);
+        if let Some(target) = &target_file {
+            cmd.arg(target);
+        }
 
-        if let Ok(output) = run_7z(cmd, Some(candidate_secret), use_stdin).await
-            && output.status.success()
-        {
-            return Ok(super::ProbeOutcome::Success(
-                candidate_secret.clone(),
-                candidate_id.clone(),
-            ));
+        match run_7z_guarded(cmd, Some(candidate_secret), None, CLI_PROBE_TIMEOUT, cancel).await {
+            Ok(output) if output.status.success() => {
+                return Ok(super::ProbeOutcome::Success(
+                    candidate_secret.clone(),
+                    candidate_id.clone(),
+                ));
+            }
+            Ok(_) => saw_status_verdict = true,
+            Err(e) if e == "Cancelled" => return Err("Cancelled".into()),
+            Err(error) => last_error = Some(error),
         }
     }
 
+    // Not one attempt produced an exit-status verdict: the run was broken
+    // (timeout/spawn), not the passwords. Never report WrongPassword here —
+    // a slow archive would otherwise be mislabelled as a wrong password.
+    if !saw_status_verdict {
+        return Err(last_error.unwrap_or_else(|| "ProbeFailed".into()));
+    }
+
     Ok(super::ProbeOutcome::WrongPassword)
+}
+
+fn is_safe_filter_pattern(pattern: &str) -> bool {
+    !pattern.is_empty()
+        && !pattern.contains('!')
+        && !pattern.starts_with('@')
+        && !pattern.chars().any(char::is_control)
 }
 
 /// Translates settings wildcard rules into 7-Zip switches so the CLI engine
@@ -396,7 +701,7 @@ fn archive_filter_args(exclusions: &[String], inclusions: &[String]) -> Vec<Stri
     let mut args = Vec::new();
     for raw in exclusions {
         let pattern = raw.trim();
-        if pattern.is_empty() {
+        if !is_safe_filter_pattern(pattern) {
             continue;
         }
         let recursive = !pattern.contains('/') && !pattern.contains('\\');
@@ -408,7 +713,7 @@ fn archive_filter_args(exclusions: &[String], inclusions: &[String]) -> Vec<Stri
     }
     for raw in inclusions {
         let pattern = raw.trim();
-        if pattern.is_empty() {
+        if !is_safe_filter_pattern(pattern) {
             continue;
         }
         let recursive = !pattern.contains('/') && !pattern.contains('\\');
@@ -427,72 +732,50 @@ pub async fn extract_cli(
     _progress: Arc<dyn Fn(&WorkerEvent) + Send + Sync>,
     cancel: Arc<AtomicBool>,
 ) -> Result<Vec<FileRecord>, String> {
+    if cancel.load(Ordering::Acquire) {
+        return Err("Cancelled".into());
+    }
+
     let bin = find_7z_binary().ok_or_else(|| "7zNotFound".to_string())?;
     let password = request.password.as_deref();
 
-    let build = |use_stdin: bool| {
-        let mut cmd = Command::new(&bin);
-        cmd.arg("x")
-            .arg(format!("-o{}", destination.display()))
-            .arg("-y");
-        for filter in archive_filter_args(&request.exclusions, &request.inclusions) {
-            cmd.arg(filter);
-        }
-        push_password(&mut cmd, password, use_stdin);
-        cmd.arg(&request.archive_path);
-        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-        cmd
-    };
+    let mut cmd = Command::new(&bin);
+    cmd.arg("x")
+        .arg(format!("-o{}", destination.display()))
+        .arg("-y")
+        .arg("-sccUTF-8")
+        .arg("-snl-")
+        .arg("-snh-");
+    for filter in archive_filter_args(&request.exclusions, &request.inclusions) {
+        cmd.arg(filter);
+    }
+    push_password(&mut cmd, password);
+    cmd.arg("--");
+    cmd.arg(&request.archive_path);
 
-    let use_stdin = password.is_some() && stdin_password_supported();
-    let output = match run_7z(build(use_stdin), password, use_stdin).await {
-        Ok(output) if output.status.success() => {
-            if use_stdin {
-                STDIN_PASSWORD.store(1, Ordering::Relaxed);
-            }
-            output
-        }
-        Ok(_) if use_stdin => {
-            // Either the password is wrong or this build ignored stdin. Only an
-            // argv retry can tell them apart, and its outcome is what we report.
-            let retry = run_7z(build(false), password, false).await?;
-            STDIN_PASSWORD.store(
-                if retry.status.success() { 2 } else { 1 },
-                Ordering::Relaxed,
-            );
-            retry
-        }
-        Ok(output) => output,
-        Err(_) if use_stdin => {
-            STDIN_PASSWORD.store(2, Ordering::Relaxed);
-            run_7z(build(false), password, false).await?
-        }
-        Err(error) => return Err(error),
-    };
+    // Refuse to start when the volume is already below the safety margin: 7-Zip
+    // would only fail halfway through and leave a partial tree behind.
+    if request.min_free_bytes > 0
+        && let Ok(free) = crate::paths::free_bytes(destination)
+        && free < request.min_free_bytes
+    {
+        return Err("ResourceLimit: 目标磁盘剩余空间低于「保留空闲空间」下限，未开始解压；请清理磁盘或调低该设置".into());
+    }
+    let volume = Some((destination, request.min_free_bytes));
+
+    let output = run_7z_guarded(cmd, password, volume, CLI_DEFAULT_TIMEOUT, &cancel).await?;
     let had_warning_or_error = !output.status.success();
     if had_warning_or_error {
-        let err_str = String::from_utf8_lossy(&output.stderr);
-        let out_str = String::from_utf8_lossy(&output.stdout);
+        let err_str = super::oem_codepage::decode_oem_text(&output.stderr);
+        let out_str = super::oem_codepage::decode_oem_text(&output.stdout);
         let combined = format!("{err_str}\n{out_str}");
-        if combined.contains("Wrong password")
-            || combined.contains("password")
-            || combined.contains("encrypted")
-            || combined.contains("Can not open encrypted archive")
-            || combined.contains("Cannot open encrypted archive")
-        {
-            return Err("PasswordMismatchOrCorrupt".into());
-        }
-        if combined.contains("Missing volume") || combined.contains("Cannot find volume") {
-            return Err("MissingVolume".into());
-        }
-        if combined.contains("Can not open as archive")
-            || combined.contains("Can't open as archive")
-            || combined.contains("Cannot open the file as")
-            || combined.contains("Is not archive")
-            || combined.contains("Headers Error")
-            || combined.contains("Unexpected end")
-        {
-            return Err("Corrupt".into());
+        if let Some(failure) = classify_cli_failure(&combined) {
+            return Err(match failure {
+                CliFailure::Password => "PasswordMismatchOrCorrupt",
+                CliFailure::MissingVolume => "MissingVolume",
+                CliFailure::Corrupt => "Corrupt",
+            }
+            .into());
         }
         if !request.salvage_corrupted {
             return Err("Corrupt".into());
@@ -523,10 +806,35 @@ pub async fn extract_cli(
             continue;
         }
 
-        let metadata = entry
-            .metadata()
-            .map_err(|e| format!("MetadataError: {e}"))?;
-        let is_dir = metadata.is_dir();
+        // Use symlink_metadata so dangling or inaccessible links don't trigger error
+        let symlink_meta = match std::fs::symlink_metadata(path) {
+            Ok(m) => m,
+            Err(_) => {
+                items_to_delete.push((path.to_path_buf(), false));
+                continue;
+            }
+        };
+
+        #[cfg(windows)]
+        let is_unsupported_link =
+            (symlink_meta.file_attributes() & 0x400 != 0) || symlink_meta.file_type().is_symlink();
+        #[cfg(not(windows))]
+        let is_unsupported_link = symlink_meta.file_type().is_symlink();
+
+        if is_unsupported_link {
+            // Unsupported link (symlink, junction, reparse point) - safely remove and skip
+            items_to_delete.push((path.to_path_buf(), symlink_meta.is_dir()));
+            continue;
+        }
+
+        // Check if relative path conforms to safe paths contract
+        if crate::paths::relative(&rel).is_err() {
+            // Unsupported path segment (reserved Windows names, illegal characters, etc.)
+            items_to_delete.push((path.to_path_buf(), symlink_meta.is_dir()));
+            continue;
+        }
+
+        let is_dir = symlink_meta.is_dir();
 
         // Parity Gate 1: Check exclusions
         if matches_exclusion(&rel, &request.exclusions) {
@@ -540,7 +848,7 @@ pub async fn extract_cli(
             continue;
         }
 
-        let size = if is_dir { 0 } else { metadata.len() };
+        let size = if is_dir { 0 } else { symlink_meta.len() };
 
         let sha256 = if is_dir {
             String::new()
@@ -585,6 +893,23 @@ pub async fn extract_cli(
         return Err("Corrupt: 无有效文件可解压".into());
     }
 
+    // 7-Zip cannot be told to stop at a byte budget, so the budget is asserted
+    // once the tree is known. The workspace owner performs the actual cleanup:
+    // deleting here would bypass its ownership manifest.
+    if request.max_entries > 0 && extracted_records.len() as u64 > request.max_entries {
+        return Err("ResourceLimit: Exceeds maxEntries".into());
+    }
+    if request.max_written_bytes > 0 {
+        let written: u64 = extracted_records
+            .iter()
+            .filter(|record| !record.is_directory)
+            .map(|record| record.size)
+            .fold(0u64, u64::saturating_add);
+        if written > request.max_written_bytes {
+            return Err("ResourceLimit: Exceeds maxWrittenBytes".into());
+        }
+    }
+
     Ok(extracted_records)
 }
 
@@ -597,17 +922,23 @@ pub async fn extract_cli_selective(
     flatten: bool,
     cancel: Arc<AtomicBool>,
 ) -> Result<Vec<String>, String> {
+    if cancel.load(Ordering::Acquire) {
+        return Err("Cancelled".into());
+    }
+
     let bin = find_7z_binary().ok_or_else(|| "7zNotFound".to_string())?;
 
     let mut cmd = Command::new(&bin);
     cmd.arg(if flatten { "e" } else { "x" })
         .arg(format!("-o{}", destination.display()))
-        .arg("-y");
+        .arg("-y")
+        .arg("-sccUTF-8")
+        .arg("-snl-")
+        .arg("-snh-");
 
-    let use_stdin = password.is_some() && stdin_password_supported();
-    push_password(&mut cmd, password, use_stdin);
-    cmd.arg(archive_path);
+    push_password(&mut cmd, password);
     cmd.arg("--");
+    cmd.arg(archive_path);
 
     for entry in entry_paths {
         let trimmed = entry.trim();
@@ -616,49 +947,131 @@ pub async fn extract_cli_selective(
         }
     }
 
-    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    // stdout carries only the progress meter here; stderr is drained by a task
+    // below. An undrained pipe blocks the child once the ~64 KiB buffer fills,
+    // which used to hang this wait loop forever.
+    cmd.stdout(Stdio::null()).stderr(Stdio::piped());
     cmd.kill_on_drop(true);
-    if use_stdin {
+    if password.is_some() {
         cmd.stdin(Stdio::piped());
+    } else {
+        cmd.stdin(Stdio::null());
     }
 
     let mut child = cmd.spawn().map_err(|e| format!("7zSpawnError: {e}"))?;
-    if use_stdin && let Some(mut stdin) = child.stdin.take() {
+    let _job = ProcessJob::attach(&child);
+    let stderr_pipe = child.stderr.take();
+    let stderr_drain = tokio::spawn(async move {
+        let Some(mut pipe) = stderr_pipe else {
+            return Vec::new();
+        };
+        use tokio::io::AsyncReadExt;
+        let mut collected = Vec::new();
+        let mut chunk = [0u8; 4096];
+        loop {
+            match pipe.read(&mut chunk).await {
+                Ok(0) | Err(_) => break,
+                Ok(read) => {
+                    // Keep a bounded tail: enough to classify the failure,
+                    // never enough to grow with a hostile archive.
+                    let keep = (STDERR_CAPTURE_LIMIT - collected.len()).min(read);
+                    collected.extend_from_slice(&chunk[..keep]);
+                }
+            }
+        }
+        collected
+    });
+    if let Some(pwd) = password
+        && let Some(mut stdin) = child.stdin.take()
+    {
         use tokio::io::AsyncWriteExt;
-        let mut line = password.unwrap_or_default().as_bytes().to_vec();
+        let mut line = pwd.as_bytes().to_vec();
         line.push(b'\n');
         let _ = stdin.write_all(&line).await;
         let _ = stdin.shutdown().await;
     }
 
+    let deadline = tokio::time::Instant::now() + CLI_DEFAULT_TIMEOUT;
     let status = loop {
         if cancel.load(Ordering::Acquire) {
             let _ = child.kill().await;
+            let _ = child.wait().await;
+            let _ = stderr_drain.await;
             return Err("Cancelled".into());
         }
         match child.try_wait().map_err(|e| format!("7zWaitError: {e}"))? {
             Some(status) => break status,
             None => {
-                tokio::time::sleep(Duration::from_millis(50)).await;
+                if tokio::time::Instant::now() >= deadline {
+                    let _ = child.kill().await;
+                    let _ = child.wait().await;
+                    let _ = stderr_drain.await;
+                    return Err("7zExecutionTimeout".into());
+                }
+                tokio::time::sleep(Duration::from_millis(25)).await;
             }
         }
     };
+    let stderr_bytes = stderr_drain.await.unwrap_or_default();
 
     if cancel.load(Ordering::Acquire) {
         return Err("Cancelled".into());
     }
 
     if !status.success() {
-        return Err("ExtractionFailed: 7-Zip selective extraction failed".into());
+        let stderr_text = super::oem_codepage::decode_oem_text(&stderr_bytes);
+        return Err(match classify_cli_failure(&stderr_text) {
+            Some(CliFailure::Password) => "PasswordMismatchOrCorrupt",
+            Some(CliFailure::MissingVolume) => "MissingVolume",
+            Some(CliFailure::Corrupt) => "Corrupt",
+            None => "ExtractionFailed: 7-Zip selective extraction failed",
+        }
+        .into());
     }
 
     let mut extracted_paths = Vec::new();
+    let mut unsafe_links_to_delete = Vec::new();
     for entry in walkdir::WalkDir::new(destination)
         .into_iter()
         .filter_map(|e| e.ok())
     {
-        if entry.path() != destination && entry.file_type().is_file() {
-            extracted_paths.push(entry.path().to_string_lossy().into_owned());
+        let path = entry.path();
+        if path == destination {
+            continue;
+        }
+        let Ok(symlink_meta) = std::fs::symlink_metadata(path) else {
+            continue;
+        };
+        #[cfg(windows)]
+        let is_unsupported_link =
+            (symlink_meta.file_attributes() & 0x400 != 0) || symlink_meta.file_type().is_symlink();
+        #[cfg(not(windows))]
+        let is_unsupported_link = symlink_meta.file_type().is_symlink();
+
+        if is_unsupported_link {
+            unsafe_links_to_delete.push((path.to_path_buf(), symlink_meta.is_dir()));
+            continue;
+        }
+
+        if let Ok(rel) = path.strip_prefix(destination) {
+            let rel_str = rel.to_string_lossy().replace('\\', "/");
+            if crate::paths::relative(&rel_str).is_err() {
+                unsafe_links_to_delete.push((path.to_path_buf(), symlink_meta.is_dir()));
+                continue;
+            }
+        }
+
+        if symlink_meta.is_file() {
+            extracted_paths.push(path.to_string_lossy().into_owned());
+        }
+    }
+
+    unsafe_links_to_delete.sort_by_key(|item| std::cmp::Reverse(item.0.as_os_str().len()));
+    for (to_del, is_dir) in unsafe_links_to_delete {
+        if is_dir {
+            let _ = std::fs::remove_dir(&to_del);
+        } else {
+            let _ = std::fs::remove_file(&to_del);
         }
     }
 
@@ -708,40 +1121,243 @@ mod password_channel_tests {
     }
 
     #[test]
-    fn stdin_mode_keeps_the_password_out_of_argv() {
+    fn password_never_reaches_argv() {
         let mut cmd = Command::new("7z.exe");
-        push_password(&mut cmd, Some("s3cr3t-value"), true);
-        assert_eq!(args_of(&cmd), vec!["-p".to_string()]);
-        assert!(!args_of(&cmd).iter().any(|arg| arg.contains("s3cr3t")));
-    }
-
-    #[test]
-    fn argv_mode_preserves_the_legacy_switch_for_builds_without_stdin_support() {
-        let mut cmd = Command::new("7z.exe");
-        push_password(&mut cmd, Some("s3cr3t-value"), false);
-        assert_eq!(args_of(&cmd), vec!["-ps3cr3t-value".to_string()]);
+        push_password(&mut cmd, Some("s3cr3t-value"));
+        let args = args_of(&cmd);
+        assert!(
+            args.is_empty(),
+            "password switch must be omitted from argv entirely"
+        );
+        assert!(!args.iter().any(|arg| arg.contains("s3cr3t")));
     }
 
     #[test]
     fn missing_password_always_disables_the_prompt() {
         let mut cmd = Command::new("7z.exe");
-        push_password(&mut cmd, None, true);
+        push_password(&mut cmd, None);
         assert_eq!(args_of(&cmd), vec!["-p-".to_string()]);
     }
 }
 
 #[cfg(test)]
-mod stdin_policy_tests {
-    use super::{STDIN_PASSWORD_ENV, stdin_password_supported};
+mod cancellation_and_encryption_tests {
+    use super::*;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Instant;
+
+    #[tokio::test]
+    async fn cancel_stops_execution_under_100ms() {
+        if !has_7z_cli() {
+            return;
+        }
+        let bin = find_7z_binary().expect("7z must be found");
+
+        // Run a benchmark command that would normally take seconds
+        let mut cmd = Command::new(&bin);
+        cmd.arg("b");
+
+        let cancel = Arc::new(AtomicBool::new(false));
+        let cancel_clone = cancel.clone();
+
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            cancel_clone.store(true, Ordering::Release);
+        });
+
+        let start = Instant::now();
+        let res = run_7z_guarded(cmd, None, None, Duration::from_secs(30), &cancel).await;
+        let elapsed = start.elapsed();
+
+        assert_eq!(res.unwrap_err(), "Cancelled");
+        assert!(
+            elapsed < Duration::from_millis(200),
+            "Kill-on-cancel must terminate child promptly: elapsed {:?}",
+            elapsed
+        );
+    }
+
+    #[tokio::test]
+    async fn password_probe_and_extract_via_stdin_succeeds_without_argv_exposure() {
+        if !has_7z_cli() {
+            return;
+        }
+        let bin = find_7z_binary().expect("7z must be found");
+        let cur = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let root = if cur.ends_with("infrastructure") {
+            cur.parent().and_then(|p| p.parent()).unwrap_or(&cur)
+        } else {
+            &cur
+        };
+        let temp_dir = root
+            .join("target")
+            .join("test_scratch")
+            .join(format!("ou_test_pwd_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        let src_file = temp_dir.join("secret_data.txt");
+        std::fs::write(&src_file, b"secure payload contents").unwrap();
+        let archive_path = temp_dir.join("encrypted.7z");
+
+        // Create encrypted archive using 7z.exe
+        let mut create_cmd = std::process::Command::new(&bin);
+        create_cmd
+            .arg("a")
+            .arg(&archive_path)
+            .arg(&src_file)
+            .arg("-pP@ssw0rd123!")
+            .arg("-y")
+            .arg("-bso0")
+            .arg("-bsp0")
+            .arg("-bse0");
+        let create_status = create_cmd.status().expect("create archive status");
+        assert!(create_status.success());
+
+        // 1. Test probe_cli with candidate passwords
+        let cancel = AtomicBool::new(false);
+        let candidates = vec![
+            ("WrongSecret1".to_string(), Some("id-1".to_string())),
+            ("P@ssw0rd123!".to_string(), Some("id-2".to_string())),
+        ];
+        let probe_outcome = probe_cli(&archive_path, &candidates, &cancel).await;
+        assert!(
+            probe_outcome.is_ok(),
+            "probe_cli failed: {:?}",
+            probe_outcome.err()
+        );
+        match probe_outcome.unwrap() {
+            crate::engine::ProbeOutcome::Success(pwd, id) => {
+                assert_eq!(pwd, "P@ssw0rd123!");
+                assert_eq!(id.as_deref(), Some("id-2"));
+            }
+            other => panic!("Expected ProbeOutcome::Success, got {:?}", other),
+        }
+
+        // 2. Test inspect_cli
+        let inspect_res = inspect_cli(&archive_path, Some("P@ssw0rd123!"), 100, 1 << 20).await;
+        assert!(
+            inspect_res.is_ok(),
+            "inspect_cli failed: {:?}",
+            inspect_res.err()
+        );
+        let records = inspect_res.unwrap();
+        assert!(
+            records
+                .iter()
+                .any(|r| r.relative_path.contains("secret_data.txt"))
+        );
+
+        // 3. Test extract_cli
+        let dest_dir = temp_dir.join("extracted_full");
+        std::fs::create_dir_all(&dest_dir).unwrap();
+        let mut req = WorkerRequest::default();
+        req.operation = "extract".to_string();
+        req.archive_path = archive_path.to_string_lossy().to_string();
+        req.destination_directory = dest_dir.to_string_lossy().to_string();
+        req.password = Some("P@ssw0rd123!".to_string());
+        let cancel_arc = Arc::new(AtomicBool::new(false));
+        let progress = Arc::new(|_: &WorkerEvent| {});
+        let extract_res = extract_cli(&req, &dest_dir, progress, cancel_arc).await;
+        assert!(
+            extract_res.is_ok(),
+            "extract_cli failed: {:?}",
+            extract_res.err()
+        );
+        let extracted_file = dest_dir.join("secret_data.txt");
+        assert!(extracted_file.exists());
+        assert_eq!(
+            std::fs::read(&extracted_file).unwrap(),
+            b"secure payload contents"
+        );
+
+        // 4. Test extract_cli_selective
+        let sel_dest_dir = temp_dir.join("extracted_sel");
+        std::fs::create_dir_all(&sel_dest_dir).unwrap();
+        let sel_res = extract_cli_selective(
+            &archive_path,
+            &["secret_data.txt".to_string()],
+            &sel_dest_dir,
+            Some("P@ssw0rd123!"),
+            true,
+            Arc::new(AtomicBool::new(false)),
+        )
+        .await;
+        assert!(
+            sel_res.is_ok(),
+            "extract_cli_selective failed: {:?}",
+            sel_res.err()
+        );
+        assert!(sel_dest_dir.join("secret_data.txt").exists());
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+}
+
+#[cfg(test)]
+mod failure_classification_tests {
+    use super::{CliFailure, ListingParser, classify_cli_failure};
 
     #[test]
-    fn stdin_channel_is_opt_in_by_default() {
-        // 7-Zip 26.04 ignores redirected stdin (see artifacts/p2-09-stdin-proof),
-        // so the argv path must stay the default unless an operator opts in.
-        unsafe { std::env::remove_var(STDIN_PASSWORD_ENV) };
-        assert!(!stdin_password_supported());
-        unsafe { std::env::set_var(STDIN_PASSWORD_ENV, "1") };
-        assert!(stdin_password_supported());
-        unsafe { std::env::remove_var(STDIN_PASSWORD_ENV) };
+    fn password_and_corruption_are_not_confused() {
+        assert_eq!(
+            classify_cli_failure("ERROR: Wrong password?"),
+            Some(CliFailure::Password)
+        );
+        assert_eq!(
+            classify_cli_failure("Can not open the file as archive"),
+            Some(CliFailure::Corrupt)
+        );
+        assert_eq!(
+            classify_cli_failure("Missing volume : data.7z.002"),
+            Some(CliFailure::MissingVolume)
+        );
+        assert_eq!(classify_cli_failure("Everything is Ok"), None);
+    }
+
+    fn record_block(path: &str, size: u64, folder: bool) -> String {
+        format!(
+            "Path = {path}\nSize = {size}\nFolder = {}\n\n",
+            if folder { "+" } else { "-" }
+        )
+    }
+
+    #[test]
+    fn listing_parser_stops_at_the_entry_limit() {
+        let mut parser = ListingParser::new(2, 0);
+        parser
+            .push_line("Path = C:\\src\\a.7z")
+            .expect("archive header is skipped");
+        parser.push_line("").expect("blank line is harmless");
+        for index in 0..3 {
+            let block = record_block(&format!("file{index}.txt"), 1, false);
+            for line in block.lines() {
+                if let Err(error) = parser.push_line(line) {
+                    assert_eq!(error, "ResourceLimit: Exceeds maxEntries");
+                    return;
+                }
+            }
+        }
+        panic!("the third entry must exceed maxEntries");
+    }
+
+    #[test]
+    fn listing_parser_stops_at_the_byte_limit() {
+        let mut parser = ListingParser::new(0, 10);
+        for line in record_block("a.txt", 6, false).lines() {
+            parser.push_line(line).expect("first file fits");
+        }
+        let mut failure = None;
+        for line in record_block("b.txt", 6, false).lines() {
+            if let Err(error) = parser.push_line(line) {
+                failure = Some(error);
+                break;
+            }
+        }
+        assert_eq!(
+            failure.as_deref(),
+            Some("ResourceLimit: Exceeds maxTotalBytes")
+        );
     }
 }

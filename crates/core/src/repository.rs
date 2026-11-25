@@ -10,6 +10,11 @@ use crate::types::{JobView, Publication, SuccessEvent};
 pub mod database_lease;
 use database_lease::DatabaseLease;
 
+fn storage_error(context: &'static str, err: impl std::fmt::Display) -> String {
+    tracing::warn!(context, error = %err, "repository storage error");
+    "StorageError".to_string()
+}
+
 pub struct Repository {
     conn: Mutex<Connection>,
     _storage_lease: DatabaseLease,
@@ -22,31 +27,31 @@ impl Repository {
         if let Some(parent) = path.parent()
             && !parent.as_os_str().is_empty()
         {
-            std::fs::create_dir_all(parent).map_err(|_| "StorageError".to_string())?;
+            std::fs::create_dir_all(parent).map_err(|e| storage_error("sqlite", e))?;
         }
 
-        let mut conn = Connection::open(path).map_err(|_| "StorageError".to_string())?;
+        let mut conn = Connection::open(path).map_err(|e| storage_error("sqlite", e))?;
 
         conn.busy_timeout(Duration::from_secs(2))
-            .map_err(|_| "StorageError".to_string())?;
+            .map_err(|e| storage_error("sqlite", e))?;
 
         conn.pragma_update(None, "journal_mode", "WAL")
-            .map_err(|_| "StorageError".to_string())?;
+            .map_err(|e| storage_error("sqlite", e))?;
         conn.pragma_update(None, "synchronous", "FULL")
-            .map_err(|_| "StorageError".to_string())?;
+            .map_err(|e| storage_error("sqlite", e))?;
         conn.pragma_update(None, "foreign_keys", "ON")
-            .map_err(|_| "StorageError".to_string())?;
+            .map_err(|e| storage_error("sqlite", e))?;
 
         let user_version: i64 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
-            .map_err(|_| "StorageError".to_string())?;
+            .map_err(|e| storage_error("sqlite", e))?;
 
-        if user_version > 1 {
+        if user_version > 2 {
             return Err("UnsupportedDatabaseVersion".to_string());
         }
 
         if user_version == 0 {
-            let tx = conn.transaction().map_err(|_| "StorageError".to_string())?;
+            let tx = conn.transaction().map_err(|e| storage_error("sqlite", e))?;
 
             tx.execute_batch(
                 r#"
@@ -65,14 +70,31 @@ impl Repository {
                     event_id TEXT PRIMARY KEY,
                     json TEXT NOT NULL
                 );
+                CREATE INDEX IF NOT EXISTS idx_publications_job_state
+                    ON publications(job_id, state);
                 "#,
             )
-            .map_err(|_| "StorageError".to_string())?;
+            .map_err(|e| storage_error("sqlite", e))?;
 
-            tx.pragma_update(None, "user_version", 1)
-                .map_err(|_| "StorageError".to_string())?;
+            tx.pragma_update(None, "user_version", 2)
+                .map_err(|e| storage_error("sqlite", e))?;
 
-            tx.commit().map_err(|_| "StorageError".to_string())?;
+            tx.commit().map_err(|e| storage_error("sqlite", e))?;
+        } else if user_version == 1 {
+            // Migration v1 -> v2: index publications by (job_id, state) so that
+            // job-scoped delete/recover/cleanup queries no longer scan the whole
+            // table as the history grows.
+            let tx = conn.transaction().map_err(|e| storage_error("sqlite", e))?;
+            tx.execute_batch(
+                r#"
+                CREATE INDEX IF NOT EXISTS idx_publications_job_state
+                    ON publications(job_id, state);
+                "#,
+            )
+            .map_err(|e| storage_error("sqlite", e))?;
+            tx.pragma_update(None, "user_version", 2)
+                .map_err(|e| storage_error("sqlite", e))?;
+            tx.commit().map_err(|e| storage_error("sqlite", e))?;
         }
 
         Ok(Self {
@@ -88,7 +110,7 @@ impl Repository {
     }
 
     pub fn save_job(&self, job: &JobView) -> Result<(), String> {
-        let json = serde_json::to_string(job).map_err(|_| "StorageError".to_string())?;
+        let json = serde_json::to_string(job).map_err(|e| storage_error("sqlite", e))?;
         let conn = self.lock_conn()?;
         conn.execute(
             r#"
@@ -100,7 +122,7 @@ impl Repository {
             "#,
             params![job.id, job.status, json],
         )
-        .map_err(|_| "StorageError".to_string())?;
+        .map_err(|e| storage_error("sqlite", e))?;
         Ok(())
     }
 
@@ -108,16 +130,16 @@ impl Repository {
         let conn = self.lock_conn()?;
         let mut stmt = conn
             .prepare("SELECT json FROM jobs ORDER BY id ASC")
-            .map_err(|_| "StorageError".to_string())?;
+            .map_err(|e| storage_error("sqlite", e))?;
         let rows = stmt
             .query_map([], |row| row.get::<_, String>(0))
-            .map_err(|_| "StorageError".to_string())?;
+            .map_err(|e| storage_error("sqlite", e))?;
 
         let mut out = Vec::new();
         for r in rows {
-            let json_str = r.map_err(|_| "StorageError".to_string())?;
+            let json_str = r.map_err(|e| storage_error("sqlite", e))?;
             let item: JobView =
-                serde_json::from_str(&json_str).map_err(|_| "StorageError".to_string())?;
+                serde_json::from_str(&json_str).map_err(|e| storage_error("sqlite", e))?;
             out.push(item);
         }
         Ok(out)
@@ -125,14 +147,14 @@ impl Repository {
 
     pub fn remove_job(&self, id: &str) -> Result<(), String> {
         let mut conn = self.lock_conn()?;
-        let tx = conn.transaction().map_err(|_| "StorageError".to_string())?;
+        let tx = conn.transaction().map_err(|e| storage_error("sqlite", e))?;
 
         let status_opt: Option<String> = tx
             .query_row("SELECT status FROM jobs WHERE id = ?1", params![id], |r| {
                 r.get(0)
             })
             .optional()
-            .map_err(|_| "StorageError".to_string())?;
+            .map_err(|e| storage_error("sqlite", e))?;
 
         let Some(status) = status_opt else {
             return Ok(());
@@ -148,24 +170,24 @@ impl Repository {
                 params![id],
                 |r| r.get(0),
             )
-            .map_err(|_| "StorageError".to_string())?;
+            .map_err(|e| storage_error("sqlite", e))?;
 
         if has_unresolved {
             return Err("UnresolvedPublication".to_string());
         }
 
         tx.execute("DELETE FROM publications WHERE job_id = ?1", params![id])
-            .map_err(|_| "StorageError".to_string())?;
+            .map_err(|e| storage_error("sqlite", e))?;
         tx.execute("DELETE FROM jobs WHERE id = ?1", params![id])
-            .map_err(|_| "StorageError".to_string())?;
+            .map_err(|e| storage_error("sqlite", e))?;
 
-        tx.commit().map_err(|_| "StorageError".to_string())?;
+        tx.commit().map_err(|e| storage_error("sqlite", e))?;
         Ok(())
     }
 
     pub fn clear_history(&self) -> Result<(), String> {
         let mut conn = self.lock_conn()?;
-        let tx = conn.transaction().map_err(|_| "StorageError".to_string())?;
+        let tx = conn.transaction().map_err(|e| storage_error("sqlite", e))?;
 
         tx.execute(
             r#"
@@ -181,7 +203,7 @@ impl Repository {
             "#,
             [],
         )
-        .map_err(|_| "StorageError".to_string())?;
+        .map_err(|e| storage_error("sqlite", e))?;
 
         tx.execute(
             r#"
@@ -194,14 +216,14 @@ impl Repository {
             "#,
             [],
         )
-        .map_err(|_| "StorageError".to_string())?;
+        .map_err(|e| storage_error("sqlite", e))?;
 
-        tx.commit().map_err(|_| "StorageError".to_string())?;
+        tx.commit().map_err(|e| storage_error("sqlite", e))?;
         Ok(())
     }
 
     pub fn save_publication(&self, publication: &Publication) -> Result<(), String> {
-        let json = serde_json::to_string(publication).map_err(|_| "StorageError".to_string())?;
+        let json = serde_json::to_string(publication).map_err(|e| storage_error("sqlite", e))?;
         let conn = self.lock_conn()?;
         conn.execute(
             r#"
@@ -214,7 +236,7 @@ impl Repository {
             "#,
             params![publication.id, publication.job_id, publication.state, json],
         )
-        .map_err(|_| "StorageError".to_string())?;
+        .map_err(|e| storage_error("sqlite", e))?;
         Ok(())
     }
 
@@ -222,16 +244,16 @@ impl Repository {
         let conn = self.lock_conn()?;
         let mut stmt = conn
             .prepare("SELECT json FROM publications ORDER BY id ASC")
-            .map_err(|_| "StorageError".to_string())?;
+            .map_err(|e| storage_error("sqlite", e))?;
         let rows = stmt
             .query_map([], |row| row.get::<_, String>(0))
-            .map_err(|_| "StorageError".to_string())?;
+            .map_err(|e| storage_error("sqlite", e))?;
 
         let mut out = Vec::new();
         for r in rows {
-            let json_str = r.map_err(|_| "StorageError".to_string())?;
+            let json_str = r.map_err(|e| storage_error("sqlite", e))?;
             let item: Publication =
-                serde_json::from_str(&json_str).map_err(|_| "StorageError".to_string())?;
+                serde_json::from_str(&json_str).map_err(|e| storage_error("sqlite", e))?;
             out.push(item);
         }
         Ok(out)
@@ -248,17 +270,17 @@ impl Repository {
         }
 
         let pub_json =
-            serde_json::to_string(publication).map_err(|_| "StorageError".to_string())?;
-        let job_json = serde_json::to_string(job).map_err(|_| "StorageError".to_string())?;
+            serde_json::to_string(publication).map_err(|e| storage_error("sqlite", e))?;
+        let job_json = serde_json::to_string(job).map_err(|e| storage_error("sqlite", e))?;
 
         let mut event_jsons = Vec::with_capacity(events.len());
         for ev in events {
-            let ej = serde_json::to_string(ev).map_err(|_| "StorageError".to_string())?;
+            let ej = serde_json::to_string(ev).map_err(|e| storage_error("sqlite", e))?;
             event_jsons.push((&ev.event_id, ej));
         }
 
         let mut conn = self.lock_conn()?;
-        let tx = conn.transaction().map_err(|_| "StorageError".to_string())?;
+        let tx = conn.transaction().map_err(|e| storage_error("sqlite", e))?;
 
         tx.execute(
             r#"
@@ -276,7 +298,7 @@ impl Repository {
                 pub_json
             ],
         )
-        .map_err(|_| "StorageError".to_string())?;
+        .map_err(|e| storage_error("sqlite", e))?;
 
         tx.execute(
             r#"
@@ -288,7 +310,7 @@ impl Repository {
             "#,
             params![job.id, job.status, job_json],
         )
-        .map_err(|_| "StorageError".to_string())?;
+        .map_err(|e| storage_error("sqlite", e))?;
 
         for (event_id, ej) in event_jsons {
             tx.execute(
@@ -298,10 +320,10 @@ impl Repository {
                 "#,
                 params![event_id, ej],
             )
-            .map_err(|_| "StorageError".to_string())?;
+            .map_err(|e| storage_error("sqlite", e))?;
         }
 
-        tx.commit().map_err(|_| "StorageError".to_string())?;
+        tx.commit().map_err(|e| storage_error("sqlite", e))?;
         Ok(())
     }
 
@@ -309,16 +331,16 @@ impl Repository {
         let conn = self.lock_conn()?;
         let mut stmt = conn
             .prepare("SELECT json FROM success_outbox ORDER BY event_id ASC")
-            .map_err(|_| "StorageError".to_string())?;
+            .map_err(|e| storage_error("sqlite", e))?;
         let rows = stmt
             .query_map([], |row| row.get::<_, String>(0))
-            .map_err(|_| "StorageError".to_string())?;
+            .map_err(|e| storage_error("sqlite", e))?;
 
         let mut out = Vec::new();
         for r in rows {
-            let json_str = r.map_err(|_| "StorageError".to_string())?;
+            let json_str = r.map_err(|e| storage_error("sqlite", e))?;
             let item: SuccessEvent =
-                serde_json::from_str(&json_str).map_err(|_| "StorageError".to_string())?;
+                serde_json::from_str(&json_str).map_err(|e| storage_error("sqlite", e))?;
             out.push(item);
         }
         Ok(out)
@@ -330,7 +352,7 @@ impl Repository {
             "DELETE FROM success_outbox WHERE event_id = ?1",
             params![event_id],
         )
-        .map_err(|_| "StorageError".to_string())?;
+        .map_err(|e| storage_error("sqlite", e))?;
         Ok(())
     }
 }
@@ -462,5 +484,91 @@ mod tests {
         blocker.execute_batch("ROLLBACK;").unwrap();
         repo.save_job(&job("recovered", "queued")).unwrap();
         assert_eq!(repo.jobs().unwrap().len(), 1);
+    }
+
+    fn legacy_schema_without_index(conn: &Connection) {
+        conn.execute_batch(
+            r#"
+            CREATE TABLE jobs (
+                id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                json TEXT NOT NULL
+            );
+            CREATE TABLE publications (
+                id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL,
+                state TEXT NOT NULL,
+                json TEXT NOT NULL
+            );
+            CREATE TABLE success_outbox (
+                event_id TEXT PRIMARY KEY,
+                json TEXT NOT NULL
+            );
+            "#,
+        )
+        .unwrap();
+        conn.pragma_update(None, "user_version", 1).unwrap();
+    }
+
+    fn index_present(conn: &Connection) -> bool {
+        conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_publications_job_state'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .map(|n| n > 0)
+        .unwrap()
+    }
+
+    #[test]
+    fn v1_database_migrates_to_v2_and_indexes_publications() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("jobs.sqlite");
+        {
+            let conn = Connection::open(&path).unwrap();
+            legacy_schema_without_index(&conn);
+        }
+        let repo = Repository::open(&path).unwrap();
+        let conn = repo.conn.lock().unwrap();
+        let version: i64 = conn
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, 2);
+        assert!(index_present(&conn));
+    }
+
+    #[test]
+    fn v1_migration_rolls_back_without_bumping_version_on_failure() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("jobs.sqlite");
+        {
+            let conn = Connection::open(&path).unwrap();
+            // Corrupted v1: version is 1 but the publications table is missing,
+            // so index creation must fail and leave the version untouched.
+            conn.execute_batch(
+                "CREATE TABLE jobs (id TEXT PRIMARY KEY, status TEXT NOT NULL, json TEXT NOT NULL);",
+            )
+            .unwrap();
+            conn.pragma_update(None, "user_version", 1).unwrap();
+        }
+        assert!(Repository::open(&path).is_err());
+        let conn = Connection::open(&path).unwrap();
+        let version: i64 = conn
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, 1);
+        assert!(!index_present(&conn));
+    }
+
+    #[test]
+    fn fresh_database_lands_directly_on_v2_with_index() {
+        let dir = tempdir().unwrap();
+        let repo = Repository::open(&dir.path().join("jobs.sqlite")).unwrap();
+        let conn = repo.conn.lock().unwrap();
+        let version: i64 = conn
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, 2);
+        assert!(index_present(&conn));
     }
 }

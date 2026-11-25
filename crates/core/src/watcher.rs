@@ -326,10 +326,7 @@ impl FolderWatcher {
             if let Some(coord) = coordinator.upgrade()
                 && let Err(e) = coord.enqueue_discovered_files(&paths)
             {
-                eprintln!(
-                    "[FolderWatcher] Failed to enqueue discovered archives: {}",
-                    e
-                );
+                tracing::warn!(error = %e, "folder watcher failed to enqueue discovered archives");
             }
         });
         Self::start(callback, initial_folders, config)
@@ -456,11 +453,11 @@ fn run_watcher_loop(
 
         // 3. Stabilization tick
         let mut stable_batch = Vec::new();
-        let mut to_remove = Vec::new();
+        let mut to_remove: HashSet<PathBuf> = HashSet::new();
 
         for (path, record) in pending_candidates.iter_mut() {
             if !path.exists() || !path.is_file() {
-                to_remove.push(path.clone());
+                to_remove.insert(path.clone());
                 continue;
             }
 
@@ -511,6 +508,11 @@ fn run_watcher_loop(
             }
         }
 
+        // 3.3 Cache directory listings for this tick so sibling volumes sharing a
+        // parent directory trigger at most one read_dir each, instead of one per
+        // stable candidate.
+        let mut dir_listing_cache: HashMap<PathBuf, Option<Vec<String>>> = HashMap::new();
+
         for (path, record) in pending_candidates.iter() {
             if to_remove.contains(path) {
                 continue;
@@ -522,7 +524,7 @@ fn run_watcher_loop(
                     .and_then(|n| n.to_str())
                     .unwrap_or_default();
                 if !is_supported_archive_path(path, fname) {
-                    to_remove.push(path.clone());
+                    to_remove.insert(path.clone());
                     continue;
                 }
 
@@ -542,17 +544,31 @@ fn run_watcher_loop(
                     // Check if parent directory contains temporary download files for the same volume stem
                     let parent_has_temp = path
                         .parent()
-                        .and_then(|parent| fs::read_dir(parent).ok())
-                        .map(|entries| {
-                            entries.flatten().any(|entry| {
-                                let ep = entry.path();
-                                if ep.is_file()
-                                    && let Some(ename) = ep.file_name().and_then(|n| n.to_str())
-                                {
-                                    return is_volume_sibling_temp(ename, &stem_lower);
-                                }
-                                false
-                            })
+                        .map(|parent| {
+                            let names = dir_listing_cache
+                                .entry(parent.to_path_buf())
+                                .or_insert_with(|| {
+                                    fs::read_dir(parent).ok().map(|entries| {
+                                        entries
+                                            .flatten()
+                                            .filter_map(|entry| {
+                                                if entry.path().is_file() {
+                                                    entry.file_name().to_str().map(String::from)
+                                                } else {
+                                                    None
+                                                }
+                                            })
+                                            .collect::<Vec<String>>()
+                                    })
+                                });
+                            names
+                                .as_ref()
+                                .map(|names| {
+                                    names
+                                        .iter()
+                                        .any(|ename| is_volume_sibling_temp(ename, &stem_lower))
+                                })
+                                .unwrap_or(false)
                         })
                         .unwrap_or(false);
 
@@ -573,7 +589,7 @@ fn run_watcher_loop(
                 }
 
                 stable_batch.push((path.clone(), record.last_size, record.last_mtime));
-                to_remove.push(path.clone());
+                to_remove.insert(path.clone());
             }
         }
 

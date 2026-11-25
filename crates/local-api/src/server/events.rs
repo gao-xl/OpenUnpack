@@ -93,6 +93,23 @@ fn need_value(state: &ServerState, event: NeedPasswordEvent, client: &ApiClient)
     }
     Some(value)
 }
+/// Keeps only the newest progress sample of a burst.
+///
+/// Several jobs running at once can publish progress far faster than a client
+/// can paint it (the transfer estimator samples every 200 ms per job). The
+/// frame is a snapshot, not a delta, so dropping intermediate samples loses no
+/// information — it only stops one busy run from flooding every subscriber.
+fn latest_progress(
+    rx: &mut broadcast::Receiver<JobProgressUpdate>,
+    first: JobProgressUpdate,
+) -> JobProgressUpdate {
+    let mut latest = first;
+    while let Ok(newer) = rx.try_recv() {
+        latest = newer;
+    }
+    latest
+}
+
 struct Subscription {
     state: ServerState,
     id: String,
@@ -157,6 +174,7 @@ pub(super) async fn events(
                     },
                     value=sub.progress.recv(), if sub.progress_open=>match value {
                         Ok(value)=>{
+                            let value=latest_progress(&mut sub.progress, value);
                             let Some(value)=sub.state.backend.project_progress(value,&client) else {continue;};
                             Event::default().event("progress").data(serde_json::to_string(&value).ok()?)
                         },
@@ -349,6 +367,7 @@ async fn handle_socket(
                 },
                 value=sub.progress.recv(), if sub.progress_open=>match value {
                     Ok(value)=>{
+                        let value=latest_progress(&mut sub.progress, value);
                         let Some(value)=sub.state.backend.project_progress(value,&client) else {continue;};
                         notification("openunpack.onJobProgress","job_progress",json!(value))
                     },

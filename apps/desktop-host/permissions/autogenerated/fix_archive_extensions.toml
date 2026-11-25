@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fix-archive-extensions"
+description = "Enables the fix_archive_extensions command without any pre-configured scope."
+commands.allow = ["fix_archive_extensions"]
+
+[[permission]]
+identifier = "deny-fix-archive-extensions"
+description = "Denies the fix_archive_extensions command without any pre-configured scope."
+commands.deny = ["fix_archive_extensions"]

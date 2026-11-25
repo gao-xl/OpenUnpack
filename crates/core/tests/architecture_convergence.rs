@@ -135,7 +135,7 @@ fn production_v1_reopens_wal_with_frozen_jobs_publications_and_outbox() {
         witness
             .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
             .unwrap(),
-        1
+        2
     );
     assert_eq!(
         witness
@@ -154,7 +154,7 @@ fn production_rejects_future_database_without_rewriting_records() {
     let temporary = tempdir().unwrap();
     let database = temporary.path().join("future.sqlite");
     let connection = Connection::open(&database).unwrap();
-    connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA user_version=2; CREATE TABLE jobs(id TEXT PRIMARY KEY,status TEXT,json TEXT); CREATE TABLE success_outbox(event_id TEXT PRIMARY KEY,json TEXT);").unwrap();
+    connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA user_version=3; CREATE TABLE jobs(id TEXT PRIMARY KEY,status TEXT,json TEXT); CREATE TABLE success_outbox(event_id TEXT PRIMARY KEY,json TEXT);").unwrap();
     let foreign_json = "{\"futureFormat\":true,\"opaque\":\"keep\"}";
     connection
         .execute(
@@ -175,7 +175,7 @@ fn production_rejects_future_database_without_rewriting_records() {
         connection
             .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
             .unwrap(),
-        2
+        3
     );
     for table in ["jobs", "success_outbox"] {
         assert_eq!(

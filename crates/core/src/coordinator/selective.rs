@@ -29,7 +29,10 @@ impl Coordinator {
         if let Some(policy) = &policy {
             policy.authorize_path(&source_path, false)?;
         }
-        let scan = scanner::scan(&[input.archive_path.clone()], false, &[])?;
+        let archive_clone = input.archive_path.clone();
+        let scan = tokio::task::spawn_blocking(move || scanner::scan(&[archive_clone], false, &[]))
+            .await
+            .map_err(|e| e.to_string())??;
         let source = scan
             .sources
             .into_iter()

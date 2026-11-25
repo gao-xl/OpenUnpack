@@ -1,13 +1,24 @@
+//! 密码候选派生策略：去重排序与受限变体生成。
+//!
+//! 安全约束：所有持有明文密码的结构在 Drop 时 zeroize，
+//! Debug 输出永不渲染明文。
+
 use super::origin::CandidateOrigin;
 use zeroize::{Zeroize, Zeroizing};
 
+/// 一个密码候选的领域表示。
+///
+/// `secret` 为明文密码，生命周期结束后内存会被清零；
+/// Debug 实现输出 `[REDACTED]`，防止泄漏进日志与 panic 信息。
 #[derive(Clone, PartialEq, Eq)]
 pub struct DomainCandidate {
     pub id: String,
+    /// 密钥库条目版本号，用于乐观并发控制。
     pub revision: u64,
     pub origin: CandidateOrigin,
     pub label: String,
     pub secret: String,
+    /// 历史命中次数，决定尝试优先级。
     pub success_count: u64,
 }
 
@@ -38,6 +49,7 @@ impl Drop for DomainCandidate {
     }
 }
 
+/// 去重并排序密码候选：按成功次数降序，同 secret 保留优先级最高的一条。
 pub fn sort_and_dedup_candidates(mut candidates: Vec<DomainCandidate>) -> Vec<DomainCandidate> {
     // 1. 去重保留优先级更高的（按已出现 secret 过滤）
     let mut seen = std::collections::HashSet::new();
@@ -133,6 +145,8 @@ pub fn apply_candidate_mutations(candidates: Vec<DomainCandidate>) -> Vec<Domain
 }
 
 fn strip_affixes_and_tags(secret: &str) -> Option<String> {
+    // 剥离包裹修饰符与标签前缀，提取候选核心值；
+    // 无任何命中时返回 None。
     let mut s = secret.trim();
     let mut changed = false;
 

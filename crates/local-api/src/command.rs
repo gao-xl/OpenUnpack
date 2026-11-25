@@ -233,6 +233,9 @@ pub enum ApiCommand {
     ExecuteToolboxOperation {
         request: ToolboxExecuteRequest,
     },
+    FixArchiveExtensions {
+        paths: Vec<String>,
+    },
     AddArchive {
         path: String,
         #[serde(default)]
@@ -315,6 +318,7 @@ impl ApiCommand {
         "read_import_file",
         "preview_toolbox_operation",
         "execute_toolbox_operation",
+        "fix_archive_extensions",
         "add_archive",
         "submit_input",
     ];
@@ -378,7 +382,9 @@ impl ApiCommand {
             | Self::PickSaveBackup
             | Self::PickOpenBackup => &[DesktopInteractive],
             Self::PreviewToolboxOperation { .. } => &[FilesRead],
-            Self::ExecuteToolboxOperation { .. } => &[FilesRead, FilesWrite],
+            Self::ExecuteToolboxOperation { .. } | Self::FixArchiveExtensions { .. } => {
+                &[FilesRead, FilesWrite]
+            }
             Self::ExtractSelective { .. } => &[FilesRead, FilesWrite],
             Self::AddArchive { .. } => &[JobsWrite, FilesRead, FilesWrite],
             Self::SubmitInput { .. } => &[JobsWrite],
@@ -674,6 +680,15 @@ impl ApiCommand {
                         "token",
                         "操作令牌必须是非空且不超过 64 字符。",
                     ));
+                }
+            }
+            Self::FixArchiveExtensions { paths } => {
+                if paths.is_empty() || paths.len() > 10000 {
+                    errors.push(FieldError::new("paths", "必须包含 1 至 10000 个路径。"));
+                } else {
+                    for (index, path) in paths.iter().enumerate() {
+                        check_abs_path(path, &format!("paths[{index}]"), &mut errors);
+                    }
                 }
             }
             Self::SaveSettings { settings } => {

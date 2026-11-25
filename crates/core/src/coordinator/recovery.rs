@@ -300,9 +300,11 @@ impl Coordinator {
         match remove_owned_retrying_async(&work, id).await {
             Ok(()) => job.workspace = None,
             Err(reason) => {
-                eprintln!(
-                    "workspace_retire_failed job={id} workspace={} reason={reason}",
-                    work.display()
+                tracing::error!(
+                    job = %id,
+                    workspace = %work.display(),
+                    reason = %reason,
+                    "workspace_retire_failed"
                 );
                 job.status = "cleanupPending".into();
                 let delivered = if job.message.is_empty() {

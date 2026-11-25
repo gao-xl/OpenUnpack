@@ -87,7 +87,7 @@ enum VolumeFamilyKey {
 
 const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x00000400;
 // Wire rules are bounded by UTF-8 bytes, matching Domain, UI and Worker.
-pub const MAX_EXCLUSION_PATTERN_BYTES: usize = 512;
+pub use openunpack_infrastructure::engine::path_safety::MAX_EXCLUSION_PATTERN_BYTES;
 /// Hard ceiling on collected archive candidates. A user-selected tree can be
 /// arbitrarily large, and an unbounded `Vec<PathBuf>` would exhaust memory long
 /// before the UI could show a result.
@@ -148,62 +148,10 @@ pub fn is_archive_candidate_name(filename: &str) -> bool {
     RE_MULTI.is_match(&lower)
 }
 
+/// Exclusion previews and extraction must agree byte for byte, so the rule
+/// engine is re-exported through infrastructure.
 pub fn matches_exclusion(relative: &str, patterns: &[String]) -> bool {
-    if relative.len() > 32768 {
-        return false;
-    }
-    let norm_path = relative.replace('\\', "/");
-    let norm_path_lower = norm_path.to_lowercase();
-
-    for pat in patterns {
-        if pat.is_empty() || pat.len() > MAX_EXCLUSION_PATTERN_BYTES {
-            continue;
-        }
-        let norm_pat = pat.replace('\\', "/").to_lowercase();
-        if wildcard_match(&norm_pat, &norm_path_lower) {
-            return true;
-        }
-        // Also allow matching solely against file/directory base name
-        if let Some(filename) = norm_path_lower.rsplit('/').next()
-            && wildcard_match(&norm_pat, filename)
-        {
-            return true;
-        }
-    }
-    false
-}
-
-fn wildcard_match(pattern: &str, text: &str) -> bool {
-    // '?' denotes one Unicode scalar value, not one byte of UTF-8.
-    let p_bytes: Vec<char> = pattern.chars().collect();
-    let t_bytes: Vec<char> = text.chars().collect();
-    let mut p_idx = 0;
-    let mut t_idx = 0;
-    let mut star_idx = None;
-    let mut match_idx = 0;
-
-    while t_idx < t_bytes.len() {
-        if p_idx < p_bytes.len() && (p_bytes[p_idx] == '?' || p_bytes[p_idx] == t_bytes[t_idx]) {
-            p_idx += 1;
-            t_idx += 1;
-        } else if p_idx < p_bytes.len() && p_bytes[p_idx] == '*' {
-            star_idx = Some(p_idx);
-            p_idx += 1;
-            match_idx = t_idx;
-        } else if let Some(star) = star_idx {
-            p_idx = star + 1;
-            match_idx += 1;
-            t_idx = match_idx;
-        } else {
-            return false;
-        }
-    }
-
-    while p_idx < p_bytes.len() && p_bytes[p_idx] == '*' {
-        p_idx += 1;
-    }
-
-    p_idx == p_bytes.len()
+    openunpack_infrastructure::engine::path_safety::matches_exclusion(relative, patterns)
 }
 
 pub fn output_name(path: &str) -> String {
@@ -448,12 +396,21 @@ pub fn is_supported_archive_path(path: &Path, filename: &str) -> bool {
             .unwrap_or(0)
     };
 
+    // Compute the SFX payload scan exactly once. It reads up to 512 KiB, and the
+    // MZ branch plus the explicit-SFX return previously re-opened and re-scanned
+    // the file a second time.
+    let sfx_payload = if is_explicit_sfx {
+        has_sfx_archive_payload(path)
+    } else {
+        false
+    };
+
     if read_count >= 2 && &header[..2] == b"MZ" {
         if !is_explicit_sfx {
             if !has_tar_header(&header[..read_count]) {
                 return false;
             }
-        } else if !has_sfx_archive_payload(path) {
+        } else if !sfx_payload {
             return false;
         }
     }
@@ -468,7 +425,7 @@ pub fn is_supported_archive_path(path: &Path, filename: &str) -> bool {
     }
 
     if is_explicit_sfx {
-        return has_sfx_archive_payload(path);
+        return sfx_payload;
     }
 
     if RE_MULTI.is_match(&lower) {

@@ -9,6 +9,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
+    time::{Duration, Instant},
 };
 
 pub fn is_tar_file(path: &Path) -> bool {
@@ -207,12 +208,14 @@ pub fn extract_tar(
 ) -> Result<(Vec<FileRecord>, bool), String> {
     let archive_path = Path::new(&request.archive_path);
     let mut file = File::open(archive_path).map_err(|e| format!("IoError: {e}"))?;
+    let total_bytes = file.metadata().map(|m| m.len()).unwrap_or(0);
     let mut extracted_records = Vec::new();
     let mut header = [0u8; 512];
     let mut completed_bytes: u64 = 0;
     let mut is_salvaged = false;
     let mut zero_block_count = 0usize;
     let mut next_long_name: Option<String> = None;
+    let mut last_progress = Instant::now();
 
     let max_entries = if request.max_entries > 0 {
         request.max_entries
@@ -406,12 +409,17 @@ pub fn extract_tar(
                 .write_all(&buf[..n])
                 .map_err(|e| format!("IoError: {e}"))?;
             hasher.update(&buf[..n]);
-            remaining -= n as u64;
-            completed_bytes += n as u64;
+            remaining = remaining.saturating_sub(n as u64);
+            completed_bytes = completed_bytes.saturating_add(n as u64);
 
-            let mut ev = super::make_event(request, "progress");
-            ev.completed_bytes = completed_bytes;
-            progress(&ev);
+            if last_progress.elapsed() >= Duration::from_millis(50) {
+                let mut ev = super::make_event(request, "progress");
+                ev.completed_bytes = completed_bytes;
+                ev.total_bytes = total_bytes;
+                ev.total_bytes_known = total_bytes > 0;
+                progress(&ev);
+                last_progress = Instant::now();
+            }
         }
 
         out_file.flush().map_err(|e| format!("IoError: {e}"))?;

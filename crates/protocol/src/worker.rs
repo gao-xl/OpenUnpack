@@ -1,7 +1,16 @@
+//! Worker 协议 DTO：协调器与提取引擎之间的请求/事件契约。
+//!
+//! 请求与事件均携带 `protocol_version`，版本协商见
+//! [`WORKER_PROTOCOL_VERSION_V1`] / [`WORKER_PROTOCOL_VERSION_V2`]。
+//! 凭据字段（密码、候选明文）在 Drop 时 zeroize，Debug 输出一律脱敏。
+
 use serde::{Deserialize, Serialize};
 
+/// 协议 v1（单请求/单事件流，无 hello 协商）。
 pub const WORKER_PROTOCOL_VERSION_V1: u32 = 1;
+/// 协议 v2（hello 能力协商 + 密码候选批量提交）。
 pub const WORKER_PROTOCOL_VERSION_V2: u32 = 2;
+/// 单条协议消息的最大字节数（8 MiB），防御异常巨型载荷。
 pub const MAX_MESSAGE_BYTES: usize = 8 * 1024 * 1024;
 
 /// In-process native worker & engine sentinel identifiers used by desktop host & coordinator.
@@ -12,18 +21,23 @@ fn known_size() -> bool {
     true
 }
 
+/// 解压结果中的单个条目（文件或目录）记录。
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileRecord {
+    /// 条目在压缩包内的相对路径。
     pub relative_path: String,
     pub size: u64,
+    /// `size` 是否可信；流式格式可能无法预知体积（未知时为 false）。
     #[serde(default = "known_size")]
     pub size_known: bool,
     pub sha256: String,
     #[serde(default)]
     pub is_directory: bool,
+    /// 条目带加密标记（加密压缩包内可能仍有未加密条目）。
     #[serde(default)]
     pub is_encrypted: bool,
+    /// 条目数据校验失败（残卷救援场景下仍可能被保留）。
     #[serde(default)]
     pub is_corrupted: bool,
 }
@@ -42,10 +56,13 @@ impl Default for FileRecord {
     }
 }
 
+/// 直通复制（pass-through）阶段的单个源文件指令。
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CopyFile {
+    /// 源文件的绝对路径。
     pub source_path: String,
+    /// 复制目标内的相对路径。
     pub relative_path: String,
     pub size: u64,
     #[serde(default = "known_size")]
@@ -71,6 +88,9 @@ impl Default for CopyFile {
     }
 }
 
+/// 密码候选条目（v2 批量提交用）。
+///
+/// `secret` 为明文，Drop 时 zeroize，Debug 输出脱敏。
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CandidateItem {
@@ -82,27 +102,38 @@ pub struct CandidateItem {
     pub secret: String,
 }
 
+/// 引擎能力声明（hello 协商的载荷）。
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct WorkerCapabilities {
     pub backend_id: String,
     pub backend_version: String,
+    /// 是否支持读取压缩包元数据（列表/统计）。
     pub read_metadata: bool,
+    /// 是否支持带密码候选的解压（否则只能单密码重试）。
     pub extract_with_candidates: bool,
+    /// 是否支持固实压缩包优化。
     pub solid_optimization: bool,
+    /// 单批密码候选上限。
     pub max_batch_candidates: usize,
+    /// 多后端（backend）细分能力列表。
     pub backends: Vec<WorkerBackend>,
 }
 
+/// 单个解压后端（如 7-Zip / HatchZip 原地引擎）的格式能力。
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct WorkerBackend {
     pub backend_id: String,
     pub backend_version: String,
+    /// 支持的压缩格式扩展名列表。
     pub formats: Vec<String>,
     pub read_metadata: bool,
+    /// 是否支持加密压缩包。
     pub encrypted_archives: bool,
+    /// 解压体积是否不可预知（流式格式）。
     pub unknown_expanded_size: bool,
+    /// 支持的校验范围（standard / strict / none）。
     pub verification_scopes: Vec<String>,
 }
 
@@ -120,6 +151,7 @@ impl Default for WorkerCapabilities {
     }
 }
 
+/// 引擎握手事件：版本与能力协商的应答。
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkerHello {
@@ -140,24 +172,35 @@ impl Default for WorkerHello {
     }
 }
 
+/// 协调器发给引擎的操作请求。
+///
+/// 几乎所有字段带 `#[serde(default)]`：旧版本协调器发出的请求
+/// 可无损反序列化，字段集只增不删。凭据字段在 Drop 时全部擦除。
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkerRequest {
     pub protocol_version: u32,
+    /// 请求唯一 ID，事件回执据此关联。
     pub request_id: String,
+    /// 操作名（如 list / extract / probe / copy）。
     pub operation: String,
+    /// 幂等键：同一操作重试时保持不变。
     #[serde(default)]
     pub operation_id: Option<String>,
+    /// 任务代数（乐观并发）。
     #[serde(default)]
     pub generation: Option<u64>,
     #[serde(default)]
     pub archive_path: String,
     #[serde(default)]
     pub destination_directory: String,
+    /// 单密码模式下的显式密码。
     #[serde(default)]
     pub password: Option<String>,
+    /// 分卷解压允许访问的卷路径白名单（安全边界）。
     #[serde(default)]
     pub allowed_volumes: Vec<String>,
+    // —— 资源预算（见 domain::ResourceBudget）——
     #[serde(default)]
     pub max_entries: u64,
     #[serde(default)]
@@ -168,6 +211,7 @@ pub struct WorkerRequest {
     pub min_free_bytes: u64,
     #[serde(default)]
     pub files: Vec<CopyFile>,
+    /// 校验范围（standard / strict / none）。
     #[serde(default)]
     pub verification: String,
     #[serde(default)]
@@ -178,10 +222,13 @@ pub struct WorkerRequest {
     pub candidate_passwords: Vec<String>,
     #[serde(default)]
     pub candidates: Vec<CandidateItem>,
+    /// 引擎线程数（0 = 自动）。
     #[serde(default)]
     pub engine_threads: u32,
+    /// 引擎进程优先级策略。
     #[serde(default)]
     pub worker_priority: String,
+    /// 是否启用残卷救援（跳过损坏条目尽可能解出内容）。
     #[serde(default)]
     pub salvage_corrupted: bool,
 }
@@ -215,11 +262,17 @@ impl Default for WorkerRequest {
     }
 }
 
+/// 引擎回传协调器的事件（进度、hello、完成、失败等）。
+///
+/// `kind` 决定载荷语义；`matched_password` 若被违规回显，会在
+/// Drop 时防御性擦除（v2 协议本不允许回显明文）。
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkerEvent {
     pub protocol_version: u32,
+    /// 关联的请求 ID。
     pub request_id: String,
+    /// 事件类别（hello / progress / completed / failed 等）。
     pub kind: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hello: Option<WorkerHello>,
@@ -235,10 +288,12 @@ pub struct WorkerEvent {
     pub total_bytes_known: bool,
     #[serde(default)]
     pub message: String,
+    /// 失败时的 [`crate::WireErrorCode`] 短名。
     #[serde(default)]
     pub error_code: String,
     #[serde(default)]
     pub files: Vec<FileRecord>,
+    // —— 结果清单指纹 ——
     #[serde(default)]
     pub manifest_path: Option<String>,
     #[serde(default)]
@@ -251,6 +306,7 @@ pub struct WorkerEvent {
     pub password_used: bool,
     #[serde(default)]
     pub matched_password: Option<String>,
+    /// 命中的候选 ID（密码回执归因用，避免传输明文）。
     #[serde(default)]
     pub matched_candidate_id: Option<String>,
     #[serde(default)]

@@ -37,6 +37,7 @@ impl Coordinator {
                     estimator: TransferEstimator::default(),
                     view: None,
                     measured: matches!(request.operation.as_str(), "extract" | "copy" | "readback"),
+                    last_emitted: None,
                 },
             );
             let mut usage = self.cache_usage_by_job.lock().map_err(|_| lock_error())?;
@@ -132,26 +133,36 @@ impl Coordinator {
                     updated_at: now(),
                 });
             }
-            let progress_update = openunpack_protocol::JobProgressUpdate {
-                job_id: job_id.to_string(),
-                stage: job.stage.clone(),
-                progress: proportion,
-                completed_bytes: completed,
-                total_bytes: total,
-                bytes_per_second: transfer
-                    .view
-                    .as_ref()
-                    .and_then(|v| v.bytes_per_second)
-                    .unwrap_or(0.0),
-                remaining_seconds: transfer.view.as_ref().and_then(|v| v.remaining_seconds),
-                current_file: job
-                    .nodes
-                    .iter()
-                    .find(|n| n.status == "running")
-                    .map(|n| n.name.clone()),
-            };
-            let _ = self.progress_broadcaster.send(progress_update);
-            self.changed_locked();
+            const THROTTLE_INTERVAL: Duration = Duration::from_millis(60);
+            let is_boundary = proportion >= 1.0 || (total > 0 && completed >= total);
+            let should_emit = is_boundary
+                || transfer.last_emitted.is_none_or(|last| {
+                    observed_at.saturating_duration_since(last) >= THROTTLE_INTERVAL
+                });
+
+            if should_emit {
+                transfer.last_emitted = Some(observed_at);
+                let progress_update = openunpack_protocol::JobProgressUpdate {
+                    job_id: job_id.to_string(),
+                    stage: job.stage.clone(),
+                    progress: proportion,
+                    completed_bytes: completed,
+                    total_bytes: total,
+                    bytes_per_second: transfer
+                        .view
+                        .as_ref()
+                        .and_then(|v| v.bytes_per_second)
+                        .unwrap_or(0.0),
+                    remaining_seconds: transfer.view.as_ref().and_then(|v| v.remaining_seconds),
+                    current_file: job
+                        .nodes
+                        .iter()
+                        .find(|n| n.status == "running")
+                        .map(|n| n.name.clone()),
+                };
+                let _ = self.progress_broadcaster.send(progress_update);
+                self.changed_locked();
+            }
         }
     }
 }

@@ -101,6 +101,10 @@ impl Rig {
         }
     }
 
+    fn is_native_worker(&self) -> bool {
+        self.worker == Path::new("native-worker")
+    }
+
     fn client(&self) -> WorkerClient {
         WorkerClient {
             executable: self.worker.clone(),
@@ -161,12 +165,14 @@ impl Rig {
             .expect("native transport and confirmed exit");
         let receipt = receipt.expect("native operation must leave an exit receipt");
         assert!(receipt.exit_confirmed);
-        assert!(
-            !receipt.processes.is_empty(),
-            "a real Worker must have started"
-        );
-        for (pid, created) in receipt.processes {
-            assert!(process_identity_exited(pid, created).unwrap());
+        if !self.is_native_worker() {
+            assert!(
+                !receipt.processes.is_empty(),
+                "a real Worker must have started"
+            );
+            for (pid, created) in receipt.processes {
+                assert!(process_identity_exited(pid, created).unwrap());
+            }
         }
         client.forget_confirmed_request(&id);
         event
@@ -243,7 +249,12 @@ async fn moved_source_is_reported_by_real_worker_and_retry_after_restore_is_exac
     // The Worker pins all approved source handles before opening the archive engine.
     // A moved root file fails that filesystem lease as IoError; MissingVolume
     // describes missing parts diagnosed later by the archive/volume resolver.
-    assert_eq!(failed.error_code, "IoError");
+    // In native engine mode, a missing source root is reported as ArchiveNotFound.
+    assert!(
+        matches!(failed.error_code.as_str(), "IoError" | "ArchiveNotFound"),
+        "unexpected error code: {}",
+        failed.error_code
+    );
     assert!(!destination.join("data.bin").exists());
     assert_eq!(digest(&moved), source_hash);
     fs::rename(&moved, &archive).unwrap();
@@ -394,7 +405,7 @@ async fn cancelled_native_extraction_reopens_as_cancelled_and_can_retry_without_
                 .is_some_and(|progress| progress.completed_bytes > 0)
         {
             let processes = live_worker_identities();
-            if processes.len() == 1 {
+            if rig.is_native_worker() || processes.len() == 1 {
                 break processes;
             }
         }

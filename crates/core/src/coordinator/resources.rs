@@ -50,7 +50,9 @@ impl Coordinator {
         if let Some(files) = records {
             let substantive: Vec<_> = files.iter().filter(|f| !f.is_directory).collect();
             entry_count = substantive.len() as u64;
-            let sum_bytes: u64 = substantive.iter().map(|f| f.size).sum();
+            let sum_bytes: u64 = substantive
+                .iter()
+                .fold(0u64, |acc, f| acc.saturating_add(f.size));
             if sum_bytes > 0 {
                 estimated_extracted_bytes = sum_bytes;
             }

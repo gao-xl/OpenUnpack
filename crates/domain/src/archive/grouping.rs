@@ -1,22 +1,26 @@
+//! 分卷压缩包命名识别。
+
+/// 分卷文件名的解析结果。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VolumePattern {
-    Numeric {
-        base: String,
-        part: u32,
-    },
+    /// 数字分卷（`.7z.001` / `.zip.001`），`base` 不含尾部分卷号。
+    Numeric { base: String, part: u32 },
+    /// WinRAR 新式分卷（`archive.part01.rar`），`width` 保留补零宽度。
     RarPart {
         base: String,
         part: u32,
         width: usize,
     },
-    Legacy {
-        base: String,
-        kind: char,
-        part: u32,
-    },
+    /// 旧式分卷扩展名（`.r00` / `.z01`），`kind` 记录 r 或 z。
+    Legacy { base: String, kind: char, part: u32 },
+    /// 非分卷的普通文件。
     Single(String),
 }
 
+/// 解析分卷压缩包文件名，识别三种分卷命名风格。
+///
+/// 按优先级依次尝试：`.partNN.rar` → `.7z/.zip.NNN` → 旧式 `.rNN`/`.zNN`；
+/// 均不匹配时归为 [`VolumePattern::Single`]。扩展名比较使用 ASCII 小写。
 pub fn parse_volume_name(file_name: &str) -> VolumePattern {
     let lower = file_name.to_ascii_lowercase();
 

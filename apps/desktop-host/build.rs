@@ -75,6 +75,7 @@ fn main() {
             "read_import_file",
             "preview_toolbox_operation",
             "execute_toolbox_operation",
+            "fix_archive_extensions",
             "execute_post_action",
             "get_shell_context_menu_status",
             "set_shell_context_menu_status",

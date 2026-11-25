@@ -17,5 +17,7 @@ version = "0.1.0"
 license = "MIT"
 
 [profile.release]
-strip = true
+# Keep the symbol table: panic reports are captured by the logging module, and a
+# fully stripped binary turns every crash into an unresolvable address list.
+strip = "debuginfo"
 lto = "thin"

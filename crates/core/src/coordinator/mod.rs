@@ -6,6 +6,8 @@ mod cache_budget;
 mod commands;
 pub mod conflict_resolver;
 mod execution;
+mod execution_extract;
+mod execution_reconcile;
 mod initialization;
 mod inplace;
 mod inspection;
@@ -74,6 +76,33 @@ fn terminal(status: &str) -> bool {
 }
 fn recovering(status: &str) -> bool {
     matches!(status, "interrupted" | "publishPending" | "cleanupPending")
+}
+
+/// Keeps only the newest `limit` jobs ordered by `(created_at desc, id desc)`
+/// without fully sorting the whole list. The bounded-history snapshot and the
+/// history page only consume a small window, so sorting every stored record on
+/// each refresh is wasted work. The retained prefix is still sorted, so the
+/// downstream ordering is unchanged; callers that need a different tie-break
+/// must not use this helper.
+fn top_n_newest(jobs: &mut Vec<&JobView>, limit: usize) {
+    let keep = limit.min(jobs.len());
+    if keep == 0 {
+        jobs.clear();
+        return;
+    }
+    if keep < jobs.len() {
+        jobs.select_nth_unstable_by(keep, |a, b| {
+            b.created_at
+                .cmp(&a.created_at)
+                .then_with(|| b.id.cmp(&a.id))
+        });
+        jobs.truncate(keep);
+    }
+    jobs.sort_by(|a, b| {
+        b.created_at
+            .cmp(&a.created_at)
+            .then_with(|| b.id.cmp(&a.id))
+    });
 }
 fn lock_error() -> String {
     "内部状态不可用；请重启并检查恢复记录。".into()
@@ -245,6 +274,7 @@ struct ActiveTransfer {
     estimator: TransferEstimator,
     view: Option<TransferProgress>,
     measured: bool,
+    last_emitted: Option<Instant>,
 }
 struct TransferOwner {
     core: Arc<Coordinator>,
@@ -285,7 +315,7 @@ impl Drop for RecoveryOwner {
                         && paths::atomic_json(&Path::new(work).join(UNCONFIRMED_FILE), &record)
                             .is_err()
                     {
-                        eprintln!("recovery_exit_marker_persist_failed job={}", self.job_id);
+                        tracing::error!(job = %self.job_id, "recovery_exit_marker_persist_failed");
                     }
                 }
                 let _ = self.core.put(&job);
@@ -409,3 +439,4 @@ struct UnconfirmedExit {
 }
 const RUN_FILE: &str = "pipeline.json";
 const UNCONFIRMED_FILE: &str = ".openunpack-exit-unconfirmed.json";
+pub(super) const MAX_DERIVATION_NODES: usize = 500;

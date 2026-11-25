@@ -2243,6 +2243,19 @@ fn test_strip_single_root_wrapper() {
     strip_single_root_wrapper(&mut files6);
     assert_eq!(files6.len(), 1);
     assert_eq!(files6[0].relative_path, "final.dat");
+
+    // Case 7: Redundant single wrapper with double or mixed leading slashes (ISSUE-H02)
+    let mut files7 = vec![
+        f("Root", true),
+        f("Root//nestedA/file.txt", false),
+        f("Root\\/nestedB\\sub.txt", false),
+    ];
+    strip_single_root_wrapper(&mut files7);
+    assert_eq!(files7.len(), 2);
+    assert_eq!(files7[0].relative_path, "nestedA\\file.txt");
+    assert_eq!(files7[1].relative_path, "nestedB\\sub.txt");
+    assert!(!files7[0].relative_path.starts_with('\\'));
+    assert!(!files7[1].relative_path.starts_with('\\'));
 }
 
 #[test]
@@ -3170,4 +3183,249 @@ fn queue_start_without_a_runtime_reports_an_error_instead_of_latching_running() 
     let core = startable_core(&directory);
     assert!(core.start().is_err());
     assert!(!core.running.load(Ordering::Acquire));
+}
+
+#[test]
+fn transfer_progress_emits_are_throttled_to_60ms_unless_boundary() {
+    use std::time::Duration;
+    let (_directory, core, job) = telemetry_core();
+    let started = Instant::now();
+    let owner = core
+        .begin_transfer(&job, &telemetry_request(&job), started)
+        .unwrap();
+    let mut rx = core.subscribe_progress();
+
+    // 1st tick at t=0: initial observation must emit immediately
+    core.observe_transfer(
+        &job.id,
+        &owner.identity,
+        &telemetry_event(&owner.identity, 100),
+        (0, Some(1000)),
+        None,
+        started,
+    );
+    let first = rx
+        .try_recv()
+        .expect("first observation must be emitted immediately");
+    assert_eq!(first.completed_bytes, 100);
+
+    // 2nd tick at t=20ms (< 60ms): throttled, must NOT emit
+    core.observe_transfer(
+        &job.id,
+        &owner.identity,
+        &telemetry_event(&owner.identity, 200),
+        (0, Some(1000)),
+        None,
+        started + Duration::from_millis(20),
+    );
+    assert!(
+        rx.try_recv().is_err(),
+        "progress update within 60ms must be throttled"
+    );
+
+    // 3rd tick at t=40ms (< 60ms): still throttled, must NOT emit
+    core.observe_transfer(
+        &job.id,
+        &owner.identity,
+        &telemetry_event(&owner.identity, 300),
+        (0, Some(1000)),
+        None,
+        started + Duration::from_millis(40),
+    );
+    assert!(
+        rx.try_recv().is_err(),
+        "progress update at 40ms must be throttled"
+    );
+
+    // 4th tick at t=65ms (>= 60ms): must emit!
+    core.observe_transfer(
+        &job.id,
+        &owner.identity,
+        &telemetry_event(&owner.identity, 400),
+        (0, Some(1000)),
+        None,
+        started + Duration::from_millis(65),
+    );
+    let second = rx.try_recv().expect("progress update after 60ms must emit");
+    assert_eq!(second.completed_bytes, 400);
+
+    // 5th tick at t=70ms with 100% completion (boundary): must emit immediately despite <60ms interval!
+    core.observe_transfer(
+        &job.id,
+        &owner.identity,
+        &telemetry_event(&owner.identity, 1000),
+        (0, Some(1000)),
+        None,
+        started + Duration::from_millis(70),
+    );
+    let boundary = rx
+        .try_recv()
+        .expect("boundary completion (100%) must bypass throttle");
+    assert_eq!(boundary.completed_bytes, 1000);
+    assert_eq!(boundary.progress, 1.0);
+}
+
+mod api_password_tests {
+    use super::*;
+
+    struct PasswordPolicy(bool);
+    impl JobExecutionPolicy for PasswordPolicy {
+        fn authorize(&self, _: &JobView) -> Result<(), String> {
+            if self.0 {
+                Ok(())
+            } else {
+                Err("synthetic denied".into())
+            }
+        }
+        fn authorize_path(&self, _: &Path, _: bool) -> Result<(), String> {
+            Ok(())
+        }
+    }
+    fn fixture() -> (tempfile::TempDir, Arc<Coordinator>, Vec<SourceGroup>) {
+        let directory = tempfile::tempdir().unwrap();
+        let archive = directory.path().join("sample.zip");
+        fs::write(&archive, b"synthetic metadata-only fixture").unwrap();
+        let core = Coordinator::open(
+            directory.path().join("data"),
+            directory.path().join("missing-worker.exe"),
+            directory.path().join("missing-engine.dll"),
+        )
+        .unwrap();
+        let sources = scanner::scan(&[paths::path_string(&archive)], false, &[])
+            .unwrap()
+            .sources;
+        (directory, core, sources)
+    }
+
+    #[test]
+    fn api_admission_keeps_password_only_for_successful_new_jobs_in_memory() {
+        let (_directory, core, sources) = fixture();
+        assert!(
+            core.add_jobs_with_password_authorized(
+                sources.clone(),
+                Settings::default(),
+                Some(zeroize::Zeroizing::new("synthetic-denied".into())),
+                Arc::new(PasswordPolicy(false)),
+            )
+            .is_err()
+        );
+        assert!(core.ephemeral_passwords.lock().unwrap().is_empty());
+        assert!(core.repository.jobs().unwrap().is_empty());
+        let added = core
+            .add_jobs_with_password_authorized(
+                sources.clone(),
+                Settings::default(),
+                Some(zeroize::Zeroizing::new("synthetic-one-time".into())),
+                Arc::new(PasswordPolicy(true)),
+            )
+            .unwrap();
+        assert_eq!(added.len(), 1);
+        assert!(core.execution_policy(&added[0].id).unwrap().is_some());
+        assert_eq!(
+            core.ephemeral_passwords.lock().unwrap()[&added[0].id][0].as_str(),
+            "synthetic-one-time"
+        );
+        assert!(
+            core.add_jobs_with_password_authorized(
+                sources,
+                Settings::default(),
+                Some(zeroize::Zeroizing::new("synthetic-duplicate".into())),
+                Arc::new(PasswordPolicy(true)),
+            )
+            .unwrap()
+            .is_empty()
+        );
+        assert_eq!(
+            core.ephemeral_passwords.lock().unwrap()[&added[0].id].len(),
+            1
+        );
+        assert!(core.vault().unwrap().views().unwrap().is_empty());
+        assert!(
+            !serde_json::to_string(&core.repository.jobs().unwrap())
+                .unwrap()
+                .contains("synthetic-one-time")
+        );
+    }
+
+    #[test]
+    fn failed_job_persistence_leaves_no_temporary_password_or_execution_policy() {
+        let (_directory, core, sources) = fixture();
+        let connection = rusqlite::Connection::open(core.data.join("jobs.sqlite")).unwrap();
+        connection.execute_batch("CREATE TRIGGER reject_api_job BEFORE INSERT ON jobs BEGIN SELECT RAISE(ABORT, 'synthetic storage failure'); END;").unwrap();
+        assert!(
+            core.add_jobs_with_password_authorized(
+                sources,
+                Settings::default(),
+                Some(zeroize::Zeroizing::new("synthetic-one-time".into())),
+                Arc::new(PasswordPolicy(true)),
+            )
+            .is_err()
+        );
+        assert!(core.ephemeral_passwords.lock().unwrap().is_empty());
+        assert!(core.execution_policies.lock().unwrap().is_empty());
+        assert!(core.repository.jobs().unwrap().is_empty());
+        assert!(core.jobs.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn authorized_input_binds_policy_before_delivery_and_propagates_closed_waiter() {
+        let (_directory, core, sources) = fixture();
+        let added = core.add_jobs(sources, Settings::default()).unwrap();
+        let id = &added[0].id;
+        let (sender, mut receiver) = tokio::sync::oneshot::channel();
+        core.pending_inputs
+            .lock()
+            .unwrap()
+            .insert(id.clone(), sender);
+        assert!(
+            core.submit_input_authorized(
+                id,
+                "synthetic-denied".into(),
+                Arc::new(PasswordPolicy(false))
+            )
+            .is_err()
+        );
+        assert!(core.pending_inputs.lock().unwrap().contains_key(id));
+        assert!(core.execution_policy(id).unwrap().is_none());
+        assert!(
+            core.submit_input_authorized(
+                id,
+                "synthetic-input".into(),
+                Arc::new(PasswordPolicy(true))
+            )
+            .unwrap()
+        );
+        assert!(core.execution_policy(id).unwrap().is_some());
+        assert_eq!(receiver.try_recv().unwrap(), "synthetic-input");
+        assert!(
+            !core
+                .submit_input_authorized(
+                    id,
+                    "synthetic-unused".into(),
+                    Arc::new(PasswordPolicy(true))
+                )
+                .unwrap()
+        );
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        drop(receiver);
+        core.pending_inputs
+            .lock()
+            .unwrap()
+            .insert(id.clone(), sender);
+        let previous_policy = core.execution_policy(id).unwrap().unwrap();
+        assert!(
+            core.submit_input_authorized(
+                id,
+                "synthetic-closed".into(),
+                Arc::new(PasswordPolicy(true))
+            )
+            .is_err()
+        );
+        assert!(Arc::ptr_eq(
+            &previous_policy,
+            &core.execution_policy(id).unwrap().unwrap()
+        ));
+        assert_eq!(core.get_job(id).unwrap().status, "queued");
+        assert!(core.vault().unwrap().views().unwrap().is_empty());
+    }
 }

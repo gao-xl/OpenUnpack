@@ -1,26 +1,48 @@
+//! 线格式错误码：跨进程结果状态的稳定枚举。
+
 use serde::{Deserialize, Serialize};
 
+/// 跨进程结果错误码。
+///
+/// 序列化短名（`as_str`）是稳定的线格式契约，
+/// 新增枚举值只能追加、不能改名或复用既有短名。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum WireErrorCode {
+    /// 操作成功（空字符串同义）。
     Success,
+    /// 压缩格式不受支持。
     UnsupportedFormat,
+    /// 需要密码才能继续。
     PasswordRequired,
+    /// 提交的密码不正确。
     PasswordIncorrect,
+    /// 压缩包数据损坏。
     CorruptedArchive,
+    /// 分卷缺失，无法按序解压。
     MissingVolume,
+    /// 输出目标冲突（同名/占用等）。
     OutputConflict,
+    /// 触及资源预算限制。
     ResourceLimit,
+    /// 用户取消操作。
     OperationCancelled,
+    /// 子进程异常终止。
     ProcessTerminated,
+    /// 通用 IO 错误。
     IoError,
+    /// 清单（manifest）数据非法。
     InvalidManifest,
+    /// 协议版本不匹配。
     ProtocolMismatch,
+    /// 内部错误（未归类）。
     InternalError,
+    /// 未知短名的兜底承载。
     Custom(String),
 }
 
 impl WireErrorCode {
+    /// 返回线格式稳定短名。
     pub fn as_str(&self) -> &str {
         match self {
             Self::Success => "SUCCESS",
@@ -41,6 +63,7 @@ impl WireErrorCode {
         }
     }
 
+    /// 从线格式短名还原错误码；未知短名归入 [`WireErrorCode::Custom`]。
     pub fn from_raw(raw: &str) -> Self {
         match raw {
             "" | "SUCCESS" => Self::Success,

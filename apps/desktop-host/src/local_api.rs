@@ -1039,6 +1039,9 @@ impl ApiBackend for DesktopBackend {
                 ExecuteToolboxOperation { request } => {
                     value(super::core_execute_toolbox_operation(state, request).await)
                 }
+                FixArchiveExtensions { paths } => {
+                    value(super::core_fix_archive_extensions(state, paths).await)
+                }
                 AddArchive {
                     path,
                     output_dir,

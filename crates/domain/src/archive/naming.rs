@@ -1,3 +1,9 @@
+//! 输出命名规则：冲突改名与分卷名解析。
+
+/// 基于 `existing` 谓词生成不冲突的输出名。
+///
+/// 冲突时追加 `_1`、`_2`……序号直到空闲；谓词由调用方提供
+/// （通常查询目标目录或内存索引）。
 pub fn generate_unique_name(base: &str, existing: impl Fn(&str) -> bool) -> String {
     if !existing(base) {
         return base.to_string();
@@ -12,6 +18,13 @@ pub fn generate_unique_name(base: &str, existing: impl Fn(&str) -> bool) -> Stri
     }
 }
 
+/// 判断压缩包是否只包含一个顶层目录，若是则返回该目录名。
+///
+/// 用于"智能解包"：单一根目录时把内容直接释放到输出根，
+/// 避免出现 `输出/唯一文件夹/...` 的冗余层级。
+///
+/// 返回 `None` 的情形：条目为空、存在顶层散文件、或顶层目录多于一个。
+/// 目录名比较使用 ASCII 忽略大小写（与 Windows 行为一致）。
 pub fn should_unwrap_single_root<'a, I>(entries: I) -> Option<&'a str>
 where
     I: IntoIterator<Item = (&'a str, bool)>,

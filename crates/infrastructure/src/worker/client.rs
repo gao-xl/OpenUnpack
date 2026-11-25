@@ -7,6 +7,7 @@ use std::{
 
 static DIAGNOSTICS: OnceLock<Mutex<VecDeque<WorkerDiagnostic>>> = OnceLock::new();
 static EXIT_RECEIPTS: OnceLock<Mutex<HashMap<String, WorkerExitReceipt>>> = OnceLock::new();
+static RECEIPT_ORDER: OnceLock<Mutex<VecDeque<String>>> = OnceLock::new();
 static RETAINED_RECEIPTS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
 #[derive(Clone, Debug)]
@@ -58,11 +59,41 @@ impl WorkerClient {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
+        let mut order = RECEIPT_ORDER
+            .get_or_init(|| Mutex::new(VecDeque::new()))
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        // First pass: clean up confirmed receipts that are not explicitly retained
         if receipts.len() >= 256 {
             receipts.retain(|id, receipt| !receipt.exit_confirmed || retained.contains(id));
+            order.retain(|id| receipts.contains_key(id));
         }
-        if receipts.len() >= 256 {
-            return Err("ResourceLimit".into());
+        // Second pass: FIFO eviction if still at or above capacity (ISSUE-H03)
+        // Evict the oldest non-retained confirmed receipt first, or oldest retained if needed,
+        // ensuring we never block operations with ResourceLimit due to an in-memory receipt table.
+        while receipts.len() >= 256 {
+            // Find oldest candidate in order
+            let mut evicted_id = None;
+            for (idx, id) in order.iter().enumerate() {
+                if !retained.contains(id) {
+                    evicted_id = Some((idx, id.clone()));
+                    break;
+                }
+            }
+            if let Some((idx, id)) = evicted_id {
+                order.remove(idx);
+                receipts.remove(&id);
+            } else if let Some(oldest) = order.pop_front() {
+                retained.remove(&oldest);
+                receipts.remove(&oldest);
+            } else {
+                break;
+            }
+        }
+
+        if !receipts.contains_key(request_id) {
+            order.push_back(request_id.to_string());
         }
         receipts.insert(
             request_id.to_string(),
@@ -97,6 +128,11 @@ impl WorkerClient {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .remove(request_id);
+            RECEIPT_ORDER
+                .get_or_init(|| Mutex::new(VecDeque::new()))
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .retain(|id| id != request_id);
         }
     }
 
@@ -187,7 +223,14 @@ impl WorkerClient {
             return Ok(ev);
         }
 
-        match crate::engine::execute_native_worker(request.clone(), progress, cancel).await {
+        // Aborting the future that awaits this call is the outermost cancel
+        // signal there is: nothing else can reach into a `spawn_blocking` copy
+        // loop. Arm the flag for the duration of the work so a dropped future
+        // still stops the engine and releases the progress callback.
+        let mut abort_guard = CancelOnAbort(Some(cancel.clone()));
+        let outcome = crate::engine::execute_native_worker(request.clone(), progress, cancel).await;
+        abort_guard.0 = None;
+        match outcome {
             Ok(event) => Ok(event),
             Err(err) if err == "Cancelled" => {
                 let mut ev = openunpack_protocol::WorkerEvent::default();
@@ -220,6 +263,129 @@ impl WorkerClient {
     }
 }
 
+/// Sets the job's cancel flag when the awaiting future is dropped.
+///
+/// The native engine runs copies on `spawn_blocking`, which cannot be aborted
+/// by dropping its handle. Without this guard an aborted `run` keeps copying
+/// the whole archive and keeps the progress callback (and everything it
+/// captures) alive until the copy finishes on its own.
+struct CancelOnAbort(Option<std::sync::Arc<std::sync::atomic::AtomicBool>>);
+
+impl Drop for CancelOnAbort {
+    fn drop(&mut self) {
+        if let Some(flag) = &self.0 {
+            flag.store(true, std::sync::atomic::Ordering::Release);
+        }
+    }
+}
+
+#[cfg(windows)]
+pub fn process_identity_exited(pid: u32, creation: u64) -> Result<bool, String> {
+    use windows_sys::Win32::Foundation::{CloseHandle, FILETIME};
+    use windows_sys::Win32::System::Threading::{
+        GetExitCodeProcess, GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    const STILL_ACTIVE: u32 = 259;
+
+    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if handle.is_null() {
+        return Ok(true);
+    }
+    let mut created = FILETIME::default();
+    let mut exit = FILETIME::default();
+    let mut kernel = FILETIME::default();
+    let mut user = FILETIME::default();
+    let has_times =
+        unsafe { GetProcessTimes(handle, &mut created, &mut exit, &mut kernel, &mut user) } != 0;
+    if !has_times {
+        unsafe { CloseHandle(handle) };
+        return Ok(true);
+    }
+    let proc_created = (u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime);
+    if proc_created != creation {
+        unsafe { CloseHandle(handle) };
+        return Ok(true);
+    }
+    let mut exit_code: u32 = 0;
+    let has_exit = unsafe { GetExitCodeProcess(handle, &mut exit_code) } != 0;
+    unsafe { CloseHandle(handle) };
+    if has_exit {
+        Ok(exit_code != STILL_ACTIVE)
+    } else {
+        Ok(true)
+    }
+}
+
+#[cfg(not(windows))]
 pub fn process_identity_exited(_pid: u32, _creation: u64) -> Result<bool, String> {
     Ok(true)
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_receipts_fifo_eviction() {
+        let client = WorkerClient {
+            executable: PathBuf::new(),
+            engine: PathBuf::new(),
+        };
+
+        // Register 300 requests (exceeding 256 limit)
+        for i in 0..300 {
+            let req_id = format!("req-{}", i);
+            let res = client.register_no_process(&req_id);
+            assert!(
+                res.is_ok(),
+                "Request {} should succeed without ResourceLimit error",
+                i
+            );
+        }
+
+        // The oldest requests should have been evicted by FIFO
+        assert!(client.request_exit_receipt("req-0").is_none());
+        assert!(client.request_exit_receipt("req-43").is_none());
+        // The most recent requests should still be present
+        assert!(client.request_exit_receipt("req-299").is_some());
+        assert!(client.request_exit_receipt("req-298").is_some());
+    }
+
+    #[test]
+    fn test_process_identity_exited() {
+        // Non-existent PID must report exited
+        assert!(process_identity_exited(999_999_999, 12345).unwrap());
+
+        #[cfg(windows)]
+        {
+            use windows_sys::Win32::Foundation::FILETIME;
+            use windows_sys::Win32::System::Threading::{
+                GetCurrentProcess, GetCurrentProcessId, GetProcessTimes,
+            };
+            let pid = unsafe { GetCurrentProcessId() };
+            let mut created = FILETIME::default();
+            let mut exit = FILETIME::default();
+            let mut kernel = FILETIME::default();
+            let mut user = FILETIME::default();
+            assert_ne!(
+                unsafe {
+                    GetProcessTimes(
+                        GetCurrentProcess(),
+                        &mut created,
+                        &mut exit,
+                        &mut kernel,
+                        &mut user,
+                    )
+                },
+                0
+            );
+            let proc_created =
+                (u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime);
+
+            // Mismatched creation time on running process must report exited (PID reused)
+            assert!(process_identity_exited(pid, proc_created + 100).unwrap());
+
+            // Exact match on currently running process must report NOT exited
+            assert!(!process_identity_exited(pid, proc_created).unwrap());
+        }
+    }
 }

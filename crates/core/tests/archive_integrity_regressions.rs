@@ -42,7 +42,9 @@ impl Rig {
         let engine = std::env::var_os("OPENUNPACK_TEST_ENGINE")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("native-engine"));
-        let seven_zip = repository.join("tools/7zip/7z.exe");
+        let seven_zip = std::env::var_os("OPENUNPACK_7Z_PATH")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| repository.join("tools/7zip/7z.exe"));
         let temporary = Builder::new()
             .prefix("openunpack-archive-integrity-")
             .tempdir()

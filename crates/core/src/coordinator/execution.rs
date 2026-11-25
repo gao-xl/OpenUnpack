@@ -1,4 +1,65 @@
+//! Job execution pipeline.
+//!
+//! `run_job` used to be a single 1033-line function: source resolution,
+//! workspace resume, password probing, extraction, publication and cleanup all
+//! shared one scope. Every new rule had to be threaded through that scope, and
+//! no stage could be tested on its own. The pipeline is now split along its
+//! natural seams:
+//!
+//! * [`Coordinator::resolve_source`] — validate and authorise the archive group.
+//! * [`Coordinator::prepare_workspace`] — resume a saved run or create a new one.
+//! * [`Coordinator::run_nodes`] — drive the derivation tree node by node.
+//! * [`Coordinator::finalize_run`] — publish, verify and retire the workspace.
+//!
+//! The node body itself is split into candidate collection, probe, extraction,
+//! external-password wait and commit. Behaviour is unchanged: every moved block
+//! is the original code with its surrounding state passed explicitly.
+
 use super::*;
+
+/// A workspace that is ready for the node loop.
+struct PreparedRun {
+    source: SourceGroup,
+    witnesses: Vec<SourceWitness>,
+    route: ExtractionRoute,
+    parent: PathBuf,
+    work: PathBuf,
+    state: SavedRun,
+    lease: Option<paths::DirectoryGuard>,
+}
+
+/// Everything one node of the derivation tree may touch.
+///
+/// Grouping it keeps the helpers below at a readable arity and makes the
+/// mutation points obvious: only `job`, `state` and `index` ever change.
+pub(super) struct NodeRun<'a> {
+    pub(super) job: &'a mut JobView,
+    pub(super) state: &'a mut SavedRun,
+    pub(super) node: &'a NodeWork,
+    pub(super) index: usize,
+    pub(super) work: &'a Path,
+    pub(super) parent: &'a Path,
+    pub(super) route: &'a ExtractionRoute,
+    pub(super) settings: &'a Settings,
+    pub(super) snapshot: &'a [Candidate],
+    pub(super) cancel: Arc<AtomicBool>,
+}
+
+/// What the node loop should do with the node it just processed.
+pub(super) enum NodeOutcome {
+    /// The node was re-queued at the front (an external password arrived).
+    Retry,
+    /// The node is settled; move on to the next one.
+    Advance,
+}
+
+/// A successful extraction of one node, before it is committed to the run.
+pub(super) struct Decoded {
+    pub(super) dest: PathBuf,
+    pub(super) files: Vec<FileRecord>,
+    pub(super) success: Option<SuccessEvent>,
+    pub(super) verification_scope: String,
+}
 
 impl Coordinator {
     pub(super) async fn extraction_size_hint(
@@ -35,6 +96,8 @@ impl Coordinator {
             Err(code) => Err(code),
         }
     }
+
+    /// Runs one job from source resolution to workspace retirement.
     pub(super) async fn run_job(
         self: &Arc<Self>,
         job: &mut JobView,
@@ -47,6 +110,56 @@ impl Coordinator {
         let s = job.options.clone();
         validate_settings(&s)?;
 
+        let (source, is_inplace) = self.resolve_source(job, &s).await?;
+        if is_inplace {
+            return self.run_inplace_job(job, &source, cancel).await;
+        }
+        let witnesses = source_witnesses(&source)?;
+        let mut prepared = self
+            .prepare_workspace(
+                job,
+                &s,
+                &source,
+                &witnesses,
+                cancel.clone(),
+                allow_partial,
+                selected,
+            )
+            .await?;
+
+        self.run_nodes(
+            job,
+            &s,
+            &prepared.route,
+            &prepared.parent,
+            &prepared.work,
+            &mut prepared.state,
+            cancel.clone(),
+            allow_partial,
+        )
+        .await?;
+
+        self.finalize_run(
+            job,
+            &s,
+            &prepared.source,
+            &prepared.witnesses,
+            &prepared.route,
+            &prepared.work,
+            &mut prepared.state,
+            prepared.lease,
+            cancel,
+            allow_partial,
+        )
+        .await
+    }
+
+    /// Validates the source group and reports whether this is an in-place run.
+    async fn resolve_source(
+        self: &Arc<Self>,
+        job: &mut JobView,
+        s: &Settings,
+    ) -> Result<(SourceGroup, bool), String> {
         let archive_path = Path::new(&job.source.path);
         let is_inplace = s.in_place();
 
@@ -59,7 +172,12 @@ impl Coordinator {
             self.authorize_execution(job, &source)?;
             source
         } else {
-            let scan = scanner::scan(std::slice::from_ref(&job.source.path), false, &[])?;
+            let path = job.source.path.clone();
+            let scan = tokio::task::spawn_blocking(move || {
+                scanner::scan(std::slice::from_ref(&path), false, &[])
+            })
+            .await
+            .map_err(|e| e.to_string())??;
             let source = scan
                 .sources
                 .into_iter()
@@ -71,14 +189,26 @@ impl Coordinator {
             }
             source
         };
+        Ok((source, is_inplace))
+    }
 
-        // 统一调度分发：原地缩容微内核自包含落盘，直接调度执行
-        if is_inplace {
-            return self.run_inplace_job(job, &source, cancel).await;
-        }
-        let witnesses = source_witnesses(&source)?;
-        let mut route = self.decide_route(&s, &source)?;
-        let mut parent = self.workspace_parent(&s, &source, &route)?;
+    /// Reuses a saved run when it is byte-identical, otherwise creates a
+    /// fresh workspace (copying volumes to the cache when routing asks for it).
+    #[allow(clippy::too_many_arguments)]
+    async fn prepare_workspace(
+        self: &Arc<Self>,
+        job: &mut JobView,
+        s: &Settings,
+        source: &SourceGroup,
+        witnesses: &[SourceWitness],
+        cancel: Arc<AtomicBool>,
+        allow_partial: bool,
+        selected: Option<&HashSet<String>>,
+    ) -> Result<PreparedRun, String> {
+        let source = source.clone();
+        let witnesses = witnesses.to_vec();
+        let mut route = self.decide_route(s, &source)?;
+        let mut parent = self.workspace_parent(s, &source, &route)?;
         // A run owns one immutable extraction configuration. Output/verification changes
         // can reuse sealed nodes; extraction-rule changes require a new generation.
         let mut resume = None;
@@ -94,20 +224,21 @@ impl Coordinator {
                 }
                 if saved.source.volumes == source.volumes
                     && saved.witnesses == witnesses
-                    && extraction_compatible(&saved.options, &s)
+                    && extraction_compatible(&saved.options, s)
                 {
                     resume = Some((old_path.to_path_buf(), saved));
                 }
             }
         }
-        let (work, mut state) = if let Some((work, mut saved)) = resume {
+
+        let (work, state) = if let Some((work, mut saved)) = resume {
             // A changed policy/free-space probe can select a different new
             // workspace. Resumption must budget the retained directory itself.
             (route, parent) = resumed_storage_route(
                 &saved.options,
                 &saved.source,
                 &work,
-                output_root(&s, &source)?,
+                output_root(s, &source)?,
             )?;
             if saved.expanded > s.max_expanded_bytes || saved.entries > s.max_entries {
                 return Err("ResourceLimit".into());
@@ -131,7 +262,7 @@ impl Coordinator {
                     .cloned()
                     .collect();
                 validate_target_tree(&input, &expected)?;
-                let mut req = request("readback", &input, &s);
+                let mut req = request("readback", &input, s);
                 req.files = expected;
                 self.request(job, req, cancel.clone()).await?;
             }
@@ -139,14 +270,14 @@ impl Coordinator {
                 self.checkpoint(&cancel).await?;
                 let expected = retained_sealed_files(sealed, &saved.retired_files)?;
                 validate_target_tree(&sealed.directory, &expected)?;
-                let mut req = request("readback", &sealed.directory, &s);
+                let mut req = request("readback", &sealed.directory, s);
                 req.files = expected;
                 self.request(job, req, cancel.clone()).await?;
             }
             if migrated {
                 // Do not commit inferred v1 retirement until every retained byte
                 // has passed the same readback verification as a native v2 run.
-                save_run(&work, &saved)?;
+                save_run_async(&work, &saved).await?;
             }
             // Do not re-run failed nodes for an explicit partial delivery. Their original
             // archive bytes remain in the parent's sealed manifest and final mapping.
@@ -165,148 +296,227 @@ impl Coordinator {
             self.put(job)?;
             (work, saved)
         } else {
-            if allow_partial || selected.is_some() {
-                return Err("无可用缓存目录，请重试整个任务。".into());
-            }
-            // Retiring an old generation or another job can prune this shared
-            // cache parent. Pin it until the new workspace owns its own lease.
-            let parent_lease = paths::DirectoryGuard::create(&parent).map_err(|_| "UnsafePath")?;
-            if let Some(old) = job.workspace.clone() {
-                drop(workspace_lease.take());
-                // Keep the workspace association until removal actually succeeds: a
-                // partial cleanup must stay retryable and keep its UI cleanup entry.
-                if let Err(code) = remove_owned_retrying_async(Path::new(&old), &job.id).await {
-                    job.message = message(&code);
-                    self.put(job)?;
-                    return Err(code);
-                }
-                job.workspace = None;
-            }
-            let work = parent.join(format!("{}-{}", job.id, job.attempts));
-            paths::mark_owned(&work, &job.id, "")?;
-            workspace_lease = Some(lock_private_workspace(&work)?);
-            drop(parent_lease);
-            job.workspace = Some(paths::path_string(&work));
-            job.nodes.clear();
-            job.stage_times.clear();
-            let should_cache_input = match &route {
-                ExtractionRoute::SsdCache { score, reason, .. } => {
-                    job.message = format!("使用中转缓存 [评分: {}]: {}", score, reason);
-                    s.cache_enabled && s.cache_input
-                }
-                ExtractionRoute::Direct { reason, .. } => {
-                    job.message = format!("直接解压模式: {}", reason);
-                    false
-                }
-            };
-            self.put(job)?;
-            let mut group = source.clone();
-            let mut fingerprint = None;
-            let mut input_files = vec![];
-            if should_cache_input {
-                self.stage(job, "caching", "正在将分卷文件复制到缓存。")?;
-                let claim =
-                    self.claim_budget_for_job(&job.id, &s, &route, &parent, Some(source.size))?;
-                let budget = claim.budget();
-                if source.size > budget {
-                    return Err("ResourceLimit".into());
-                }
-                let input = work.join("input");
-                paths::DirectoryGuard::create(&input).map_err(|_| "UnsafePath")?;
-                let files = source
-                    .volumes
-                    .iter()
-                    .map(|p| {
-                        let path = Path::new(p);
-                        CopyFile {
-                            size_known: true,
-                            source_path: p.clone(),
-                            relative_path: path
-                                .file_name()
-                                .unwrap_or_default()
-                                .to_string_lossy()
-                                .into(),
-                            size: fs::metadata(path).map(|m| m.len()).unwrap_or(u64::MAX),
-                            sha256: String::new(),
-                            is_directory: false,
-                            is_corrupted: false,
-                        }
-                    })
-                    .collect();
-                let mut req = request("copy", &input, &s);
-                req.files = files;
-                req.max_written_bytes = budget;
-                let result = self.request(job, req, cancel.clone()).await?;
-                // Bind ordered content, never filenames: a renamed archive/volume group
-                // therefore still resolves to the same successful-password association.
-                let mut hashes = vec![];
-                for path in &source.volumes {
-                    let name = Path::new(path)
-                        .file_name()
-                        .ok_or("UnsafePath")?
-                        .to_string_lossy();
-                    let f = result
-                        .files
-                        .iter()
-                        .find(|f| f.relative_path.eq_ignore_ascii_case(&name))
-                        .ok_or("ProtocolError")?;
-                    hashes.push((f.size, f.sha256.clone()));
-                    input_files.push(CopyFile {
-                        size_known: true,
-                        source_path: paths::path_string(
-                            &input.join(paths::relative(&f.relative_path)?),
-                        ),
-                        relative_path: f.relative_path.clone(),
-                        size: f.size,
-                        sha256: f.sha256.clone(),
-                        is_directory: false,
-                        is_corrupted: f.is_corrupted,
-                    });
-                }
-                fingerprint = Some(content_fingerprint(&hashes)?);
-                group.path = paths::path_string(
-                    &input.join(Path::new(&source.path).file_name().ok_or("UnsafePath")?),
-                );
-                group.volumes = source
-                    .volumes
-                    .iter()
-                    .map(|p| {
-                        paths::path_string(
-                            &input.join(Path::new(p).file_name().unwrap_or_default()),
-                        )
-                    })
-                    .collect();
-                verify_witnesses(&source, &witnesses)?;
-            }
-            let root = NodeWork {
-                id: uid(),
-                group,
-                prefix: PathBuf::new(),
-                depth: 0,
-                parent: None,
-            };
-            let state = SavedRun {
-                version: 2,
-                job_id: job.id.clone(),
-                source: source.clone(),
-                witnesses: witnesses.clone(),
-                options: s.clone(),
-                input_files,
-                input_retired: false,
-                fingerprint,
-                pending: VecDeque::from([root]),
-                failed: vec![],
-                sealed: vec![],
-                final_files: vec![],
-                events: vec![],
-                expanded: 0,
-                entries: 0,
-                views: vec![],
-                retired_files: HashSet::new(),
-            };
-            save_run(&work, &state)?;
-            (work, state)
+            self.create_fresh_workspace(
+                job,
+                s,
+                &source,
+                &witnesses,
+                &route,
+                &parent,
+                &mut workspace_lease,
+                cancel.clone(),
+                allow_partial,
+                selected,
+            )
+            .await?
         };
+
+        Ok(PreparedRun {
+            source,
+            witnesses,
+            route,
+            parent,
+            work,
+            state,
+            lease: workspace_lease,
+        })
+    }
+
+    /// Builds a brand new workspace generation: retires the previous one,
+    /// optionally stages the volumes in the SSD cache, and persists the plan.
+    #[allow(clippy::too_many_arguments)]
+    async fn create_fresh_workspace(
+        self: &Arc<Self>,
+        job: &mut JobView,
+        s: &Settings,
+        source: &SourceGroup,
+        witnesses: &[SourceWitness],
+        route: &ExtractionRoute,
+        parent: &Path,
+        workspace_lease: &mut Option<paths::DirectoryGuard>,
+        cancel: Arc<AtomicBool>,
+        allow_partial: bool,
+        selected: Option<&HashSet<String>>,
+    ) -> Result<(PathBuf, SavedRun), String> {
+        if allow_partial || selected.is_some() {
+            return Err("无可用缓存目录，请重试整个任务。".into());
+        }
+        // Retiring an old generation or another job can prune this shared
+        // cache parent. Pin it until the new workspace owns its own lease.
+        let parent_lease = paths::DirectoryGuard::create(parent).map_err(|_| "UnsafePath")?;
+        if let Some(old) = job.workspace.clone() {
+            drop(workspace_lease.take());
+            // Keep the workspace association until removal actually succeeds: a
+            // partial cleanup must stay retryable and keep its UI cleanup entry.
+            if let Err(code) = remove_owned_retrying_async(Path::new(&old), &job.id).await {
+                job.message = message(&code);
+                self.put(job)?;
+                return Err(code);
+            }
+            job.workspace = None;
+        }
+        let work = parent.join(format!("{}-{}", job.id, job.attempts));
+        paths::mark_owned(&work, &job.id, "")?;
+        *workspace_lease = Some(lock_private_workspace(&work)?);
+        drop(parent_lease);
+        job.workspace = Some(paths::path_string(&work));
+        job.nodes.clear();
+        job.stage_times.clear();
+        let should_cache_input = match route {
+            ExtractionRoute::SsdCache { score, reason, .. } => {
+                job.message = format!("使用中转缓存 [评分: {}]: {}", score, reason);
+                s.cache_enabled && s.cache_input
+            }
+            ExtractionRoute::Direct { reason, .. } => {
+                job.message = format!("直接解压模式: {}", reason);
+                false
+            }
+        };
+        self.put(job)?;
+
+        let (group, fingerprint, input_files) = if should_cache_input {
+            self.cache_input(job, s, route, parent, &work, source, witnesses, cancel)
+                .await?
+        } else {
+            (source.clone(), None, vec![])
+        };
+
+        let root = NodeWork {
+            id: uid(),
+            group,
+            prefix: PathBuf::new(),
+            depth: 0,
+            parent: None,
+        };
+        let state = SavedRun {
+            version: 2,
+            job_id: job.id.clone(),
+            source: source.clone(),
+            witnesses: witnesses.to_vec(),
+            options: s.clone(),
+            input_files,
+            input_retired: false,
+            fingerprint,
+            pending: VecDeque::from([root]),
+            failed: vec![],
+            sealed: vec![],
+            final_files: vec![],
+            events: vec![],
+            expanded: 0,
+            entries: 0,
+            views: vec![],
+            retired_files: HashSet::new(),
+        };
+        save_run_async(&work, &state).await?;
+        Ok((work, state))
+    }
+
+    /// Copies the archive volumes into the workspace cache and fingerprints the
+    /// ordered content (never the filenames).
+    #[allow(clippy::too_many_arguments)]
+    async fn cache_input(
+        self: &Arc<Self>,
+        job: &mut JobView,
+        s: &Settings,
+        route: &ExtractionRoute,
+        parent: &Path,
+        work: &Path,
+        source: &SourceGroup,
+        witnesses: &[SourceWitness],
+        cancel: Arc<AtomicBool>,
+    ) -> Result<(SourceGroup, Option<String>, Vec<CopyFile>), String> {
+        let mut group = source.clone();
+        let mut input_files = vec![];
+        self.stage(job, "caching", "正在将分卷文件复制到缓存。")?;
+        let claim = self.claim_budget_for_job(&job.id, s, route, parent, Some(source.size))?;
+        let budget = claim.budget();
+        if source.size > budget {
+            return Err("ResourceLimit".into());
+        }
+        let input = work.join("input");
+        paths::DirectoryGuard::create(&input).map_err(|_| "UnsafePath")?;
+        let volumes_clone = source.volumes.clone();
+        let files = tokio::task::spawn_blocking(move || -> Result<Vec<CopyFile>, String> {
+            let mut list = Vec::with_capacity(volumes_clone.len());
+            for p in &volumes_clone {
+                let path = Path::new(p);
+                // A missing/unreadable source must fail the job explicitly; a
+                // sentinel size here would overflow the summed budget below.
+                let size = fs::metadata(path)
+                    .map(|m| m.len())
+                    .map_err(|e| format!("IoError: {e}"))?;
+                list.push(CopyFile {
+                    size_known: true,
+                    source_path: p.clone(),
+                    relative_path: path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into(),
+                    size,
+                    sha256: String::new(),
+                    is_directory: false,
+                    is_corrupted: false,
+                });
+            }
+            Ok(list)
+        })
+        .await
+        .map_err(|e| e.to_string())??;
+        let mut req = request("copy", &input, s);
+        req.files = files;
+        req.max_written_bytes = budget;
+        let result = self.request(job, req, cancel).await?;
+        // Bind ordered content, never filenames: a renamed archive/volume group
+        // therefore still resolves to the same successful-password association.
+        let mut hashes = vec![];
+        for path in &source.volumes {
+            let name = Path::new(path)
+                .file_name()
+                .ok_or("UnsafePath")?
+                .to_string_lossy();
+            let f = result
+                .files
+                .iter()
+                .find(|f| f.relative_path.eq_ignore_ascii_case(&name))
+                .ok_or("ProtocolError")?;
+            hashes.push((f.size, f.sha256.clone()));
+            input_files.push(CopyFile {
+                size_known: true,
+                source_path: paths::path_string(&input.join(paths::relative(&f.relative_path)?)),
+                relative_path: f.relative_path.clone(),
+                size: f.size,
+                sha256: f.sha256.clone(),
+                is_directory: false,
+                is_corrupted: f.is_corrupted,
+            });
+        }
+        let fingerprint = Some(content_fingerprint(&hashes)?);
+        group.path = paths::path_string(
+            &input.join(Path::new(&source.path).file_name().ok_or("UnsafePath")?),
+        );
+        group.volumes = source
+            .volumes
+            .iter()
+            .map(|p| paths::path_string(&input.join(Path::new(p).file_name().unwrap_or_default())))
+            .collect();
+        verify_witnesses(source, witnesses)?;
+        Ok((group, fingerprint, input_files))
+    }
+
+    /// Processes every pending node until the derivation tree is drained.
+    #[allow(clippy::too_many_arguments)]
+    async fn run_nodes(
+        self: &Arc<Self>,
+        job: &mut JobView,
+        s: &Settings,
+        route: &ExtractionRoute,
+        parent: &Path,
+        work: &Path,
+        state: &mut SavedRun,
+        cancel: Arc<AtomicBool>,
+        allow_partial: bool,
+    ) -> Result<(), String> {
         // Freeze the finite saved-password snapshot for this generation. Password edits
         // during decoding do not mutate its candidates or recorded revisions.
         let snapshot = unique_candidates(
@@ -323,6 +533,7 @@ impl Coordinator {
                 })
                 .unwrap_or_default(),
         );
+
         while let Some(node) = state.pending.front().cloned() {
             self.checkpoint(&cancel).await?;
             if allow_partial {
@@ -331,738 +542,269 @@ impl Coordinator {
                 state
                     .views
                     .push(node_view(&node, "failed", "内层包未完成，保留原压缩文件。"));
-                save_run(&work, &state)?;
+                save_run_async(work, state).await?;
                 continue;
             }
-            let node_index =
-                if let Some(index) = state.views.iter().position(|view| view.id == node.id) {
-                    index
-                } else {
+            let index = match state.views.iter().position(|view| view.id == node.id) {
+                Some(index) => index,
+                None => {
                     state.views.push(node_view(&node, "running", ""));
                     state.views.len() - 1
-                };
-            state.views[node_index].status = "running".into();
-            state.views[node_index].stage = "extracting".into();
-            state.views[node_index].message = String::new();
-            job.nodes = state.views.clone();
-            self.stage(
-                job,
-                if node.depth == 0 {
-                    "extracting"
-                } else {
-                    "nested"
-                },
-                "正在解压并尝试已保存的密码。",
-            )?;
-            let node_fingerprint = if node.depth == 0 {
-                state.fingerprint.clone()
-            } else {
-                fingerprint_for_group(&node.group, &state.final_files)?
+                }
             };
-            let mut candidates = prioritize_snapshot(
-                &snapshot,
-                self.vault()
-                    .and_then(|v| {
-                        v.candidates(
-                            if s.password_group.is_empty() {
-                                None
-                            } else {
-                                Some(&s.password_group)
-                            },
-                            node_fingerprint.as_deref(),
-                        )
-                    })
-                    .unwrap_or_default(),
-            );
-            if let Ok(ephem_map) = self.ephemeral_passwords.lock()
-                && let Some(list) = ephem_map.get(&job.id)
-            {
-                for (idx, secret) in list.iter().enumerate() {
-                    if !candidates
-                        .iter()
-                        .any(|c| c.secret.as_str() == secret.as_str())
+            let mut run = NodeRun {
+                job: &mut *job,
+                state: &mut *state,
+                node: &node,
+                index,
+                work,
+                parent,
+                route,
+                settings: s,
+                snapshot: &snapshot,
+                cancel: cancel.clone(),
+            };
+            match self.process_node(&mut run).await? {
+                NodeOutcome::Retry => continue,
+                NodeOutcome::Advance => {}
+            }
+        }
+        Ok(())
+    }
+
+    /// Extracts one node and commits its result to the run.
+    async fn process_node(self: &Arc<Self>, run: &mut NodeRun<'_>) -> Result<NodeOutcome, String> {
+        run.state.views[run.index].status = "running".into();
+        run.state.views[run.index].stage = "extracting".into();
+        run.state.views[run.index].message = String::new();
+        run.job.nodes = run.state.views.clone();
+        self.stage(
+            run.job,
+            if run.node.depth == 0 {
+                "extracting"
+            } else {
+                "nested"
+            },
+            "正在解压并尝试已保存的密码。",
+        )?;
+
+        let node_fingerprint = if run.node.depth == 0 {
+            run.state.fingerprint.clone()
+        } else {
+            fingerprint_for_group(&run.node.group, &run.state.final_files)?
+        };
+        let candidates = self.collect_candidates(run, node_fingerprint.clone())?;
+        let mut decoded = None;
+        let failure;
+
+        if run.node.group.missing_volume {
+            failure = "MissingVolume".to_string();
+        } else {
+            let (attempts, probed_failure, skip_extraction) =
+                self.probe_attempts(run, &candidates).await?;
+            if skip_extraction {
+                failure = probed_failure;
+            } else {
+                let (extracted, code) = self.try_extract(run, attempts, node_fingerprint).await?;
+                decoded = extracted;
+                failure = code;
+            }
+        }
+
+        run.state.pending.pop_front();
+        let Some(decoded) = decoded else {
+            return self.settle_failed_node(run, failure).await;
+        };
+        self.commit_decoded_node(run, decoded).await?;
+        Ok(NodeOutcome::Advance)
+    }
+
+    /// Folds a successful extraction into the run: budgets, final mapping,
+    /// sealed manifest, nested discovery, and workspace housekeeping.
+    async fn commit_decoded_node(
+        self: &Arc<Self>,
+        run: &mut NodeRun<'_>,
+        decoded: Decoded,
+    ) -> Result<(), String> {
+        let s = run.settings;
+        let node = run.node;
+        let index = run.index;
+        let work = run.work;
+        let job_id = run.job.id.clone();
+        let Decoded {
+            dest,
+            files,
+            success: event_success,
+            verification_scope,
+        } = decoded;
+
+        for file in &files {
+            paths::relative(&file.relative_path)?;
+        }
+        let bytes = files.iter().try_fold(0u64, |sum, file| {
+            sum.checked_add(file.size).ok_or("ResourceLimit")
+        })?;
+        run.state.expanded = run
+            .state
+            .expanded
+            .checked_add(bytes)
+            .ok_or("ResourceLimit")?;
+        run.state.entries = run
+            .state
+            .entries
+            .checked_add(files.len() as u64)
+            .ok_or("ResourceLimit")?;
+        if run.state.expanded > s.max_expanded_bytes || run.state.entries > s.max_entries {
+            return Err("ResourceLimit".into());
+        }
+        if node.depth > 0 {
+            let consumed: HashSet<_> = node
+                .group
+                .volumes
+                .iter()
+                .map(|p| p.to_lowercase())
+                .collect();
+            run.state
+                .final_files
+                .retain(|f| !consumed.contains(&f.source_path.to_lowercase()));
+            run.state.retired_files.extend(consumed);
+        }
+        let fixed_relatives: Option<Vec<PathBuf>> = if s.auto_fix_encoding {
+            crate::zip_encoding::probe_zip_encoding(Path::new(&node.group.path))
+                .ok()
+                .and_then(|probe| {
+                    if probe.detected_encoding == "UTF-8"
+                        || probe.detected_encoding == "ASCII"
+                        || probe.decoded_paths.len() != files.len()
                     {
-                        candidates.insert(
-                            idx,
-                            Candidate {
-                                id: format!("ephemeral-{}-{}", job.id, idx),
-                                label: "即时输入密码".into(),
-                                secret: secret.to_string(),
-                                revision: 0,
-                            },
-                        );
+                        return None;
                     }
-                }
-            }
-            let archive_p = Path::new(&node.group.path);
-            let mut mined_hints = Vec::new();
-            if let Some(file_name) = archive_p.file_name().and_then(|n| n.to_str()) {
-                mined_hints.extend(scanner::extract_passwords_from_filename(file_name));
-            }
-            let companion_policy = self.execution_policy(&job.id)?;
-            mined_hints.extend(scanner::sniff_accompanying_passwords_authorized(
-                archive_p,
-                |path| {
-                    companion_policy
-                        .as_ref()
-                        .is_none_or(|policy| policy.authorize_path(path, false).is_ok())
-                },
-            ));
-
-            let mut seen_mined = std::collections::HashSet::new();
-            let mut unique_mined = Vec::new();
-            for hint in mined_hints {
-                if seen_mined.insert(hint.clone()) {
-                    unique_mined.push(hint);
-                }
-            }
-
-            // Filename and companion-file hints can prioritize an already
-            // authorized candidate, never introduce an unsaved/group-excluded secret.
-            for hint in unique_mined.into_iter().rev() {
-                if let Some(pos) = candidates.iter().position(|c| c.secret == hint) {
-                    let matched = candidates.remove(pos);
-                    candidates.insert(0, matched);
-                }
-            }
-            let mutations = crate::vault::derive_candidate_mutations(&candidates);
-            for mut_cand in mutations {
-                if !candidates.iter().any(|c| c.secret == mut_cand.secret) {
-                    candidates.push(mut_cand);
-                }
-            }
-            let mut decoded = None;
-            let mut failure = "NeedsPassword".to_string();
-            if node.group.missing_volume {
-                failure = "MissingVolume".into();
-            } else {
-                let mut attempts_to_try: Vec<Option<Candidate>> = Vec::new();
-                let mut skip_extraction = false;
-
-                // A request carries at most the negotiated candidate batch limit.
-                // Empty vaults still probe once to distinguish ordinary archives.
-                let batches: Vec<&[Candidate]> = if candidates.is_empty() {
-                    vec![&[]]
-                } else {
-                    candidates.chunks(128).collect()
-                };
-                for (batch_index, batch) in batches.iter().enumerate() {
-                    let mut probe_req = request("probe", &work, &s);
-                    probe_req.archive_path = node.group.path.clone();
-                    probe_req.allowed_volumes = node.group.volumes.clone();
-                    probe_req.max_entries = s.max_entries;
-                    probe_req.max_total_bytes = s.max_expanded_bytes;
-                    probe_req.max_written_bytes = s.max_expanded_bytes;
-                    probe_req.candidates = batch
-                        .iter()
-                        .map(|candidate| CandidateItem {
-                            candidate_id: candidate.id.clone(),
-                            source: if candidate.id.starts_with("ephemeral-") {
-                                "ephemeral".into()
-                            } else {
-                                "vault".into()
-                            },
-                            revision: candidate.revision,
-                            label: candidate.label.clone(),
-                            secret: candidate.secret.clone(),
-                        })
-                        .collect();
-                    match self.request(job, probe_req, cancel.clone()).await {
-                        Ok(probe_event) => match probe_event.probe_status.as_deref() {
-                            Some("NoPasswordNeeded") => {
-                                attempts_to_try.push(None);
-                            }
-                            Some("Success") => {
-                                let candidate = probe_event
-                                    .matched_candidate_id
-                                    .as_deref()
-                                    .and_then(|matched| {
-                                        batch.iter().find(|candidate| candidate.id == matched)
-                                    })
-                                    .ok_or("WorkerProtocolError")?;
-                                attempts_to_try.push(Some(candidate.clone()));
-                            }
-                            Some("WrongPassword") => {
-                                if batch_index + 1 < batches.len() {
-                                    continue;
-                                }
-                                failure = "NeedsPassword".into();
-                                skip_extraction = true;
-                            }
-                            Some("MissingVolume") => {
-                                failure = "MissingVolume".into();
-                                skip_extraction = true;
-                            }
-                            Some("Corrupt") => {
-                                if s.salvage_corrupted {
-                                    attempts_to_try.push(None);
-                                    attempts_to_try.extend(candidates.iter().cloned().map(Some));
-                                } else {
-                                    failure = "Corrupt".into();
-                                    skip_extraction = true;
-                                }
-                            }
-                            Some("Unsupported") => {
-                                failure = "Unsupported".into();
-                                skip_extraction = true;
-                            }
-                            _ => {
-                                attempts_to_try.push(None);
-                                attempts_to_try.extend(candidates.iter().cloned().map(Some));
-                            }
-                        },
-                        Err(code)
-                            if matches!(
-                                code.as_str(),
-                                "Cancelled"
-                                    | "WorkerExitUnconfirmed"
-                                    | "WorkerProtocolError"
-                                    | "ProtocolError"
-                            ) =>
-                        {
-                            return Err(code);
-                        }
-                        Err(_) => {
-                            attempts_to_try.push(None);
-                            attempts_to_try.extend(candidates.iter().cloned().map(Some));
-                        }
-                    }
-                    break;
-                }
-
-                if !skip_extraction {
-                    for candidate_opt in attempts_to_try {
-                        self.checkpoint(&cancel).await?;
-                        let remaining = s.max_expanded_bytes.saturating_sub(state.expanded);
-                        if remaining == 0 || state.entries >= s.max_entries {
-                            return Err("ResourceLimit".into());
-                        }
-                        let needed = if matches!(route, ExtractionRoute::SsdCache { .. }) {
-                            self.extraction_size_hint(
-                                job,
-                                &node,
-                                &work,
-                                remaining,
-                                candidate_opt.as_ref(),
-                                cancel.clone(),
-                            )
-                            .await?
-                        } else {
-                            None
-                        };
-                        let claim =
-                            self.claim_budget_for_job(&job.id, &s, &route, &parent, needed)?;
-                        let budget = claim
-                            .budget()
-                            .min(s.max_expanded_bytes.saturating_sub(state.expanded));
-                        if budget == 0 || state.entries >= s.max_entries {
-                            return Err("ResourceLimit".into());
-                        }
-                        let dest = work.join(format!("node-{}-{}", node.id, uid()));
-                        paths::DirectoryGuard::create(&dest).map_err(|_| "UnsafePath")?;
-                        let mut req = request("extract", &dest, &s);
-                        req.archive_path = node.group.path.clone();
-                        req.allowed_volumes = node.group.volumes.clone();
-                        req.max_entries = s.max_entries - state.entries;
-                        req.max_total_bytes = budget;
-                        req.max_written_bytes = budget;
-                        if let Some(c) = &candidate_opt {
-                            req.password = Some(c.secret.clone());
-                        }
-                        let topo = self.job_disk_topology(Path::new(&node.group.path), &dest);
-                        if topo.source_is_hdd || topo.target_is_hdd {
-                            req.engine_threads = resolve_engine_threads_with_topology(
-                                s.engine_threads,
-                                s.concurrency,
-                                true,
-                            );
-                        }
-                        state.views[node_index].attempts += 1;
-                        job.nodes = state.views.clone();
-                        save_run(&work, &state)?;
-                        self.put(job)?;
-                        match self.request(job, req, cancel.clone()).await {
-                            Ok(mut event) => {
-                                let mut event_success = None;
-                                if event.password_used
-                                    && let Some(candidate) = &candidate_opt
-                                {
-                                    state.views[node_index].password_label =
-                                        Some(candidate.label.clone());
-                                    if !candidate.id.starts_with("ephemeral-") {
-                                        event_success = Some(SuccessEvent {
-                                            event_id: uid(),
-                                            password_id: candidate.id.clone(),
-                                            password_revision: candidate.revision,
-                                            fingerprint: node_fingerprint.clone(),
-                                        });
-                                    }
-                                }
-                                decoded = Some((
-                                    dest,
-                                    std::mem::take(&mut event.files),
-                                    event_success,
-                                    std::mem::take(&mut event.verification_scope),
-                                ));
-                                break;
-                            }
-                            Err(code)
-                                if matches!(
-                                    code.as_str(),
-                                    "NeedsPassword" | "PasswordMismatchOrCorrupt"
-                                ) =>
-                            {
-                                failure = code;
-                                paths::remove_inside_owned(&dest, &work, &job.id)?;
-                            }
-                            Err(code)
-                                if matches!(
-                                    code.as_str(),
-                                    "Corrupt"
-                                        | "CorruptArchive"
-                                        | "ExtractionFailed"
-                                        | "Unsupported"
-                                        | "MissingVolume"
-                                        | "UnsafePath"
-                                ) =>
-                            {
-                                failure = if matches!(
-                                    code.as_str(),
-                                    "CorruptArchive" | "ExtractionFailed"
-                                ) {
-                                    "Corrupt".into()
-                                } else {
-                                    code
-                                };
-                                paths::remove_inside_owned(&dest, &work, &job.id)?;
-                                break;
-                            }
-                            Err(code) => return Err(code),
-                        }
-                    }
-                }
-            }
-            state.pending.pop_front();
-            let Some((dest, files, event_success, verification_scope)) = decoded else {
-                if matches!(
-                    failure.as_str(),
-                    "NeedsPassword" | "PasswordMismatchOrCorrupt"
-                ) {
-                    let (tx, rx) = tokio::sync::oneshot::channel();
-                    if let Ok(mut pending) = self.pending_inputs.lock() {
-                        pending.insert(job.id.clone(), tx);
-                    }
-                    state.views[node_index].status = "needsPassword".into();
-                    state.views[node_index].message =
-                        "密码库未命中，等待外部密码输入回调...".into();
-                    job.nodes = state.views.clone();
-                    self.stage(
-                        job,
-                        "needsPassword",
-                        "密码库遍历完毕，等待外部客户端提供密码...",
-                    )?;
-                    let need_event = openunpack_protocol::NeedPasswordEvent {
-                        job_id: job.id.clone(),
-                        archive_path: node.group.path.clone(),
-                        timeout_seconds: 60,
-                        input_type: "password".into(),
-                    };
-                    let _ = self.need_input_broadcaster.send(need_event);
-
-                    // A plain `timeout` kept the request parked for the whole
-                    // minute even after a cancel. Poll the cancel set alongside
-                    // the reply so cancelling during the wait returns at once.
-                    let timeout_secs = std::env::var("OPENUNPACK_NEED_PASSWORD_TIMEOUT_SECS")
-                        .ok()
-                        .and_then(|v| v.parse().ok())
-                        .unwrap_or_else(|| {
-                            if cfg!(test) || std::env::var_os("CARGO_MANIFEST_DIR").is_some() {
-                                1
-                            } else {
-                                60
-                            }
-                        });
-                    let deadline = tokio::time::Instant::now() + Duration::from_secs(timeout_secs);
-                    let mut receiver = rx;
-                    let mut external: Option<String> = None;
-                    loop {
-                        let cancelled = self
-                            .cancelled_jobs
-                            .lock()
-                            .map(|set| set.contains(&job.id))
-                            .unwrap_or(false);
-                        if cancelled {
-                            if let Ok(mut pending) = self.pending_inputs.lock() {
-                                pending.remove(&job.id);
-                            }
-                            return Err("Cancelled".into());
-                        }
-                        let remaining =
-                            deadline.saturating_duration_since(tokio::time::Instant::now());
-                        if remaining.is_zero() {
-                            break;
-                        }
-                        match tokio::time::timeout(
-                            remaining.min(Duration::from_millis(200)),
-                            &mut receiver,
-                        )
-                        .await
-                        {
-                            Ok(Ok(value)) => {
-                                external = Some(value);
-                                break;
-                            }
-                            Ok(Err(_)) => break,
-                            Err(_) => continue,
-                        }
-                    }
-                    if let Some(external_pwd) = external.filter(|value| !value.trim().is_empty()) {
-                        if let Ok(mut ephem_map) = self.ephemeral_passwords.lock() {
-                            ephem_map
-                                .entry(job.id.clone())
-                                .or_default()
-                                .push(zeroize::Zeroizing::new(external_pwd.clone()));
-                        }
-                        candidates.insert(
-                            0,
-                            Candidate {
-                                id: format!("callback-{}-{}", job.id, uid()),
-                                label: "外部输入密码".into(),
-                                secret: external_pwd,
-                                revision: 0,
-                            },
-                        );
-                        state.pending.push_front(node.clone());
-                        save_run(&work, &state)?;
-                        continue;
-                    }
-                    if let Ok(mut pending) = self.pending_inputs.lock() {
-                        pending.remove(&job.id);
-                    }
-                }
-                state.views[node_index].status = if matches!(
-                    failure.as_str(),
-                    "NeedsPassword" | "PasswordMismatchOrCorrupt"
-                ) {
-                    "needsPassword"
-                } else {
-                    "failed"
-                }
-                .into();
-                state.views[node_index].message = message(&failure);
-                state.failed.push((node.clone(), failure.clone()));
-                save_run(&work, &state)?;
-                job.nodes = state.views.clone();
-                self.put(job)?;
-                if node.depth == 0 {
-                    return Err(if failure == "PasswordMismatchOrCorrupt" {
-                        "NeedsPassword".into()
-                    } else {
-                        failure
-                    });
-                }
-                continue;
-            };
-            for file in &files {
-                paths::relative(&file.relative_path)?;
-            }
-            let bytes = files.iter().try_fold(0u64, |sum, file| {
-                sum.checked_add(file.size).ok_or("ResourceLimit")
-            })?;
-            state.expanded = state.expanded.checked_add(bytes).ok_or("ResourceLimit")?;
-            state.entries = state
-                .entries
-                .checked_add(files.len() as u64)
-                .ok_or("ResourceLimit")?;
-            if state.expanded > s.max_expanded_bytes || state.entries > s.max_entries {
-                return Err("ResourceLimit".into());
-            }
-            if node.depth > 0 {
-                let consumed: HashSet<_> = node
-                    .group
-                    .volumes
-                    .iter()
-                    .map(|p| p.to_lowercase())
-                    .collect();
-                state
-                    .final_files
-                    .retain(|f| !consumed.contains(&f.source_path.to_lowercase()));
-                state.retired_files.extend(consumed);
-            }
-            let fixed_relatives: Option<Vec<PathBuf>> = if s.auto_fix_encoding {
-                crate::zip_encoding::probe_zip_encoding(Path::new(&node.group.path))
-                    .ok()
-                    .and_then(|probe| {
-                        if probe.detected_encoding == "UTF-8"
-                            || probe.detected_encoding == "ASCII"
-                            || probe.decoded_paths.len() != files.len()
-                        {
+                    let mut resolved = Vec::with_capacity(files.len());
+                    let mut names = HashSet::new();
+                    for decoded in &probe.decoded_paths {
+                        let rel = paths::relative(decoded).ok()?;
+                        let key = paths::path_string(&rel).to_lowercase();
+                        if !names.insert(key) {
                             return None;
                         }
-                        let mut resolved = Vec::with_capacity(files.len());
-                        let mut names = HashSet::new();
-                        for decoded in &probe.decoded_paths {
-                            let rel = paths::relative(decoded).ok()?;
-                            let key = paths::path_string(&rel).to_lowercase();
-                            if !names.insert(key) {
-                                return None;
-                            }
-                            resolved.push(rel);
-                        }
-                        Some(resolved)
-                    })
-            } else {
-                None
-            };
+                        resolved.push(rel);
+                    }
+                    Some(resolved)
+                })
+        } else {
+            None
+        };
 
-            for (file_idx, file) in files.iter().enumerate() {
-                let orig_relative = paths::relative(&file.relative_path)?;
-                let dest_relative = fixed_relatives
-                    .as_ref()
-                    .and_then(|fixed| fixed.get(file_idx))
-                    .cloned()
-                    .unwrap_or_else(|| orig_relative.clone());
-                state.final_files.push(CopyFile {
-                    size_known: true,
-                    source_path: paths::path_string(&dest.join(&orig_relative)),
-                    relative_path: paths::path_string(&node.prefix.join(dest_relative)),
-                    size: file.size,
-                    sha256: file.sha256.clone(),
-                    is_directory: file.is_directory,
-                    is_corrupted: file.is_corrupted,
-                });
-            }
-            let node_corrupted =
-                files.iter().any(|f| f.is_corrupted) || verification_scope.contains("salvaged");
-            if !node_corrupted && let Some(event) = event_success {
-                state.events.push(event);
-            }
-            state.sealed.push(SealedNode {
-                node: node.clone(),
-                directory: dest.clone(),
-                files,
-                verification_scope,
+        for (file_idx, file) in files.iter().enumerate() {
+            let orig_relative = paths::relative(&file.relative_path)?;
+            let dest_relative = fixed_relatives
+                .as_ref()
+                .and_then(|fixed| fixed.get(file_idx))
+                .cloned()
+                .unwrap_or_else(|| orig_relative.clone());
+            run.state.final_files.push(CopyFile {
+                size_known: true,
+                source_path: paths::path_string(&dest.join(&orig_relative)),
+                relative_path: paths::path_string(&node.prefix.join(dest_relative)),
+                size: file.size,
+                sha256: file.sha256.clone(),
+                is_directory: file.is_directory,
+                is_corrupted: file.is_corrupted,
             });
-            state.views[node_index].status = if node_corrupted {
-                "salvaged".into()
-            } else {
-                "completed".into()
-            };
-            state.views[node_index].stage = "finished".into();
-            state.views[node_index].progress = 1.;
-            let mut has_child_archives = false;
-            if s.expand_nested {
-                let nested = scanner::scan(&[paths::path_string(&dest)], true, &[])?;
-                if node.depth + 1 < s.max_depth {
-                    for child in nested.sources {
-                        has_child_archives = true;
-                        let archive = Path::new(&child.path);
-                        let folder = archive
-                            .parent()
-                            .ok_or("UnsafePath")?
-                            .strip_prefix(&dest)
-                            .map_err(|_| "UnsafePath")?;
-                        let base = node
-                            .prefix
-                            .join(folder)
-                            .join(scanner::output_name(&child.path));
-                        let reserved: Vec<_> = state
-                            .pending
-                            .iter()
-                            .chain(state.failed.iter().map(|(node, _)| node))
-                            .map(|n| n.prefix.clone())
-                            .collect();
-                        let prefix = unique_prefix(base, &state.final_files, &reserved);
-                        state.pending.push_back(NodeWork {
-                            id: uid(),
-                            group: child,
-                            prefix,
-                            depth: node.depth + 1,
-                            parent: Some(node.id.clone()),
-                        });
-                    }
-                } else if !nested.sources.is_empty() {
-                    state.views[node_index].message =
-                        "已达到展开层数限制，更深内包按原文件保留。".into();
-                }
-            }
-            if node.depth == 0 && !state.input_files.is_empty() {
-                state.input_retired = true;
-            }
-            // Persist the successful replacement and consumption intent first.
-            // A crash or failed deletion then permits absence only for these
-            // retired inputs; any bytes left behind must still pass readback.
-            save_run(&work, &state)?;
-            // Only clean up inner archive volumes if it's a leaf node without children.
-            // If node spawned child archives, keep the intermediate archive intact
-            // until all descendant nodes complete and the derivation tree closes.
-            if node.depth > 0 && !has_child_archives {
-                for volume in &node.group.volumes {
-                    let _ = paths::remove_file_inside_owned(Path::new(volume), &work, &job.id);
-                }
-            }
-            if node.depth == 0 && work.join("input").exists() {
-                let _ = paths::remove_inside_owned(&work.join("input"), &work, &job.id);
-            }
-            self.refresh_usage()?;
-            job.nodes = state.views.clone();
-            self.put(job)?;
         }
-        let tree_closed = is_derivation_tree_closed(&state);
-        if tree_closed {
-            // Bottom-up retirement: clean up inner archives in reverse depth order
-            let mut sealed_nodes = state.sealed.clone();
-            sealed_nodes.sort_by_key(|s| std::cmp::Reverse(s.node.depth));
-            for sealed in &sealed_nodes {
-                if sealed.node.depth > 0 {
-                    for volume in &sealed.node.group.volumes {
-                        let _ = paths::remove_file_inside_owned(Path::new(volume), &work, &job.id);
-                    }
-                }
-            }
+        let node_corrupted =
+            files.iter().any(|f| f.is_corrupted) || verification_scope.contains("salvaged");
+        if !node_corrupted && let Some(event) = event_success {
+            run.state.events.push(event);
         }
-        if !state.failed.is_empty() && !allow_partial {
-            return Err(
-                if state.failed.iter().any(|(_, code)| {
-                    matches!(code.as_str(), "NeedsPassword" | "PasswordMismatchOrCorrupt")
-                }) {
-                    "NeedsPassword".into()
-                } else {
-                    state.failed[0].1.clone()
-                },
-            );
-        }
-        verify_witnesses(&source, &witnesses)?;
-        self.checkpoint(&cancel).await?;
-        self.stage(
-            job,
-            "planning",
-            "正在生成最终文件映射；同名目录按策略处理。",
-        )?;
-        let Some(staged) = self.publications.prepare(
-            &self.repository,
-            job,
-            &state,
-            &source,
-            &work,
-            &route,
-            tree_closed,
-        )?
-        else {
-            job.status = "skipped".into();
-            if job.message.is_empty() {
-                job.message = "同名目标已存在，按设置跳过；原包保留。".into();
-            }
-            job.finished_at = Some(now());
-            drop(workspace_lease.take());
-            remove_owned_retrying_async(&work, &job.id).await?;
-            job.workspace = None;
-            return self.put(job);
+        run.state.sealed.push(SealedNode {
+            node: node.clone(),
+            directory: dest.clone(),
+            files,
+            verification_scope,
+        });
+        run.state.views[index].status = if node_corrupted {
+            "salvaged".into()
+        } else {
+            "completed".into()
         };
-        if let Some(req) = staged.copy_request() {
-            self.stage(job, "copying", "正在顺序写回目标盘，同时对比解压流摘要。")?;
-            self.request(job, req, cancel.clone()).await?;
-        }
-        staged.finish_copy()?;
-        let readback = staged.readback();
-        if readback {
-            self.checkpoint(&cancel).await?;
-            self.stage(
-                job,
-                "verifying",
-                "正在完整回读目标临时文件，耗时取决于目标盘。",
-            )?;
-        }
-        let sealed = staged.seal(&self.repository, cancel.clone()).await?;
-        if readback {
-            *job.stage_times.entry("verifying".into()).or_default() += sealed.verification_millis();
-        }
-        self.checkpoint(&cancel).await?;
-        self.stage(job, "publishing", "正在提交已验证的最终目录。")?;
-        let Some(committed) = self.publications.commit(&self.repository, sealed, job)? else {
-            job.status = "skipped".into();
-            if job.message.is_empty() {
-                job.message = "发布时发现同名目标，按策略跳过；原包保留。".into();
-            }
-            job.finished_at = Some(now());
-            drop(workspace_lease.take());
-            remove_owned_retrying_async(&work, &job.id).await?;
-            job.workspace = None;
-            self.put(job)?;
-            return self.refresh_usage();
-        };
-        let mut msg = committed.message().to_owned();
-
-        // Safe source archive cleanup (only when 100% completed, non-empty, no exclusions, witness verified, target tree verified, and derivation tree closed)
-        if committed.cleanup_allowed() {
-            // Pin every volume before checking the saved witnesses. The exact
-            // objects checked here are retained until their delete/recycle ends.
-            let cleanup_sources =
-                lock_cleanup_sources(&source, &witnesses, s.source_cleanup == "recycle");
-            let mut cleanup_ok = cleanup_sources.is_ok();
-            if let Ok(sources) = cleanup_sources {
-                for source_file in sources {
-                    let _gate = self.mutations.lock().map_err(|_| lock_error())?;
-                    if cancel.load(Ordering::Acquire)
-                        || self
-                            .deleting_jobs
-                            .lock()
-                            .map_err(|_| lock_error())?
-                            .contains(&job.id)
+        run.state.views[index].stage = "finished".into();
+        run.state.views[index].progress = 1.;
+        let mut has_child_archives = false;
+        if s.expand_nested {
+            let dest_str = paths::path_string(&dest);
+            let nested = tokio::task::spawn_blocking(move || scanner::scan(&[dest_str], true, &[]))
+                .await
+                .map_err(|e| e.to_string())??;
+            let total_nodes =
+                run.state.sealed.len() + run.state.pending.len() + run.state.failed.len();
+            if total_nodes >= MAX_DERIVATION_NODES {
+                if !nested.sources.is_empty() {
+                    run.state.views[index].message =
+                        "已达到最大派生节点数量限制，更深内包按原文件保留。".into();
+                }
+            } else if node.depth + 1 < s.max_depth {
+                for child in nested.sources {
+                    if run.state.sealed.len() + run.state.pending.len() + run.state.failed.len()
+                        >= MAX_DERIVATION_NODES
                     {
-                        cleanup_ok = false;
+                        run.state.views[index].message =
+                            "已达到最大派生节点数量限制，部分内包按原文件保留。".into();
                         break;
                     }
-                    if source_file.cleanup().is_err() {
-                        cleanup_ok = false;
-                        break;
-                    }
+                    has_child_archives = true;
+                    let archive = Path::new(&child.path);
+                    let folder = archive
+                        .parent()
+                        .ok_or("UnsafePath")?
+                        .strip_prefix(&dest)
+                        .map_err(|_| "UnsafePath")?;
+                    let base = node
+                        .prefix
+                        .join(folder)
+                        .join(scanner::output_name(&child.path));
+                    let reserved: Vec<_> = run
+                        .state
+                        .pending
+                        .iter()
+                        .chain(run.state.failed.iter().map(|(node, _)| node))
+                        .map(|n| n.prefix.clone())
+                        .collect();
+                    let prefix = unique_prefix(base, &run.state.final_files, &reserved);
+                    run.state.pending.push_back(NodeWork {
+                        id: uid(),
+                        group: child,
+                        prefix,
+                        depth: node.depth + 1,
+                        parent: Some(node.id.clone()),
+                    });
                 }
-            }
-            if cleanup_ok {
-                msg = if s.source_cleanup == "recycle" {
-                    "解压完成并校验通过；源压缩包已移入回收站。".to_string()
-                } else {
-                    "解压完成并校验通过；源压缩包已删除。".to_string()
-                };
-            } else {
-                msg = "解压完成并校验通过；源文件自动清理未完成，剩余源文件保留。".to_string();
+            } else if !nested.sources.is_empty() {
+                run.state.views[index].message =
+                    "已达到展开层数限制，更深内包按原文件保留。".into();
             }
         }
-        drop(committed);
-        drop(workspace_lease.take());
-        job.message = msg;
-        self.put(job)?;
-        self.apply_outbox();
-        let retire_result = match remove_owned_retrying_async(&work, &job.id).await {
-            Ok(()) => Ok(()),
-            Err(initial_err) => {
-                // 短暂让步等待 Windows 防病毒扫描或残留句柄释放后进行二次重试
-                tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-                match remove_owned_retrying_async(&work, &job.id).await {
-                    Ok(()) => Ok(()),
-                    Err(_) => Err(initial_err),
-                }
-            }
-        };
-
-        match retire_result {
-            Ok(()) => job.workspace = None,
-            Err(reason) => {
-                // This is the only cleanup signal that survives into the CI log,
-                // so the concrete reason must never be collapsed again.
-                eprintln!(
-                    "workspace_retire_failed job={} workspace={} reason={reason}",
-                    job.id,
-                    work.display()
-                );
-                job.status = "cleanupPending".into();
-                // Keep the delivery summary before the marker so an automatic
-                // settle can restore the exact completed message later.
-                job.message = with_cleanup_pending_note(&job.message, &reason);
+        if node.depth == 0 && !run.state.input_files.is_empty() {
+            run.state.input_retired = true;
+        }
+        // Persist the successful replacement and consumption intent first.
+        // A crash or failed deletion then permits absence only for these
+        // retired inputs; any bytes left behind must still pass readback.
+        save_run_async(work, run.state).await?;
+        // Only clean up inner archive volumes if it's a leaf node without children.
+        // If node spawned child archives, keep the intermediate archive intact
+        // until all descendant nodes complete and the derivation tree closes.
+        if node.depth > 0 && !has_child_archives {
+            for volume in &node.group.volumes {
+                let _ = paths::remove_file_inside_owned(Path::new(volume), work, &job_id);
             }
         }
-        self.put(job)?;
-        self.refresh_usage()
+        if node.depth == 0 && work.join("input").exists() {
+            let _ = paths::remove_inside_owned(&work.join("input"), work, &job_id);
+        }
+        self.refresh_usage()?;
+        run.job.nodes = run.state.views.clone();
+        self.put(run.job)?;
+        Ok(())
     }
 }

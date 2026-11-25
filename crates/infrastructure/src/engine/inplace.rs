@@ -579,7 +579,11 @@ pub fn execute(
             if request.verify_first {
                 // Verification reads the archive's bytes, not the entries', so
                 // the bar counts what is actually read.
-                let compressed = job.storage.parts().iter().map(|part| part.len).sum::<u64>();
+                let compressed = job
+                    .storage
+                    .parts()
+                    .iter()
+                    .fold(0u64, |acc, part| acc.saturating_add(part.len));
                 progress.begin(Phase::Verifying, compressed);
                 let counter = progress.clone();
                 job.verify(&move |bytes| {
@@ -639,9 +643,10 @@ fn run(
             Outcome::Paused => j.phase = JournalPhase::Interrupted,
         }
         if let Err(e) = write_journal(&request.archive, &j) {
-            eprintln!(
-                "inplace_journal_update_failed archive={} reason={e}",
-                request.archive.display()
+            tracing::error!(
+                archive = %request.archive.display(),
+                reason = %e,
+                "inplace_journal_update_failed"
             );
         }
     }

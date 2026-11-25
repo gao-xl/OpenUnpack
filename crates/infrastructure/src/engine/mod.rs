@@ -14,13 +14,16 @@ pub mod cli_engine;
 pub mod extractor;
 pub mod inplace;
 pub mod lz4_engine;
+pub mod oem_codepage;
 pub mod path_safety;
+mod process_job;
 pub mod tar_engine;
 pub mod zip_engine;
 
 pub use cli_engine::*;
 pub use extractor::*;
 pub use lz4_engine::*;
+pub use oem_codepage::*;
 pub use path_safety::*;
 pub use tar_engine::*;
 pub use zip_engine::*;
@@ -99,7 +102,7 @@ async fn inspect_archive(request: &WorkerRequest) -> Result<WorkerEvent, String>
         )
         .await?;
 
-    let total_bytes: u64 = files.iter().map(|f| f.size).sum();
+    let total_bytes: u64 = files.iter().fold(0u64, |acc, f| acc.saturating_add(f.size));
     let size_known = files.iter().all(|f| f.size_known);
 
     let mut event = make_event(request, "completed");
@@ -242,9 +245,16 @@ fn copy_files_blocking(
     fs::create_dir_all(destination).map_err(|e| format!("DestinationCreationFailed: {e}"))?;
 
     let mut copied_files = Vec::new();
-    let total_bytes: u64 = request.files.iter().map(|f| f.size).sum();
+    let total_bytes: u64 = request
+        .files
+        .iter()
+        .fold(0u64, |acc, f| acc.saturating_add(f.size));
     let mut completed_bytes: u64 = 0;
     let mut last_progress = std::time::Instant::now();
+
+    // 1 MB aligned buffer allocated once outside the loop to eliminate per-file heap thrashing
+    const COPY_BUFFER_CAPACITY: usize = 1024 * 1024;
+    let mut buffer = vec![0u8; COPY_BUFFER_CAPACITY];
 
     for file in &request.files {
         if cancel.load(Ordering::Acquire) {
@@ -281,14 +291,13 @@ fn copy_files_blocking(
         let mut reader = File::open(src).map_err(|e| format!("IoError: {e}"))?;
         let mut writer = if !is_readback {
             Some(std::io::BufWriter::with_capacity(
-                64 * 1024,
+                COPY_BUFFER_CAPACITY,
                 File::create(&target_path).map_err(|e| format!("IoError: {e}"))?,
             ))
         } else {
             None
         };
         let mut hasher = Sha256::new();
-        let mut buffer = vec![0u8; 64 * 1024];
 
         loop {
             if cancel.load(Ordering::Acquire) {
@@ -305,7 +314,7 @@ fn copy_files_blocking(
                     .map_err(|e| format!("IoError: {e}"))?;
             }
             hasher.update(&buffer[..read]);
-            completed_bytes += read as u64;
+            completed_bytes = completed_bytes.saturating_add(read as u64);
 
             if last_progress.elapsed() >= std::time::Duration::from_millis(50) {
                 let mut prog_ev = make_event(request, "progress");

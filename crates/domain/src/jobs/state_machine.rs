@@ -1,27 +1,49 @@
+//! 任务状态机：状态全集、转移矩阵与执行阶段定义。
+
 use crate::error::DomainError;
 use serde::{Deserialize, Serialize};
 
+/// 任务生命周期状态。
+///
+/// 转移矩阵由 [`JobStatus::can_transition_to`] 唯一定义；
+/// 终态允许显式重试回到 `Queued`。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum JobStatus {
+    /// 已入队，等待调度。
     Queued,
+    /// 解压进行中。
     Running,
+    /// 用户暂停。
     Paused,
+    /// 收到停止请求，等待协作式退出。
     Stopping,
+    /// 成功完成（终态）。
     Completed,
+    /// 经残卷还原/降级救援后完成（终态）。
     Salvaged,
+    /// 部分条目成功（终态）。
     Partial,
+    /// 等待用户提交密码候选。
     NeedsPassword,
+    /// 等待资源预算释放（并发/磁盘）。
     WaitingResource,
+    /// 失败（终态）。
     Failed,
+    /// 用户取消（终态）。
     Cancelled,
+    /// 调度前被跳过（终态）。
     Skipped,
+    /// 进程中断后恢复的中间态。
     Interrupted,
+    /// 解压完成，等待发布（校验/落盘确认）。
     PublishPending,
+    /// 发布完成，等待工作区清理。
     CleanupPending,
 }
 
 impl JobStatus {
+    /// 返回用于持久化与协议传输的稳定小驼峰短名。
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Queued => "queued",
@@ -42,6 +64,7 @@ impl JobStatus {
         }
     }
 
+    /// 从持久化/协议短名还原状态，未知值返回 `None`。
     pub fn from_raw(raw: &str) -> Option<Self> {
         match raw {
             "queued" => Some(Self::Queued),
@@ -63,6 +86,7 @@ impl JobStatus {
         }
     }
 
+    /// 是否为终态。终态不再被协调器推进，只允许显式重试转入 `Queued`。
     pub fn is_terminal(&self) -> bool {
         matches!(
             self,
@@ -75,6 +99,13 @@ impl JobStatus {
         )
     }
 
+    /// 判断当前状态到 `next` 的跳变是否被转移矩阵允许。
+    ///
+    /// 相同状态视为合法（幂等）；关键规则：
+    /// - `Running` 可进入全部执行中间态与终态；
+    /// - 等待类状态（`NeedsPassword` / `WaitingResource` / `Interrupted`）
+    ///   可回到 `Queued` 以支持显式重试；
+    /// - 终态只能通过重试进入 `Queued`，不能直接复活为 `Running`。
     pub fn can_transition_to(&self, next: Self) -> bool {
         if *self == next {
             return true;
@@ -137,6 +168,8 @@ impl JobStatus {
         }
     }
 
+    /// 执行状态转移；被矩阵拒绝时返回
+    /// [`DomainError::InvalidStateTransition`] 且不改变自身。
     pub fn transition_to(&mut self, next: Self) -> Result<(), DomainError> {
         if self.can_transition_to(next) {
             *self = next;
@@ -150,6 +183,7 @@ impl JobStatus {
     }
 }
 
+/// 任务执行阶段：比状态更细的进度划分，仅用于 UI 展示与统计，不参与状态机校验。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ExecutionStage {
@@ -168,6 +202,7 @@ pub enum ExecutionStage {
 }
 
 impl ExecutionStage {
+    /// 返回用于持久化与协议传输的稳定短名。
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Queued => "queued",
@@ -185,6 +220,7 @@ impl ExecutionStage {
         }
     }
 
+    /// 从持久化/协议短名还原阶段，未知值返回 `None`。
     pub fn from_raw(raw: &str) -> Option<Self> {
         match raw {
             "queued" => Some(Self::Queued),

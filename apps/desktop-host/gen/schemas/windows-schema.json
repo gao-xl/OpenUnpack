@@ -303,6 +303,12 @@
           "markdownDescription": "Enables the extract_selective command without any pre-configured scope."
         },
         {
+          "description": "Enables the fix_archive_extensions command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-fix-archive-extensions",
+          "markdownDescription": "Enables the fix_archive_extensions command without any pre-configured scope."
+        },
+        {
           "description": "Enables the get_shell_context_menu_status command without any pre-configured scope.",
           "type": "string",
           "const": "allow-get-shell-context-menu-status",
@@ -613,6 +619,12 @@
           "type": "string",
           "const": "deny-extract-selective",
           "markdownDescription": "Denies the extract_selective command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the fix_archive_extensions command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-fix-archive-extensions",
+          "markdownDescription": "Denies the fix_archive_extensions command without any pre-configured scope."
         },
         {
           "description": "Denies the get_shell_context_menu_status command without any pre-configured scope.",

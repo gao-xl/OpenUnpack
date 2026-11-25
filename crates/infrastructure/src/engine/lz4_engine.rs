@@ -9,6 +9,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
+    time::{Duration, Instant},
 };
 
 const LZ4_MAGIC: [u8; 4] = [0x04, 0x22, 0x4D, 0x18];
@@ -52,7 +53,7 @@ pub fn inspect_lz4(
     max_entries: u64,
     max_total_bytes: u64,
 ) -> Result<Vec<FileRecord>, String> {
-    if max_entries < 1 {
+    if max_entries > 0 && max_entries < 1 {
         return Err("ResourceLimit".into());
     }
 
@@ -90,7 +91,7 @@ pub fn inspect_lz4(
             .map_err(|_| "Corrupt".to_string())?;
         content_size = u64::from_le_bytes(size_buf);
         size_known = true;
-        if content_size > max_total_bytes {
+        if max_total_bytes > 0 && content_size > max_total_bytes {
             return Err("ResourceLimit".into());
         }
     }
@@ -163,7 +164,12 @@ pub fn extract_lz4(
             .map_err(|_| "Corrupt".to_string())?;
     }
 
-    let max_bytes = request.max_total_bytes.min(request.max_written_bytes);
+    let max_bytes = match (request.max_total_bytes > 0, request.max_written_bytes > 0) {
+        (true, true) => request.max_total_bytes.min(request.max_written_bytes),
+        (true, false) => request.max_total_bytes,
+        (false, true) => request.max_written_bytes,
+        (false, false) => u64::MAX,
+    };
     if let Some(declared) = declared_content_size
         && declared > max_bytes
     {
@@ -192,6 +198,7 @@ pub fn extract_lz4(
     let mut block_decompressed = Vec::with_capacity(64 * 1024);
     let mut total_decompressed: u64 = 0;
     let mut hasher = Sha256::new();
+    let mut last_progress = Instant::now();
 
     let result = (|| -> Result<(), String> {
         loop {
@@ -256,11 +263,14 @@ pub fn extract_lz4(
                     .map_err(|e| format!("IoError: {e}"))?;
             }
 
-            let mut prog_event = super::make_event(request, "progress");
-            prog_event.completed_bytes = total_decompressed;
-            prog_event.total_bytes = declared_content_size.unwrap_or(0);
-            prog_event.total_bytes_known = declared_content_size.is_some();
-            progress(&prog_event);
+            if last_progress.elapsed() >= Duration::from_millis(50) {
+                let mut prog_event = super::make_event(request, "progress");
+                prog_event.completed_bytes = total_decompressed;
+                prog_event.total_bytes = declared_content_size.unwrap_or(0);
+                prog_event.total_bytes_known = declared_content_size.is_some();
+                progress(&prog_event);
+                last_progress = Instant::now();
+            }
         }
 
         if content_checksum_present {

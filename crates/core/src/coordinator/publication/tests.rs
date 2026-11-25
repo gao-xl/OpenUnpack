@@ -302,3 +302,26 @@ async fn cancellation_after_sealing_cannot_reclassify_an_atomic_commit() {
         .unwrap();
     assert_eq!(fixture.job.status, "completed");
 }
+
+#[test]
+fn test_clean_orphaned_trash_directories() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let trash1 = root.join(".openunpack-trash-12345.tmp");
+    let trash2 = root.join(".openunpack-trash-abcde.tmp");
+    let valid_dir = root.join("my_output");
+    let regular_file = root.join("important.txt");
+
+    fs::create_dir(&trash1).unwrap();
+    fs::write(trash1.join("old.txt"), b"discard").unwrap();
+    fs::create_dir(&trash2).unwrap();
+    fs::create_dir(&valid_dir).unwrap();
+    fs::write(&regular_file, b"keep").unwrap();
+
+    super::clean_orphaned_trash_directories(root);
+
+    assert!(!trash1.exists());
+    assert!(!trash2.exists());
+    assert!(valid_dir.exists());
+    assert!(regular_file.exists());
+}

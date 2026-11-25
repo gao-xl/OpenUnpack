@@ -1,15 +1,15 @@
 mod clipboard;
 mod local_api;
+mod logging;
 use openunpack_core::coordinator::Coordinator;
 use openunpack_protocol::{
-    AppSnapshot, ArchiveInspectionView, HistoryPageQuery, ImportPreview, ImportResult,
-    JobHistoryPage, JobView, PasswordInput, PasswordView, ScanResult, SelectiveExtractRequest,
-    SelectiveExtractResult, Settings, SnapshotUpdate, SourceGroup, SuccessEvent,
-    ToolboxExecuteRequest, ToolboxExecuteResult, ToolboxOptions, ToolboxPreviewResult,
+    AppSnapshot, ArchiveExtensionFixItem, ArchiveInspectionView, HistoryPageQuery, ImportPreview,
+    ImportResult, JobHistoryPage, JobView, PasswordInput, PasswordView, ScanResult,
+    SelectiveExtractRequest, SelectiveExtractResult, Settings, SnapshotUpdate, SourceGroup,
+    SuccessEvent, ToolboxExecuteRequest, ToolboxExecuteResult, ToolboxOptions,
+    ToolboxPreviewResult,
 };
 use rfd::{FileDialog, MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
-#[cfg(windows)]
-use std::os::windows::fs::MetadataExt;
 use std::{
     collections::{HashMap, HashSet},
     fs::{self, File, OpenOptions},
@@ -29,7 +29,6 @@ use tokio::sync::broadcast::error::RecvError;
 
 pub type Window = WebviewWindow;
 
-const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x00000400;
 const MAX_IMPORT_BYTES: u64 = 8 * 1024 * 1024;
 
 #[derive(Clone, Default)]
@@ -333,12 +332,31 @@ impl openunpack_application::VaultStore for CoordinatorVaultStore {
 }
 
 fn path_contains_or_equal(base: &Path, target: &Path) -> bool {
+    if base.as_os_str().is_empty() {
+        return false;
+    }
     let mut b_iter = base.components();
     let mut t_iter = target.components();
     loop {
         match (b_iter.next(), t_iter.next()) {
             (None, _) => return true,
-            (Some(b), Some(t)) if b == t => continue,
+            (Some(b), Some(t)) => {
+                #[cfg(windows)]
+                {
+                    if b.as_os_str().to_string_lossy().to_lowercase()
+                        != t.as_os_str().to_string_lossy().to_lowercase()
+                    {
+                        return false;
+                    }
+                }
+                #[cfg(not(windows))]
+                {
+                    if b != t {
+                        return false;
+                    }
+                }
+                continue;
+            }
             _ => return false,
         }
     }
@@ -353,7 +371,7 @@ fn verify_no_reparse_ancestors(path: &Path) -> Result<(), String> {
         if segment.exists() {
             let meta =
                 fs::symlink_metadata(segment).map_err(|_| "Native operation failed".to_string())?;
-            if meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            if meta.file_type().is_symlink() {
                 return Err(format!(
                     "Path or ancestor is a symlink/reparse point: {}",
                     segment.display()
@@ -566,7 +584,7 @@ fn resolve_worker_paths(_app: &tauri::AppHandle) -> Result<(PathBuf, PathBuf), S
     resolve_worker_paths_standalone()
 }
 
-fn resolve_data_directory() -> Result<PathBuf, String> {
+pub fn resolve_data_directory() -> Result<PathBuf, String> {
     if let Ok(custom) = std::env::var("OPENUNPACK_DATA_DIR") {
         let p = PathBuf::from(custom.trim());
         if !p.as_os_str().is_empty() {
@@ -574,11 +592,33 @@ fn resolve_data_directory() -> Result<PathBuf, String> {
             return Ok(p);
         }
     }
+    // Check if running in portable mode (e.g. "data" directory adjacent to executable)
+    if let Ok(exe_path) = std::env::current_exe()
+        && let Some(exe_dir) = exe_path.parent()
+    {
+        let portable_data = exe_dir.join("data");
+        if portable_data.is_dir() {
+            return Ok(portable_data);
+        }
+    }
     #[cfg(windows)]
     let path = {
-        let local_app_data = std::env::var("LOCALAPPDATA")
-            .map_err(|_| "LOCALAPPDATA environment variable is missing".to_string())?;
-        PathBuf::from(local_app_data).join("OpenUnpack")
+        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA")
+            && !local_app_data.trim().is_empty()
+        {
+            PathBuf::from(local_app_data).join("OpenUnpack")
+        } else if let Ok(user_profile) = std::env::var("USERPROFILE")
+            && !user_profile.trim().is_empty()
+        {
+            PathBuf::from(user_profile)
+                .join("AppData")
+                .join("Local")
+                .join("OpenUnpack")
+        } else {
+            return Err(
+                "LOCALAPPDATA and USERPROFILE environment variables are missing".to_string(),
+            );
+        }
     };
     #[cfg(not(windows))]
     let path = {
@@ -592,7 +632,7 @@ fn resolve_data_directory() -> Result<PathBuf, String> {
     Ok(path)
 }
 
-fn acquire_instance_lock(data_dir: &Path) -> Result<File, String> {
+pub fn acquire_instance_lock(data_dir: &Path) -> Result<File, String> {
     let lock_path = data_dir.join(".instance.lock");
     let mut opts = OpenOptions::new();
     opts.read(true).write(true).create(true).truncate(false);
@@ -603,6 +643,30 @@ fn acquire_instance_lock(data_dir: &Path) -> Result<File, String> {
     }
     opts.open(&lock_path)
         .map_err(|_| "Another instance is running or the data directory is unavailable".to_string())
+}
+
+pub fn setup_process_environment(data_dir: &Path) {
+    if std::env::var("OPENUNPACK_DATA_DIR").is_err() {
+        unsafe {
+            std::env::set_var("OPENUNPACK_DATA_DIR", data_dir);
+        }
+    }
+    if std::env::var("WEBVIEW2_USER_DATA_FOLDER").is_err() {
+        let wv2_dir = data_dir.join("webview2");
+        let _ = fs::create_dir_all(&wv2_dir);
+        unsafe {
+            std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", &wv2_dir);
+        }
+    }
+    // Clean up stale WebView2 locks when this process is the sole instance owner
+    let default_lock = data_dir
+        .join("webview2")
+        .join("EBWebView")
+        .join("Default")
+        .join("LOCK");
+    if default_lock.exists() {
+        let _ = fs::remove_file(default_lock);
+    }
 }
 
 pub(crate) async fn core_snapshot(state: &AppState) -> Result<AppSnapshot, String> {
@@ -2015,6 +2079,41 @@ pub(crate) async fn core_execute_toolbox_operation(
     .map_err(|_| "Background operation failed".to_string())?
 }
 
+pub(crate) async fn core_fix_archive_extensions(
+    state: &AppState,
+    paths: Vec<String>,
+) -> Result<Vec<ArchiveExtensionFixItem>, String> {
+    let access = state.access.clone();
+    spawn_blocking(move || {
+        let mut checked_paths = Vec::with_capacity(paths.len());
+        for p in paths {
+            let canon = canonicalize_existing(&p)?;
+            checked_paths.push(canon.to_string_lossy().into_owned());
+        }
+        {
+            let mut guard = access
+                .lock()
+                .map_err(|_| "Access lock poisoned".to_string())?;
+            for p in &checked_paths {
+                let path = Path::new(p);
+                if path.is_file() {
+                    if let Some(parent) = path.parent() {
+                        guard.grant_write_dir(parent.to_path_buf());
+                        guard.grant_read(parent.to_path_buf(), true);
+                    }
+                    guard.grant_read(path.to_path_buf(), false);
+                } else if path.is_dir() {
+                    guard.grant_write_dir(path.to_path_buf());
+                    guard.grant_read(path.to_path_buf(), true);
+                }
+            }
+        }
+        openunpack_core::toolbox::fix_archive_extensions(&checked_paths)
+    })
+    .await
+    .map_err(|_| "Background operation failed".to_string())?
+}
+
 #[tauri::command]
 async fn pick_files(
     window: WebviewWindow,
@@ -2081,6 +2180,16 @@ async fn execute_toolbox_operation(
 ) -> Result<ToolboxExecuteResult, String> {
     verify_frontend_window(&window)?;
     core_execute_toolbox_operation(&state, request).await
+}
+
+#[tauri::command]
+async fn fix_archive_extensions(
+    window: Window,
+    state: State<'_, AppState>,
+    paths: Vec<String>,
+) -> Result<Vec<ArchiveExtensionFixItem>, String> {
+    verify_frontend_window(&window)?;
+    core_fix_archive_extensions(&state, paths).await
 }
 
 #[tauri::command]
@@ -2458,244 +2567,319 @@ fn install_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 pub fn run() {
-    Builder::default()
-        .setup(|app| {
-            let data_dir = match resolve_data_directory() {
-                Ok(dir) => dir,
-                Err(err) => {
-                    MessageDialog::new()
-                        .set_title("OpenUnpack Initialization Error")
-                        .set_description(format!("Failed to locate data directory: {err}"))
-                        .set_level(MessageLevel::Error)
-                        .show();
-                    return Err(err.into());
-                }
-            };
-            let lock_file = match acquire_instance_lock(&data_dir) {
-                Ok(file) => file,
-                Err(err) => {
-                    MessageDialog::new()
-                        .set_title("OpenUnpack Instance Error")
-                        .set_description(format!("Another instance running or locked: {err}"))
-                        .set_level(MessageLevel::Error)
-                        .show();
-                    return Err(err.into());
-                }
-            };
-            let (worker_exe, worker_dll) = match resolve_worker_paths(app.handle()) {
-                Ok(pair) => pair,
-                Err(err) => {
-                    MessageDialog::new()
-                        .set_title("OpenUnpack Worker Error")
-                        .set_description(format!("Worker binaries missing: {err}"))
-                        .set_level(MessageLevel::Error)
-                        .show();
-                    return Err(err.into());
-                }
-            };
-            let coordinator = match open_coordinator_on_runtime(
-                data_dir,
-                worker_exe,
-                worker_dll,
-                tauri::async_runtime::handle().inner(),
-            ) {
-                Ok(coord) => coord,
-                Err(err) => {
-                    MessageDialog::new()
-                        .set_title("OpenUnpack Vault/Database Error")
-                        .set_description(format!("Failed to open OpenUnpack Coordinator: {err}"))
-                        .set_level(MessageLevel::Error)
-                        .show();
-                    return Err(err.into());
-                }
-            };
-
-            let mut native_access = NativeAccess::default();
-            if let Ok(snap) = coordinator.snapshot() {
-                if !snap.settings.output_root.trim().is_empty()
-                    && let Ok(p) = canonicalize_existing(&snap.settings.output_root)
-                {
-                    native_access.grant_write_dir(p);
-                }
-                if !snap.settings.cache_root.trim().is_empty()
-                    && let Ok(p) = canonicalize_existing(&snap.settings.cache_root)
-                {
-                    native_access.grant_write_dir(p);
-                }
-                for j in &snap.jobs {
-                    if let Ok(p) = canonicalize_existing(&j.source.path) {
-                        native_access.grant_read(p, false);
+    let data_dir = match resolve_data_directory() {
+        Ok(dir) => dir,
+        Err(err) => {
+            MessageDialog::new()
+                .set_title("OpenUnpack Initialization Error")
+                .set_description(format!("Failed to locate data directory: {err}"))
+                .set_level(MessageLevel::Error)
+                .show();
+            return;
+        }
+    };
+    // Install logging before the instance lock: a second launch that loses the
+    // race is exactly the case where a silent exit used to be unexplainable.
+    if let Some(log_path) = logging::init(&data_dir, false) {
+        tracing::info!(
+            version = env!("CARGO_PKG_VERSION"),
+            data_dir = %data_dir.display(),
+            log = %log_path.display(),
+            "openunpack starting (desktop)"
+        );
+    }
+    let lock_file = match acquire_instance_lock(&data_dir) {
+        Ok(file) => file,
+        Err(_err) => {
+            tracing::warn!("another instance already owns the data directory");
+            #[cfg(windows)]
+            {
+                use windows_sys::Win32::UI::WindowsAndMessaging::{
+                    FindWindowW, SW_RESTORE, SetForegroundWindow, ShowWindow,
+                };
+                let title: Vec<u16> = "解压工坊 OpenUnpack\0".encode_utf16().collect();
+                let hwnd = unsafe { FindWindowW(std::ptr::null(), title.as_ptr()) };
+                if !hwnd.is_null() {
+                    unsafe {
+                        ShowWindow(hwnd, SW_RESTORE);
+                        SetForegroundWindow(hwnd);
                     }
-                    for v in &j.source.volumes {
-                        if let Ok(p) = canonicalize_existing(v) {
+                    return;
+                }
+            }
+            MessageDialog::new()
+                .set_title("解压工坊 OpenUnpack")
+                .set_description("解压工坊已在运行中，请检查系统任务栏或托盘图标。")
+                .set_level(MessageLevel::Info)
+                .show();
+            return;
+        }
+    };
+
+    setup_process_environment(&data_dir);
+
+    let run_res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        Builder::default()
+            .setup(move |app| {
+                let (worker_exe, worker_dll) = match resolve_worker_paths(app.handle()) {
+                    Ok(pair) => pair,
+                    Err(err) => {
+                        MessageDialog::new()
+                            .set_title("OpenUnpack Worker Error")
+                            .set_description(format!("Worker binaries missing: {err}"))
+                            .set_level(MessageLevel::Error)
+                            .show();
+                        return Err(err.into());
+                    }
+                };
+                let coordinator = match open_coordinator_on_runtime(
+                    data_dir,
+                    worker_exe,
+                    worker_dll,
+                    tauri::async_runtime::handle().inner(),
+                ) {
+                    Ok(coord) => coord,
+                    Err(err) => {
+                        MessageDialog::new()
+                            .set_title("OpenUnpack Vault/Database Error")
+                            .set_description(format!(
+                                "Failed to open OpenUnpack Coordinator: {err}"
+                            ))
+                            .set_level(MessageLevel::Error)
+                            .show();
+                        return Err(err.into());
+                    }
+                };
+
+                let mut native_access = NativeAccess::default();
+                if let Ok(snap) = coordinator.snapshot() {
+                    if !snap.settings.output_root.trim().is_empty()
+                        && let Ok(p) = canonicalize_existing(&snap.settings.output_root)
+                    {
+                        native_access.grant_write_dir(p);
+                    }
+                    if !snap.settings.cache_root.trim().is_empty()
+                        && let Ok(p) = canonicalize_existing(&snap.settings.cache_root)
+                    {
+                        native_access.grant_write_dir(p);
+                    }
+                    for j in &snap.jobs {
+                        if let Ok(p) = canonicalize_existing(&j.source.path) {
                             native_access.grant_read(p, false);
                         }
-                    }
-                }
-            }
-
-            let access_state = Arc::new(Mutex::new(native_access));
-            let vault_store = Arc::new(CoordinatorVaultStore(coordinator.clone()));
-            let vault_use_cases = Arc::new(openunpack_application::VaultUseCases::new(vault_store));
-            let sys_env: Arc<dyn openunpack_application::SystemEnvironment> =
-                Arc::new(openunpack_infrastructure::WindowsSystemEnvironment::new());
-
-            app.manage(AppState {
-                coordinator: coordinator.clone(),
-                vault_use_cases,
-                sys_env,
-                access: access_state,
-                _lock_file: lock_file,
-                scans: Mutex::new(HashMap::new()),
-                clipboard_sequence: Mutex::new(None),
-                exiting: AtomicBool::new(false),
-                minimize_to_tray: AtomicBool::new(
-                    coordinator
-                        .snapshot()
-                        .map(|s| s.settings.minimize_to_tray)
-                        .unwrap_or(false),
-                ),
-            });
-            let api_manager = local_api::ApiManager::open(&coordinator.data);
-            app.manage(api_manager.clone());
-            let api_app = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                api_manager.restore(api_app).await;
-            });
-            install_tray(app)?;
-            if let (Some(w), Ok(s)) = (app.get_webview_window("main"), coordinator.snapshot()) {
-                w.set_always_on_top(s.settings.always_on_top)?;
-            }
-
-            let app_handle = app.handle().clone();
-            let mut sub = coordinator.subscribe();
-            tauri::async_runtime::spawn(async move {
-                let mut known_finished = HashSet::new();
-                if let Some(s) = app_handle.try_state::<AppState>()
-                    && let Ok(snapshot) = s.coordinator.snapshot()
-                {
-                    for j in snapshot.jobs {
-                        if j.finished_at.is_some() {
-                            known_finished.insert(j.id);
-                        }
-                    }
-                }
-                while let Ok(()) | Err(RecvError::Lagged(_)) = sub.recv().await {
-                    if let Some(s) = app_handle.try_state::<AppState>() {
-                        let c = s.coordinator.clone();
-                        let (session_id, revision) = c.revision_info();
-                        let invalidated = openunpack_protocol::StateInvalidated {
-                            session_id,
-                            revision: revision.to_string(),
-                        };
-                        let _ = app_handle.emit_to("main", "state-changed", invalidated);
-                        let beep = c.newly_finished_jobs(&mut known_finished);
-                        if beep && c.completion_sound() {
-                            let _ = spawn_blocking(|| unsafe {
-                                windows_sys::Win32::System::Diagnostics::Debug::MessageBeep(0x40)
-                            })
-                            .await;
-                        }
-                    }
-                }
-            });
-            Ok(())
-        })
-        .on_window_event(|window, event| {
-            if window.label() == "main" {
-                if let WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    let app = window.app_handle().clone();
-                    let to_tray = window
-                        .try_state::<AppState>()
-                        .is_some_and(|s| s.minimize_to_tray.load(Ordering::Acquire));
-                    if to_tray {
-                        let _ = window.hide();
-                    } else {
-                        request_exit(app);
-                    }
-                }
-                if matches!(event, WindowEvent::Resized(_))
-                    && window
-                        .try_state::<AppState>()
-                        .is_some_and(|s| s.minimize_to_tray.load(Ordering::Acquire))
-                    && window.is_minimized().unwrap_or(false)
-                {
-                    let _ = window.hide();
-                }
-                if let WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event
-                    && let Some(state) = window.try_state::<AppState>()
-                    && let Ok(mut guard) = state.access.lock()
-                {
-                    for path in paths {
-                        if let Some(raw) = path.to_str() {
-                            guard.native_drop_paths.insert(raw.to_string());
-                            if let Ok(canon) = canonicalize_existing(raw)
-                                && let Some(parent) = canon.parent()
-                            {
-                                guard.grant_write_dir(parent.to_path_buf());
+                        for v in &j.source.volumes {
+                            if let Ok(p) = canonicalize_existing(v) {
+                                native_access.grant_read(p, false);
                             }
                         }
                     }
                 }
-            }
-        })
-        .invoke_handler(generate_handler![
-            set_ui_language,
-            local_api::api_status,
-            local_api::api_configure,
-            local_api::api_create_client,
-            local_api::api_revoke_client,
-            local_api::api_open_docs,
-            snapshot,
-            queue_snapshot,
-            snapshot_update,
-            history_page,
-            job_details,
-            scan_sources,
-            add_jobs,
-            start_jobs,
-            pause_jobs,
-            cancel_jobs,
-            retry_job,
-            remove_job,
-            clear_completed,
-            passwords,
-            save_password,
-            delete_password,
-            reveal_password,
-            preview_import,
-            confirm_import,
-            export_backup,
-            preview_restore_backup,
-            confirm_restore_backup,
-            copy_password,
-            bulk_password_action,
-            cancel_scan,
-            retry_node,
-            preview_exclusions,
-            cancel_preview_exclusions,
-            save_settings,
-            history,
-            clear_history,
-            recover_job,
-            inspect_archive,
-            cancel_inspect_archive,
-            extract_selective,
-            open_path,
-            pick_files,
-            pick_directory,
-            pick_save_backup,
-            pick_open_backup,
-            read_import_file,
-            preview_toolbox_operation,
-            execute_toolbox_operation,
-            execute_post_action,
-            get_shell_context_menu_status,
-            set_shell_context_menu_status,
-        ])
-        .run(generate_context!())
-        .expect("error while running OpenUnpack desktop application");
+
+                let access_state = Arc::new(Mutex::new(native_access));
+                let vault_store = Arc::new(CoordinatorVaultStore(coordinator.clone()));
+                let vault_use_cases =
+                    Arc::new(openunpack_application::VaultUseCases::new(vault_store));
+                let sys_env: Arc<dyn openunpack_application::SystemEnvironment> =
+                    Arc::new(openunpack_infrastructure::WindowsSystemEnvironment::new());
+
+                app.manage(AppState {
+                    coordinator: coordinator.clone(),
+                    vault_use_cases,
+                    sys_env,
+                    access: access_state,
+                    _lock_file: lock_file,
+                    scans: Mutex::new(HashMap::new()),
+                    clipboard_sequence: Mutex::new(None),
+                    exiting: AtomicBool::new(false),
+                    minimize_to_tray: AtomicBool::new(
+                        coordinator
+                            .snapshot()
+                            .map(|s| s.settings.minimize_to_tray)
+                            .unwrap_or(false),
+                    ),
+                });
+                let api_manager = local_api::ApiManager::open(&coordinator.data);
+                app.manage(api_manager.clone());
+                let api_app = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    api_manager.restore(api_app).await;
+                });
+                install_tray(app)?;
+                if let (Some(w), Ok(s)) = (app.get_webview_window("main"), coordinator.snapshot()) {
+                    w.set_always_on_top(s.settings.always_on_top)?;
+                }
+
+                let app_handle = app.handle().clone();
+                let mut sub = coordinator.subscribe();
+                let mut progress_sub = coordinator.subscribe_progress();
+                let app_progress_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    loop {
+                        match progress_sub.recv().await {
+                            Ok(update) => {
+                                let _ = app_progress_handle.emit_to("main", "job-progress", update);
+                            }
+                            Err(RecvError::Lagged(_)) => continue,
+                            Err(RecvError::Closed) => break,
+                        }
+                    }
+                });
+                tauri::async_runtime::spawn(async move {
+                    let mut known_finished = HashSet::new();
+                    if let Some(s) = app_handle.try_state::<AppState>()
+                        && let Ok(snapshot) = s.coordinator.snapshot()
+                    {
+                        for j in snapshot.jobs {
+                            if j.finished_at.is_some() {
+                                known_finished.insert(j.id);
+                            }
+                        }
+                    }
+                    while let Ok(()) | Err(RecvError::Lagged(_)) = sub.recv().await {
+                        if let Some(s) = app_handle.try_state::<AppState>() {
+                            let c = s.coordinator.clone();
+                            let (session_id, revision) = c.revision_info();
+                            let invalidated = openunpack_protocol::StateInvalidated {
+                                session_id,
+                                revision: revision.to_string(),
+                            };
+                            let _ = app_handle.emit_to("main", "state-changed", invalidated);
+                            let beep = c.newly_finished_jobs(&mut known_finished);
+                            if beep && c.completion_sound() {
+                                let _ = spawn_blocking(|| unsafe {
+                                    windows_sys::Win32::System::Diagnostics::Debug::MessageBeep(
+                                        0x40,
+                                    )
+                                })
+                                .await;
+                            }
+                        }
+                    }
+                });
+                Ok(())
+            })
+            .on_window_event(|window, event| {
+                if window.label() == "main" {
+                    if let WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let app = window.app_handle().clone();
+                        let to_tray = window
+                            .try_state::<AppState>()
+                            .is_some_and(|s| s.minimize_to_tray.load(Ordering::Acquire));
+                        if to_tray {
+                            let _ = window.hide();
+                        } else {
+                            request_exit(app);
+                        }
+                    }
+                    if matches!(event, WindowEvent::Resized(_))
+                        && window
+                            .try_state::<AppState>()
+                            .is_some_and(|s| s.minimize_to_tray.load(Ordering::Acquire))
+                        && window.is_minimized().unwrap_or(false)
+                    {
+                        let _ = window.hide();
+                    }
+                    if let WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event
+                        && let Some(state) = window.try_state::<AppState>()
+                        && let Ok(mut guard) = state.access.lock()
+                    {
+                        for path in paths {
+                            if let Some(raw) = path.to_str() {
+                                guard.native_drop_paths.insert(raw.to_string());
+                                if let Ok(canon) = canonicalize_existing(raw)
+                                    && let Some(parent) = canon.parent()
+                                {
+                                    guard.grant_write_dir(parent.to_path_buf());
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+            .invoke_handler(generate_handler![
+                set_ui_language,
+                local_api::api_status,
+                local_api::api_configure,
+                local_api::api_create_client,
+                local_api::api_revoke_client,
+                local_api::api_open_docs,
+                snapshot,
+                queue_snapshot,
+                snapshot_update,
+                history_page,
+                job_details,
+                scan_sources,
+                add_jobs,
+                start_jobs,
+                pause_jobs,
+                cancel_jobs,
+                retry_job,
+                remove_job,
+                clear_completed,
+                passwords,
+                save_password,
+                delete_password,
+                reveal_password,
+                preview_import,
+                confirm_import,
+                export_backup,
+                preview_restore_backup,
+                confirm_restore_backup,
+                copy_password,
+                bulk_password_action,
+                cancel_scan,
+                retry_node,
+                preview_exclusions,
+                cancel_preview_exclusions,
+                save_settings,
+                history,
+                clear_history,
+                recover_job,
+                inspect_archive,
+                cancel_inspect_archive,
+                extract_selective,
+                open_path,
+                pick_files,
+                pick_directory,
+                pick_save_backup,
+                pick_open_backup,
+                read_import_file,
+                preview_toolbox_operation,
+                execute_toolbox_operation,
+                fix_archive_extensions,
+                execute_post_action,
+                get_shell_context_menu_status,
+                set_shell_context_menu_status,
+            ])
+            .run(generate_context!())
+            .expect("error while running OpenUnpack desktop application");
+    }));
+
+    if let Err(payload) = run_res {
+        let msg = if let Some(s) = payload.downcast_ref::<&str>() {
+            (*s).to_string()
+        } else if let Some(s) = payload.downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "Unknown panic".to_string()
+        };
+
+        let user_msg = if msg.contains("0x8000FFFF") || msg.contains("灾难性故障") {
+            "检测到当前 Windows 系统处于锁屏状态或无活动图形桌面。\n\n请解锁进入 Windows 桌面后再启动解压工坊。".to_string()
+        } else if msg.contains("0x800700AA") || msg.contains("请求的资源在使用中") {
+            "检测到 WebView2 渲染组件被残留进程占用。\n\n已为您自动重置环境，请再次双击启动。"
+                .to_string()
+        } else {
+            format!("解压工坊启动异常: {msg}")
+        };
+
+        MessageDialog::new()
+            .set_title("解压工坊 OpenUnpack - 启动提示")
+            .set_description(&user_msg)
+            .set_level(MessageLevel::Warning)
+            .show();
+    }
 }
 
 fn collect_flag_values(args: &[String], flag: &str) -> Vec<String> {
@@ -2807,16 +2991,27 @@ pub fn run_headless() {
         }
     };
     println!("Data directory: {}", data_dir.display());
+    if let Some(log_path) = logging::init(&data_dir, true) {
+        tracing::info!(
+            version = env!("CARGO_PKG_VERSION"),
+            data_dir = %data_dir.display(),
+            log = %log_path.display(),
+            "openunpack starting (headless)"
+        );
+        println!("Log file:       {}", log_path.display());
+    }
 
     let lock_file = match acquire_instance_lock(&data_dir) {
         Ok(file) => file,
         Err(err) => {
+            tracing::error!("instance lock unavailable: {err}");
             eprintln!(
                 "[Error] Another instance is already running or data directory is locked: {err}"
             );
             std::process::exit(1);
         }
     };
+    setup_process_environment(&data_dir);
 
     let (worker_exe, worker_dll) = match resolve_worker_paths_standalone() {
         Ok(pair) => pair,

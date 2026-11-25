@@ -1,4 +1,6 @@
 pub mod coordinator;
+pub mod error;
+pub use error::UnpackError;
 pub mod dedup {
     pub use openunpack_infrastructure::dedup::*;
 }

@@ -32,6 +32,13 @@ const ERR_RECORD_NOT_FOUND: &str = "Password entry not found";
 const ERR_INVALID_BACKUP: &str = "Invalid backup archive or incorrect passphrase";
 const ERR_INVALID_TOKEN: &str = "Invalid or expired import preview token";
 const ERR_BACKUP_TOO_LARGE: &str = "Backup payload exceeds maximum allowed size";
+/// A key that could not be persisted must never be used: the next launch would
+/// generate a different one and the whole vault would become undecryptable.
+const ERR_VAULT_KEY_UNAVAILABLE: &str = "便携密钥文件无法创建或写入，已停止加密以避免密码库永久不可恢复；请检查密码库目录的写入权限与磁盘空间。";
+const VAULT_KEY_FILE: &str = ".vault.key";
+const VAULT_KEY_LEN: usize = 32;
+/// Generated keys are 32 bytes; the cap only bounds a hostile or corrupted file.
+const MAX_VAULT_KEY_FILE_SIZE: u64 = 4096;
 
 const BACKUP_MIN_ITER: u32 = 100_000;
 const BACKUP_MAX_ITER: u32 = 2_000_000;
@@ -43,6 +50,17 @@ const MAX_VAULT_ITEMS: usize = 100_000;
 // writing, and use the same bound when reopening, including old 64 MiB stores.
 const MAX_VAULT_FILE_SIZE: usize = MAX_BACKUP_PAYLOAD_SIZE + 64 * 1024;
 const MAX_BACKUP_FILE_SIZE: usize = MAX_BACKUP_PAYLOAD_SIZE * 2;
+
+fn ct_bytes_eq(a: &[u8], b: &[u8]) -> bool {
+    let mut diff = a.len() ^ b.len();
+    let max_len = a.len().max(b.len());
+    for i in 0..max_len {
+        let x = a.get(i).copied().unwrap_or(0);
+        let y = b.get(i).copied().unwrap_or(0);
+        diff |= (x ^ y) as usize;
+    }
+    diff == 0
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 struct VaultItem {
@@ -227,7 +245,7 @@ impl Vault {
                 if new_secret.is_empty() {
                     return Err("Password required".to_string());
                 }
-                if new_secret != item.secret {
+                if !ct_bytes_eq(new_secret.as_bytes(), item.secret.as_bytes()) {
                     item.secret.zeroize();
                     item.secret = new_secret;
                     item.revision = item.revision.saturating_add(1);
@@ -2041,52 +2059,136 @@ fn resolve_vault_key(path: &Path) -> Result<Zeroizing<Vec<u8>>, String> {
         }
     }
     let parent = path.parent().unwrap_or(Path::new("."));
-    let key_file = parent.join(".vault.key");
-    if key_file.exists() {
-        if !portable_vault_opted_in() {
-            return Err(ERR_PORTABLE_NOT_ENABLED.to_string());
+    let key_file = parent.join(VAULT_KEY_FILE);
+
+    // Generate first: `create_new` is the only race-free "first run" test, and
+    // it never truncates a key another process already wrote.
+    let mut key_bytes = Zeroizing::new([0u8; VAULT_KEY_LEN]);
+    rand::thread_rng().fill_bytes(&mut *key_bytes);
+    if !parent.is_dir() {
+        fs::create_dir_all(parent).map_err(|_| ERR_VAULT_KEY_UNAVAILABLE.to_string())?;
+    }
+    match create_vault_key_file(&key_file, &key_bytes[..]) {
+        Ok(()) => return Ok(Zeroizing::new(key_bytes.to_vec())),
+        // A concurrent first run won the race: adopt the key it persisted.
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(_) => return Err(ERR_VAULT_KEY_UNAVAILABLE.to_string()),
+    }
+    read_vault_key_file(&key_file)?.ok_or_else(|| ERR_VAULT_CORRUPT.to_string())
+}
+
+/// Opens the existing key file without following a redirect, then validates the
+/// handle itself so a swapped path cannot smuggle a link in after the check.
+fn read_vault_key_file(key_file: &Path) -> Result<Option<Zeroizing<Vec<u8>>>, String> {
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        // FILE_FLAG_OPEN_REPARSE_POINT: open the link itself, never its target.
+        options.custom_flags(0x0020_0000);
+    }
+    let file = match options.open(key_file) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err(ERR_VAULT_CORRUPT.to_string()),
+    };
+    let metadata = file.metadata().map_err(|_| ERR_VAULT_CORRUPT.to_string())?;
+    if !portable_vault_opted_in() {
+        return Err(ERR_PORTABLE_NOT_ENABLED.to_string());
+    }
+    if !metadata.is_file() || metadata.file_type().is_symlink() {
+        return Err("Vault key must be a regular file".into());
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if metadata.file_attributes() & 0x400 != 0 {
+            return Err("Vault key must not be a reparse point".into());
         }
-        let metadata =
-            fs::symlink_metadata(&key_file).map_err(|_| ERR_VAULT_CORRUPT.to_string())?;
-        if !metadata.file_type().is_file() {
-            return Err("Vault key must be a regular file".into());
-        }
-        if let Ok(bytes) = fs::read(&key_file)
-            && !bytes.is_empty()
-        {
-            return Ok(Zeroizing::new(bytes));
-        }
+    }
+    let mut bytes = Zeroizing::new(Vec::with_capacity(VAULT_KEY_LEN));
+    file.take(MAX_VAULT_KEY_FILE_SIZE)
+        .read_to_end(&mut bytes)
+        .map_err(|_| ERR_VAULT_CORRUPT.to_string())?;
+    if bytes.len() != VAULT_KEY_LEN {
         return Err(ERR_VAULT_CORRUPT.to_string());
     }
-    // Auto-generate key file
-    let mut key_bytes = vec![0u8; 32];
-    rand::thread_rng().fill_bytes(&mut key_bytes);
-    let _ = fs::create_dir_all(parent);
+    Ok(Some(bytes))
+}
+
+fn create_vault_key_file(key_file: &Path, key: &[u8]) -> std::io::Result<()> {
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        if let Ok(mut f) = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(&key_file)
-        {
-            let _ = f.write_all(&key_bytes);
-        }
+        options.mode(0o600);
     }
-    #[cfg(not(unix))]
+    let mut file = options.open(key_file)?;
+    // A half-written key would be read back as if it were the real one and
+    // would silently produce an undecryptable vault, so remove it on failure.
+    if let Err(error) = file.write_all(key).and_then(|()| file.sync_all()) {
+        drop(file);
+        let _ = fs::remove_file(key_file);
+        return Err(error);
+    }
+    drop(file);
+    // Portable mode keeps the key next to the vault by design. That is only
+    // acceptable when no other principal can read it, so the DACL is reduced
+    // to the owner. Failing to harden the key is fatal: writing a key that
+    // every local user can read would be worse than refusing to start.
+    #[cfg(windows)]
+    restrict_key_file_to_owner(key_file)?;
+    Ok(())
+}
+
+/// Replaces the key file's DACL with "protected, full control for the owner".
+#[cfg(windows)]
+fn restrict_key_file_to_owner(key_file: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::LocalFree;
+    use windows_sys::Win32::Security::Authorization::{
+        ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
+    };
+    use windows_sys::Win32::Security::{
+        DACL_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, SetFileSecurityW,
+    };
+
+    // OW is the "owner rights" SID, so the rule follows the file's owner rather
+    // than hard-coding a user SID that a copied profile would invalidate.
+    let sddl: Vec<u16> = "D:P(A;;FA;;;OW)\0".encode_utf16().collect();
+    let mut descriptor = std::ptr::null_mut();
+    let mut size = 0u32;
+    // SAFETY: `sddl` is NUL-terminated and the out-params are valid.
+    if unsafe {
+        ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            sddl.as_ptr(),
+            SDDL_REVISION_1,
+            &mut descriptor,
+            &mut size,
+        )
+    } == 0
     {
-        if let Ok(mut f) = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&key_file)
-        {
-            let _ = f.write_all(&key_bytes);
-        }
+        return Err(std::io::Error::last_os_error());
     }
-    Ok(Zeroizing::new(key_bytes))
+    let path: Vec<u16> = key_file.as_os_str().encode_wide().chain(Some(0)).collect();
+    // SAFETY: the descriptor is owned by us and released below.
+    let applied = unsafe {
+        SetFileSecurityW(
+            path.as_ptr(),
+            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            descriptor,
+        )
+    };
+    // SAFETY: `descriptor` came from the conversion API above.
+    unsafe {
+        LocalFree(descriptor);
+    }
+    if applied == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
 }
 
 pub fn portable_encrypt(data: &[u8], path: &Path) -> Result<Vec<u8>, String> {

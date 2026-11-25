@@ -2715,3 +2715,39 @@ async fn unknown_size_cache_jobs_complete_after_whole_job_reservation_is_release
     eprintln!("unknown_cache_peak={peak} quota={quota} retried={retried}");
     assert!(first.exists() && second.exists());
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn mined_password_from_filename_auto_extracts_without_preexisting_vault_entry() {
+    let rig = Rig::new();
+    rig.file(
+        "payload_mined/content.txt",
+        b"Auto mined password content!\n",
+    );
+    let archive = rig.root.join("archives/[解压密码MinedSecret888]sample.zip");
+    rig.pack(
+        &rig.root.join("payload_mined"),
+        &archive,
+        "zip",
+        Some("MinedSecret888"),
+        &[],
+    );
+
+    let id = rig.add(&archive, rig.settings());
+    let job = rig.run(&id).await;
+
+    assert_eq!(
+        job.status, "completed",
+        "job must complete with auto-mined password, message: {}",
+        job.message
+    );
+    assert_eq!(
+        job.nodes[0].password_label.as_deref(),
+        Some("提取自文件名/伴生文件"),
+        "node password label must reflect mined origin"
+    );
+    let out = delivered(&job);
+    assert_eq!(
+        fs::read(out.join("content.txt")).unwrap(),
+        b"Auto mined password content!\n"
+    );
+}

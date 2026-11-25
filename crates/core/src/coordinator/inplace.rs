@@ -338,10 +338,24 @@ impl Coordinator {
             }
         }
 
-        for hint in unique_mined.into_iter().rev() {
+        // Filename and companion-file hints are prioritized as dynamic candidates
+        // (id = "mined-..."), tried automatically with top priority when no restricted
+        // password group is configured. When a group is specified, hints may only
+        // reorder pre-authorized group candidates.
+        for (idx, hint) in unique_mined.into_iter().enumerate().rev() {
             if let Some(pos) = raw_candidates.iter().position(|c| c.secret == hint) {
                 let matched = raw_candidates.remove(pos);
                 raw_candidates.insert(0, matched);
+            } else if job.options.password_group.is_empty() {
+                raw_candidates.insert(
+                    0,
+                    Candidate {
+                        id: format!("mined-{}-{}", job.id, idx),
+                        label: "提取自文件名/伴生文件".into(),
+                        secret: hint,
+                        revision: 0,
+                    },
+                );
             }
         }
 
@@ -515,9 +529,10 @@ impl Coordinator {
         self.repository.commit_publication(&publication, job, &[])?;
         self.put(job)?;
         if let Err(e) = inplace::forget_state(archive) {
-            eprintln!(
-                "inplace_forget_state_failed archive={} reason={e}",
-                archive.display()
+            tracing::error!(
+                archive = %archive.display(),
+                reason = %e,
+                "inplace_forget_state_failed"
             );
         }
         inplace::cleanup_archive(archive);

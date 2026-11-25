@@ -350,7 +350,7 @@ impl Coordinator {
                                 this.stop_batch.store(true, Ordering::Release);
                                 return;
                             }
-                            if code == "WorkerExitUnconfirmed" || code == "StorageError" {
+                            if code == "WorkerExitUnconfirmed" || code.starts_with("StorageError") {
                                 this.stop_batch.store(true, Ordering::Release);
                             }
                         } else {
@@ -380,7 +380,7 @@ impl Coordinator {
                                 this.stop_batch.store(true, Ordering::Release);
                                 return;
                             }
-                            if code == "WorkerExitUnconfirmed" || code == "StorageError" {
+                            if code == "WorkerExitUnconfirmed" || code.starts_with("StorageError") {
                                 this.stop_batch.store(true, Ordering::Release);
                             }
                         }
@@ -398,7 +398,20 @@ impl Coordinator {
                             .lock()
                             .ok()
                             .and_then(|s| s.on_complete.clone());
-                        trigger_on_complete_hook(&job, settings_hook.as_deref());
+                        let hook_this = this.clone();
+                        let hook_job_id = job.id.clone();
+                        trigger_on_complete_hook(
+                            &job,
+                            settings_hook.as_deref(),
+                            Some(Box::new(move |err| {
+                                // Surface the hook failure in the task message so it
+                                // shows up in the UI instead of a console window.
+                                if let Ok(mut current) = hook_this.get_job(&hook_job_id) {
+                                    current.message = format!("完成后脚本执行失败：{err}");
+                                    let _ = hook_this.put(&current);
+                                }
+                            })),
+                        );
                     }
                 });
                 owners.insert(handle.id(), job_id);
@@ -553,7 +566,7 @@ impl Coordinator {
                 .is_ok_and(|job| job.status != "waitingResource");
         } else if result.is_err() {
             self.stop_batch.store(true, Ordering::Release);
-            eprintln!("job_join_owner_missing");
+            tracing::error!("job_join_owner_missing");
         }
         // A failed claim releases no contested resource. Wait for another owner
         // to finish instead of immediately recreating the same Worker attempt.
@@ -562,7 +575,7 @@ impl Coordinator {
             && self.requeue_resource_waiters().is_err()
         {
             self.stop_batch.store(true, Ordering::Release);
-            eprintln!("resource_waiter_persist_failed");
+            tracing::error!("resource_waiter_persist_failed");
         }
         self.changed();
     }
@@ -594,7 +607,7 @@ impl Coordinator {
                     processes: self.job_exit_processes(job_id),
                 };
                 if paths::atomic_json(&Path::new(work).join(UNCONFIRMED_FILE), &record).is_err() {
-                    eprintln!("job_exit_marker_persist_failed job={job_id}");
+                    tracing::error!(job = %job_id, "job_exit_marker_persist_failed");
                 }
             }
         } else {
@@ -637,7 +650,7 @@ impl Coordinator {
                 }
                 Ok(())
             });
-            eprintln!("job_abort_persist_failed job={job_id}");
+            tracing::error!(job = %job_id, "job_abort_persist_failed");
         } else if !unconfirmed && let Ok(mut active) = self.active_cancel.lock() {
             active.remove(job_id);
         }
@@ -655,31 +668,69 @@ impl Coordinator {
         if self.stop_batch.load(Ordering::Acquire) || self.paused.load(Ordering::Acquire) {
             return Ok(None);
         }
-        let small_first = self.settings.lock().map_err(|_| lock_error())?.small_first;
+        let (small_first, concurrency) = {
+            let s = self.settings.lock().map_err(|_| lock_error())?;
+            (s.small_first, s.concurrency as usize)
+        };
         let deleting = self.deleting_jobs.lock().map_err(|_| lock_error())?;
-        let all_jobs = self.jobs.lock().map_err(|_| lock_error())?.clone();
+        let scope = self
+            .scheduler_scope
+            .lock()
+            .map_err(|_| lock_error())?
+            .clone();
+        let blocked = self
+            .authorization_blocked
+            .lock()
+            .map_err(|_| lock_error())?
+            .clone();
+
+        // 仅筛选活跃 running 任务与有效待调度的 queued 任务，避免全量深拷贝
+        let (active_descriptors, mut queued): (Vec<_>, Vec<JobView>) = {
+            let jobs_guard = self.jobs.lock().map_err(|_| lock_error())?;
+            let mut active = Vec::new();
+            let mut queued = Vec::new();
+            for j in jobs_guard.iter() {
+                if j.status == "running" {
+                    active.push((
+                        j.source.path.clone(),
+                        j.options.output_root.clone(),
+                        j.stage.clone(),
+                        j.workspace.clone(),
+                        j.options.cache_enabled,
+                        j.options.cache_root.clone(),
+                    ));
+                } else if j.status == "queued"
+                    && !deleting.contains(&j.id)
+                    && !blocked.contains(&j.id)
+                    && scope.as_ref().is_none_or(|ids| ids.contains(&j.id))
+                {
+                    queued.push(j.clone());
+                }
+            }
+            (active, queued)
+        };
+        drop(deleting);
 
         // 收集当前活跃 running 任务所占用的物理设备负载（机械硬盘限制单任务避免寻道，NVMe 开启并发）
-        let concurrency = self.settings.lock().map_err(|_| lock_error())?.concurrency as usize;
         let mut scheduler = crate::route::MultiDeviceScheduler::new(concurrency);
 
-        for active in all_jobs.iter().filter(|j| j.status == "running") {
-            let src_path = Path::new(&active.source.path);
-            let final_dst_path = if !active.options.output_root.is_empty() {
-                Path::new(&active.options.output_root)
+        for (src_str, opt_out, stage, ws_opt, cache_enabled, cache_root) in active_descriptors {
+            let src_path = Path::new(&src_str);
+            let final_dst_path = if !opt_out.is_empty() {
+                Path::new(&opt_out)
             } else {
                 src_path.parent().unwrap_or(src_path)
             };
-            let (cur_src, cur_dst) = match active.stage.as_str() {
+            let (cur_src, cur_dst) = match stage.as_str() {
                 "copying" | "verifying" | "publishing" => {
-                    if let Some(ref ws) = active.workspace {
+                    if let Some(ref ws) = ws_opt {
                         (Path::new(ws), final_dst_path)
                     } else {
                         (src_path, final_dst_path)
                     }
                 }
                 _ => {
-                    if let Some(ref ws) = active.workspace {
+                    if let Some(ref ws) = ws_opt {
                         (src_path, Path::new(ws))
                     } else {
                         (src_path, final_dst_path)
@@ -709,11 +760,8 @@ impl Coordinator {
             // A newly claimed job has not chosen/materialized its workspace yet.
             // Reserve its configured cache endpoint until actual I/O paths are
             // available, so two checking jobs cannot both enter one slow cache.
-            if active.workspace.is_none()
-                && active.options.cache_enabled
-                && !active.options.cache_root.trim().is_empty()
-            {
-                let cache_path = Path::new(active.options.cache_root.trim());
+            if ws_opt.is_none() && cache_enabled && !cache_root.trim().is_empty() {
+                let cache_path = Path::new(cache_root.trim());
                 let cache_topology = self.job_disk_topology(src_path, cache_path);
                 let cache_ep = crate::route::DeviceEndpoint::from_path(
                     cache_path,
@@ -732,26 +780,6 @@ impl Coordinator {
             }
         }
 
-        let scope = self
-            .scheduler_scope
-            .lock()
-            .map_err(|_| lock_error())?
-            .clone();
-        let blocked = self
-            .authorization_blocked
-            .lock()
-            .map_err(|_| lock_error())?
-            .clone();
-        let mut queued: Vec<_> = all_jobs
-            .into_iter()
-            .filter(|job| {
-                job.status == "queued"
-                    && !deleting.contains(&job.id)
-                    && !blocked.contains(&job.id)
-                    && scope.as_ref().is_none_or(|ids| ids.contains(&job.id))
-            })
-            .collect();
-        drop(deleting);
         if small_first {
             queued.sort_by_key(|job| job.source.size);
         }
@@ -848,7 +876,11 @@ impl Coordinator {
     }
 }
 
-pub fn trigger_on_complete_hook(job: &JobView, hook_script: Option<&str>) {
+pub fn trigger_on_complete_hook(
+    job: &JobView,
+    hook_script: Option<&str>,
+    on_failure: Option<Box<dyn FnOnce(String) + Send + 'static>>,
+) {
     let Some(script) = hook_script else { return };
     let script_path = script.trim();
     if script_path.is_empty() {
@@ -885,33 +917,42 @@ pub fn trigger_on_complete_hook(job: &JobView, hook_script: Option<&str>) {
     tokio::spawn(async move {
         let script_file = std::path::Path::new(&script_cmd);
         if !script_file.is_file() {
-            eprintln!("on-complete hook is not an existing file: {script_cmd}");
+            tracing::warn!(script = %script_cmd, "on-complete hook is not an existing file");
             return;
         }
         // Job data travels through the environment only. Passing it as argv into
         // `cmd.exe` let an archive-controlled output path inject commands at `&`.
         #[cfg(target_os = "windows")]
-        let mut cmd = if script_cmd.to_lowercase().ends_with(".ps1") {
-            let mut c = tokio::process::Command::new("powershell.exe");
-            c.arg("-ExecutionPolicy")
-                .arg("Bypass")
-                .arg("-File")
-                .arg(&script_cmd);
-            c
-        } else if script_cmd.to_lowercase().ends_with(".bat")
-            || script_cmd.to_lowercase().ends_with(".cmd")
-        {
-            if script_cmd.contains(['&', '|', '<', '>', '^', '%', '!', '"', '\r', '\n']) {
-                eprintln!(
-                    "on-complete hook path contains shell metacharacters and was refused: {script_cmd}"
-                );
-                return;
+        let mut cmd = {
+            // CREATE_NO_WINDOW keeps the console host (powershell.exe / cmd.exe)
+            // from flashing a visible window when the on-complete hook runs.
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            if script_cmd.to_lowercase().ends_with(".ps1") {
+                let mut c = tokio::process::Command::new("powershell.exe");
+                c.arg("-ExecutionPolicy")
+                    .arg("Bypass")
+                    .arg("-File")
+                    .arg(&script_cmd)
+                    .creation_flags(CREATE_NO_WINDOW);
+                c
+            } else if script_cmd.to_lowercase().ends_with(".bat")
+                || script_cmd.to_lowercase().ends_with(".cmd")
+            {
+                if script_cmd.contains(['&', '|', '<', '>', '^', '%', '!', '"', '\r', '\n']) {
+                    tracing::warn!(
+                        script = %script_cmd,
+                        "on-complete hook path contains shell metacharacters and was refused"
+                    );
+                    return;
+                }
+                let mut c = tokio::process::Command::new("cmd.exe");
+                c.arg("/C")
+                    .arg(&script_cmd)
+                    .creation_flags(CREATE_NO_WINDOW);
+                c
+            } else {
+                tokio::process::Command::new(&script_cmd)
             }
-            let mut c = tokio::process::Command::new("cmd.exe");
-            c.arg("/C").arg(&script_cmd);
-            c
-        } else {
-            tokio::process::Command::new(&script_cmd)
         };
 
         #[cfg(not(target_os = "windows"))]
@@ -930,15 +971,42 @@ pub fn trigger_on_complete_hook(job: &JobView, hook_script: Option<&str>) {
             .env("OPENUNPACK_COMPLETED_BYTES", &completed_bytes)
             .env("OPENUNPACK_TOTAL_BYTES", &total_bytes);
 
-        match cmd.status().await {
-            Ok(code) => {
-                if !code.success() {
-                    eprintln!("on_complete hook exited with status: {:?}", code);
+        match cmd.output().await {
+            Ok(out) => {
+                if !out.status.success() {
+                    let detail = hook_error_detail(&out.stderr, &out.stdout);
+                    tracing::warn!(
+                        script = %script_cmd,
+                        status = ?out.status,
+                        "on-complete hook exited with a failure status"
+                    );
+                    if let Some(cb) = on_failure {
+                        cb(detail);
+                    }
                 }
             }
             Err(e) => {
-                eprintln!("failed to spawn on_complete hook ({}): {}", script_cmd, e);
+                tracing::error!(script = %script_cmd, error = %e, "failed to spawn on-complete hook");
+                if let Some(cb) = on_failure {
+                    cb(format!("无法启动完成后脚本：{e}"));
+                }
             }
         }
     });
+}
+
+/// Extracts a short, UI-safe failure message from a hook process's output.
+fn hook_error_detail(stderr: &[u8], stdout: &[u8]) -> String {
+    let mut detail = String::from_utf8_lossy(stderr).trim().to_string();
+    if detail.is_empty() {
+        detail = String::from_utf8_lossy(stdout).trim().to_string();
+    }
+    if detail.chars().count() > 500 {
+        detail = detail.chars().take(500).collect::<String>();
+        detail.push('…');
+    }
+    if detail.is_empty() {
+        detail = "脚本以非零状态退出。".into();
+    }
+    detail
 }

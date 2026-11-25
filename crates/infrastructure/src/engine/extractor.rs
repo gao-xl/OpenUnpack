@@ -98,7 +98,7 @@ impl ArchiveExtractor for ZipExtractor {
             match zip_res {
                 Ok(records) => Ok(records),
                 Err(e) if permits_zip_cli_fallback(&e) && cli_engine::has_7z_cli() => {
-                    cli_engine::inspect_cli(&p, pwd.as_deref())
+                    cli_engine::inspect_cli(&p, pwd.as_deref(), max_entries, max_total_bytes)
                         .await
                         .map_err(|_| e)
                 }
@@ -184,7 +184,7 @@ impl ArchiveExtractor for ZipExtractor {
                 Err(e) => return Err(e),
             };
 
-            let total_bytes: u64 = files.iter().map(|f| f.size).sum();
+            let total_bytes: u64 = files.iter().fold(0u64, |acc, f| acc.saturating_add(f.size));
             Ok(ExtractionOutcome {
                 total_bytes,
                 verification_scope: if is_salvaged {
@@ -260,7 +260,7 @@ impl ArchiveExtractor for TarExtractor {
             .await
             .map_err(|e| format!("SpawnBlockingError: {e}"))??;
 
-            let total_bytes: u64 = files.iter().map(|f| f.size).sum();
+            let total_bytes: u64 = files.iter().fold(0u64, |acc, f| acc.saturating_add(f.size));
             Ok(ExtractionOutcome {
                 total_bytes,
                 verification_scope: if is_salvaged {
@@ -335,7 +335,7 @@ impl ArchiveExtractor for Lz4Extractor {
             })
             .await
             .map_err(|e| format!("SpawnBlockingError: {e}"))??;
-            let total_bytes: u64 = files.iter().map(|f| f.size).sum();
+            let total_bytes: u64 = files.iter().fold(0u64, |acc, f| acc.saturating_add(f.size));
             Ok(ExtractionOutcome {
                 total_bytes,
                 verification_scope: "frameValidationAndStreamSha256".into(),
@@ -362,15 +362,17 @@ impl ArchiveExtractor for CliExtractor {
     fn inspect(
         &self,
         archive: &Path,
-        _max_entries: u64,
-        _max_total_bytes: u64,
+        max_entries: u64,
+        max_total_bytes: u64,
         password: Option<&str>,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<Vec<FileRecord>, String>> + Send + 'static>,
     > {
         let p = archive.to_path_buf();
         let pwd = password.map(str::to_string);
-        Box::pin(async move { cli_engine::inspect_cli(&p, pwd.as_deref()).await })
+        Box::pin(async move {
+            cli_engine::inspect_cli(&p, pwd.as_deref(), max_entries, max_total_bytes).await
+        })
     }
 
     fn probe(
@@ -402,7 +404,7 @@ impl ArchiveExtractor for CliExtractor {
         let dest_clone = destination.to_path_buf();
         Box::pin(async move {
             let files = cli_engine::extract_cli(&req_clone, &dest_clone, progress, cancel).await?;
-            let total_bytes: u64 = files.iter().map(|f| f.size).sum();
+            let total_bytes: u64 = files.iter().fold(0u64, |acc, f| acc.saturating_add(f.size));
             Ok(ExtractionOutcome {
                 total_bytes,
                 verification_scope: "archiveCrcAndStreamSha256".into(),
@@ -545,7 +547,8 @@ impl ArchiveExtractor for InplaceExtractor {
                             is_corrupted: cf.is_corrupted,
                         })
                         .collect();
-                    let total_bytes: u64 = files.iter().map(|f| f.size).sum();
+                    let total_bytes: u64 =
+                        files.iter().fold(0u64, |acc, f| acc.saturating_add(f.size));
                     Ok((files, total_bytes))
                 }
             });

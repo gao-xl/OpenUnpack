@@ -1,6 +1,15 @@
+//! 解压路径安全闸门：Zip Slip 防御、排除/包含规则委托入口。
+//!
+//! 排除匹配的唯一真源在 `openunpack-domain::archive::exclusions`，
+//! 本模块只做委托，保证预览与解压永不出现判定分歧。
+
 use std::path::{Component, Path};
 
-/// Validates and sanitizes a relative archive entry path to prevent Zip Slip / path traversal attacks.
+/// 校验并规范化压缩包内相对路径，防御 Zip Slip / 路径穿越攻击。
+///
+/// 拒绝项：绝对路径（含盘符与根斜杠）、`..` 穿越段、NUL/冒号等非法字符、
+/// 尾随点/空格段、Windows 保留设备名（CON/NUL/COM1…）、深度超过 128。
+/// 通过时返回正斜杠规范化后的相对路径。
 pub fn validate_relative_path(name: &str) -> Result<String, String> {
     if name.starts_with('/') || name.starts_with('\\') {
         return Err("UnsafePath: Absolute paths forbidden".into());
@@ -56,6 +65,7 @@ pub fn validate_relative_path(name: &str) -> Result<String, String> {
     Ok(path_str.to_string())
 }
 
+/// 判断段基名是否为 Windows 保留设备名（忽略大小写）。
 fn is_reserved_windows_name(name: &str) -> bool {
     let upper = name.to_ascii_uppercase();
     matches!(
@@ -88,33 +98,18 @@ fn is_reserved_windows_name(name: &str) -> bool {
     )
 }
 
-/// Evaluates if a relative path matches any exclusion wildcard pattern.
-pub fn matches_exclusion(path: &str, patterns: &[String]) -> bool {
-    if patterns.is_empty() {
-        return false;
-    }
-    let norm_path = path.replace('\\', "/");
-    let file_name = norm_path.rsplit('/').next().unwrap_or(&norm_path);
+/// 判断相对路径是否命中排除规则。委托 `openunpack-domain` 的唯一实现：
+/// 预览面板与解压引擎对"是否排除"的判定必须永远一致。
+pub use openunpack_domain::archive::exclusions::MAX_EXCLUSION_PATTERN_BYTES;
 
-    for raw in patterns {
-        let pattern = raw.trim().replace('\\', "/");
-        if pattern.is_empty() {
-            continue;
-        }
-        let target = if pattern.contains('/') {
-            &norm_path
-        } else {
-            file_name
-        };
-        let target_utf16: Vec<u16> = target.encode_utf16().collect();
-        let pattern_utf16: Vec<u16> = pattern.encode_utf16().collect();
-        if wildcard_utf16(&target_utf16, &pattern_utf16) {
-            return true;
-        }
-    }
-    false
+pub fn matches_exclusion(path: &str, patterns: &[String]) -> bool {
+    openunpack_domain::archive::exclusions::matches_exclusion(path, patterns)
 }
 
+/// 批量预览输出排除结果：对每条路径给出是否会被排除。
+///
+/// 语义比单条匹配更强：命中排除规则的目录，其全部子孙路径
+/// 也标记为排除（与实际解压时目录整棵跳过的行为一致）。
 pub fn preview_output_exclusions(paths: &[String], patterns: &[String]) -> Vec<bool> {
     if patterns.is_empty() {
         return vec![false; paths.len()];
@@ -153,7 +148,11 @@ pub fn preview_output_exclusions(paths: &[String], patterns: &[String]) -> Vec<b
     result
 }
 
-/// Evaluates if a relative path matches inclusion patterns (if specified).
+/// 判断相对路径是否命中包含（inclusion）规则。
+///
+/// 规则集为空时视为全量包含（返回 true）。支持三类形式：
+/// `./前缀` 显式选择（含目录递归）、纯目录名前缀递归、通配符匹配
+/// （带分隔符时对全路径匹配，纯文件名模式对 basename 匹配）。
 pub fn matches_inclusion(path: &str, _is_directory: bool, patterns: &[String]) -> bool {
     if patterns.is_empty() {
         return true;
@@ -205,101 +204,11 @@ pub fn matches_inclusion(path: &str, _is_directory: bool, patterns: &[String]) -
         } else {
             file_name
         };
-        if wildcard_match(target, &pattern) {
+        if openunpack_domain::archive::exclusions::wildcard_match(&pattern, target) {
             return true;
         }
     }
     false
-}
-
-fn to_upper_invariant(c: u16) -> u16 {
-    if c == 0x0131 {
-        return 0x0131;
-    }
-    if c == 0x03C2 || c == 0x03C3 {
-        return 0x03A3;
-    }
-    if (b'a' as u16..=b'z' as u16).contains(&c) {
-        return c - 32;
-    }
-    if let Some(ch) = char::from_u32(c as u32) {
-        let mut upper = ch.to_uppercase();
-        if let Some(first) = upper.next()
-            && upper.next().is_none()
-        {
-            let u = first as u32;
-            if u <= 0xFFFF {
-                return u as u16;
-            }
-        }
-    }
-    c
-}
-
-fn wildcard_utf16(value: &[u16], pattern: &[u16]) -> bool {
-    let mut v = 0;
-    let mut p = 0;
-    let mut star: Option<usize> = None;
-    let mut restart = 0;
-    let qmark = '?' as u16;
-    let star_char = '*' as u16;
-
-    while v < value.len() {
-        if p < pattern.len()
-            && (pattern[p] == qmark
-                || to_upper_invariant(value[v]) == to_upper_invariant(pattern[p]))
-        {
-            v += 1;
-            p += 1;
-        } else if p < pattern.len() && pattern[p] == star_char {
-            star = Some(p);
-            p += 1;
-            restart = v;
-        } else if let Some(s) = star {
-            p = s + 1;
-            restart += 1;
-            v = restart;
-        } else {
-            return false;
-        }
-    }
-    while p < pattern.len() && pattern[p] == star_char {
-        p += 1;
-    }
-    p == pattern.len()
-}
-
-fn wildcard_match(text: &str, pattern: &str) -> bool {
-    let t_chars: Vec<char> = text.chars().map(|c| c.to_ascii_lowercase()).collect();
-    let p_chars: Vec<char> = pattern.chars().map(|c| c.to_ascii_lowercase()).collect();
-
-    let mut t_idx = 0;
-    let mut p_idx = 0;
-    let mut star_idx = None;
-    let mut match_idx = 0;
-
-    while t_idx < t_chars.len() {
-        if p_idx < p_chars.len() && (p_chars[p_idx] == '?' || p_chars[p_idx] == t_chars[t_idx]) {
-            p_idx += 1;
-            t_idx += 1;
-        } else if p_idx < p_chars.len() && p_chars[p_idx] == '*' {
-            star_idx = Some(p_idx);
-            p_idx += 1;
-            match_idx = t_idx;
-        } else if let Some(star) = star_idx {
-            p_idx = star + 1;
-            match_idx += 1;
-            t_idx = match_idx;
-        } else {
-            return false;
-        }
-    }
-
-    while p_idx < p_chars.len() && p_chars[p_idx] == '*' {
-        p_idx += 1;
-    }
-
-    p_idx == p_chars.len()
 }
 
 #[cfg(test)]
@@ -323,10 +232,22 @@ mod tests {
 
     #[test]
     fn test_wildcard_matching() {
-        assert!(wildcard_match("test.txt", "*.txt"));
-        assert!(wildcard_match("abc123xyz", "abc*xyz"));
-        assert!(wildcard_match("file1.png", "file?.png"));
-        assert!(!wildcard_match("file12.png", "file?.png"));
+        // Canonical rule order is (pattern, text): see openunpack-domain.
+        assert!(openunpack_domain::archive::exclusions::wildcard_match(
+            "*.txt", "test.txt"
+        ));
+        assert!(openunpack_domain::archive::exclusions::wildcard_match(
+            "abc*xyz",
+            "abc123xyz"
+        ));
+        assert!(openunpack_domain::archive::exclusions::wildcard_match(
+            "file?.png",
+            "file1.png"
+        ));
+        assert!(!openunpack_domain::archive::exclusions::wildcard_match(
+            "file?.png",
+            "file12.png"
+        ));
         assert!(matches_exclusion(
             "node_modules/pkg/index.js",
             &["node_modules/*".into()]

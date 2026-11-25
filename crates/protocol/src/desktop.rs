@@ -1,9 +1,19 @@
+//! Desktop API 协议 DTO：UI ↔ local-api 的线格式契约。
+//!
+//! camelCase 序列化；带 `openapi` feature 时生成 OpenAPI schema。
+//! 含凭据的结构在 Drop 时 zeroize，Debug 输出一律脱敏。
+
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+/// Desktop API 协议版本。
 pub const DESKTOP_API_VERSION: u32 = 1;
+/// 并发解压任务上限。
 pub const MAX_CONCURRENT_JOBS: u32 = 5;
 
+/// 密码库条目的写入载荷（新建时 `id` 为 `None`）。
+///
+/// `secret` 为明文，Drop 时 zeroize，Debug 输出脱敏。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,6 +26,7 @@ pub struct PasswordInput {
     pub enabled: bool,
 }
 
+/// 密码库条目的展示视图（永不携带明文）。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,22 +36,28 @@ pub struct PasswordView {
     pub groups: Vec<String>,
     pub notes: String,
     pub enabled: bool,
+    /// 历史命中次数。
     pub success_count: u64,
     pub last_success: Option<String>,
+    /// 条目版本号（乐观并发）。
     pub revision: u64,
 }
 
+/// 密码导入预览中的单行结果。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportRow {
+    /// 源文件行号（从 1 开始）。
     pub line: usize,
     pub name: String,
     pub group: String,
+    /// 行状态（added / duplicate / error）。
     pub status: String,
     pub message: String,
 }
 
+/// 密码导入预览结果；`token` 用于确认提交时的防重放。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -52,6 +69,7 @@ pub struct ImportPreview {
     pub rows: Vec<ImportRow>,
 }
 
+/// 密码导入确认提交的结果。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,17 +78,21 @@ pub struct ImportResult {
     pub duplicates: usize,
 }
 
+/// 一组源压缩包（含分卷分组与缺失标记）。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceGroup {
+    /// 主分卷（或单文件）路径。
     pub path: String,
     pub display_name: String,
+    /// 组内全部分卷路径。
     pub volumes: Vec<String>,
     pub size: u64,
     pub missing_volume: bool,
 }
 
+/// 扫描过程中的单条提示（跳过/访问受限等）。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -79,6 +101,7 @@ pub struct ScanNotice {
     pub message: String,
 }
 
+/// 输入扫描结果：压缩包分组 + 提示清单。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -95,6 +118,10 @@ fn default_auto_start_on_add() -> bool {
     true
 }
 
+/// 应用设置的完整快照（UI 全量读写）。
+///
+/// 任务冻结时所需字段的语义与 [`crate::FrozenJobOptions`] 一一对应；
+/// 新增字段必须提供 serde default 以兼容旧持久化记录。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -216,6 +243,7 @@ impl Default for Settings {
     }
 }
 
+/// 任务树节点的 UI 视图（状态/阶段用稳定短名字符串表示）。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -232,6 +260,7 @@ pub struct NodeView {
     pub password_label: Option<String>,
 }
 
+/// 跨盘传输进度（缓存中转 / 直通复制阶段的速率与 ETA）。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -243,6 +272,7 @@ pub struct TransferProgress {
     pub updated_at: String,
 }
 
+/// 活动任务的完整 UI 视图（含节点树与冻结设置）。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -266,7 +296,7 @@ pub struct JobView {
     pub transfer_progress: Option<TransferProgress>,
 }
 
-/// Bounded history rows omit node trees and frozen extraction settings.
+/// 有界的历史记录行视图，省略节点树与冻结的解压设置。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -285,6 +315,7 @@ pub struct JobSummary {
     pub workspace: Option<String>,
 }
 
+/// 历史记录分页查询参数；`status` 为空表示不过滤。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -295,6 +326,7 @@ pub struct HistoryPageQuery {
     pub search: String,
 }
 
+/// 历史记录分页结果（含过滤统计与会话/修订号）。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -313,6 +345,7 @@ pub struct JobHistoryPage {
     pub revision: u64,
 }
 
+/// 应用状态全量快照（订阅建立或 `StateInvalidated` 后的重建基线）。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -333,6 +366,7 @@ pub struct AppSnapshot {
     pub revision: u64,
 }
 
+/// 全量快照中随任务集变化的运行时状态部分。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -346,6 +380,7 @@ pub struct SnapshotState {
     pub cache_used_bytes: u64,
 }
 
+/// 状态增量：相对基线快照的变更集（改动的实体 + 移除的 ID 列表）。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -359,6 +394,11 @@ pub struct SnapshotDelta {
 }
 
 impl SnapshotDelta {
+    /// 将增量应用到基线快照，返回新快照。
+    ///
+    /// 应用顺序：先按 `jobs_removed`/`passwords_removed` 剔除，
+    /// 再用同 ID 的变更覆盖基线，最后追加基线中不存在的新实体；
+    /// `settings` 与 `state` 为 `None` 时沿用基线值。
     pub fn apply_to(&self, base: &AppSnapshot, session_id: String, revision: u64) -> AppSnapshot {
         let removed_jobs: std::collections::HashSet<&str> =
             self.jobs_removed.iter().map(|s| s.as_str()).collect();
@@ -468,6 +508,7 @@ impl SnapshotDelta {
     }
 }
 
+/// 订阅推送帧：`full` 与 `delta` 二选一，携带会话 ID 与修订号。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -497,6 +538,7 @@ mod decimal_revision {
     use serde::Deserialize;
 }
 
+/// 增量流失效通知：客户端修订号对不上时需丢弃本地状态重新拉全量。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -505,6 +547,7 @@ pub struct StateInvalidated {
     pub revision: String,
 }
 
+/// 单任务进度推送（高频心跳事件）。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -520,6 +563,7 @@ pub struct JobProgressUpdate {
     pub current_file: Option<String>,
 }
 
+/// 任务需要密码的事件；`timeout_seconds` 内未响应则按失败处理。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -530,6 +574,7 @@ pub struct NeedPasswordEvent {
     pub input_type: String,
 }
 
+/// 压缩包内容浏览（检查）视图中的单个条目。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -543,6 +588,7 @@ pub struct ArchiveEntryView {
     pub raw_path: String,
 }
 
+/// 压缩包内容检查结果（含编码探测与加密条目统计）。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -561,6 +607,7 @@ fn archive_size_known() -> bool {
     true
 }
 
+/// 选择性解压请求：只解出指定的条目集合。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -575,6 +622,7 @@ pub struct SelectiveExtractRequest {
     pub flatten: bool,
 }
 
+/// 选择性解压结果。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -584,15 +632,20 @@ pub struct SelectiveExtractResult {
     pub total_bytes: u64,
 }
 
+/// 工具箱操作类别。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ToolboxKind {
+    /// 修正错误的压缩包扩展名。
     NormalizeExtensions,
+    /// 按规则批量重命名。
     BatchRename,
+    /// 扁平化目录层级。
     FlattenDirectory,
 }
 
+/// 冲突处理策略（工具箱与解压共用）。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -602,6 +655,7 @@ pub enum ConflictStrategy {
     Error,
 }
 
+/// 预览计划中单条目的执行动作。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -611,6 +665,7 @@ pub enum ToolboxAction {
     Skip,
 }
 
+/// 批量重命名的规则定义（查找替换 / 前后缀 / 编号）。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -625,6 +680,7 @@ pub struct RenamePatternRule {
     pub numbering_digits: Option<u32>,
 }
 
+/// 工具箱操作参数。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -638,6 +694,7 @@ pub struct ToolboxOptions {
     pub rename_rule: Option<RenamePatternRule>,
 }
 
+/// 预览阶段为单个条目生成的执行计划。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -652,6 +709,7 @@ pub struct ToolboxItemPlan {
     pub conflict_reason: Option<String>,
 }
 
+/// 工具箱预览结果；`token` 用于执行阶段的防重放绑定。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -664,6 +722,8 @@ pub struct ToolboxPreviewResult {
     pub token: String,
 }
 
+/// 工具箱执行请求：`approved_paths` 限定实际生效的条目子集
+/// （未批准的跳过），`token` 必须与预览结果一致。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -674,6 +734,7 @@ pub struct ToolboxExecuteRequest {
     pub token: Option<String>,
 }
 
+/// 工具箱执行结果统计。
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -683,6 +744,19 @@ pub struct ToolboxExecuteResult {
     pub failed_count: usize,
     pub cleaned_folders_count: usize,
     pub errors: Vec<String>,
+}
+
+/// 扩展名修正预览/执行中的单个条目；
+/// `proposed_*` 为 `None` 表示无修正方案（如状态为 error）。
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArchiveExtensionFixItem {
+    pub original_path: String,
+    pub proposed_name: Option<String>,
+    pub new_path: Option<String>,
+    pub status: String,
+    pub message: String,
 }
 
 impl Drop for PasswordInput {

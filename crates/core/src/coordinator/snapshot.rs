@@ -29,12 +29,10 @@ impl Coordinator {
         } else {
             Vec::new()
         };
-        recent.sort_by(|a, b| {
-            b.created_at
-                .cmp(&a.created_at)
-                .then_with(|| b.id.cmp(&a.id))
-        });
-        let recent_ids: HashSet<_> = recent.iter().take(20).map(|job| job.id.as_str()).collect();
+        // Only the latest 20 ended jobs are shown; select them without sorting
+        // the entire stored history on every snapshot.
+        top_n_newest(&mut recent, 20);
+        let recent_ids: HashSet<_> = recent.iter().map(|job| job.id.as_str()).collect();
         let mut jobs: Vec<_> = stored
             .iter()
             .filter(|job| {

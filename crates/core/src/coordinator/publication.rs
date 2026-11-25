@@ -246,10 +246,33 @@ impl PublicationService {
                     std::fs::rename(&target, &trash_path)
                         .map_err(|e| format!("目标目录已存在且覆盖备份失败: {e}"))?;
                     if let Err(e) = tree.rename_no_replace(&staged.output_directory, &final_path) {
-                        let _ = std::fs::rename(&trash_path, &target);
-                        return Err(format!("目标目录提交失败；已恢复原目录: {e}"));
+                        // Never claim the original directory is back unless it
+                        // actually is: a failed restore leaves the user's data
+                        // in the trash backup, and the message must say where.
+                        return Err(match std::fs::rename(&trash_path, &target) {
+                            Ok(()) => format!("目标目录提交失败；已恢复原目录: {e}"),
+                            Err(restore) => format!(
+                                "目标目录提交失败，且原目录恢复失败（原目录备份保留在 {}）：{e}；恢复错误: {restore}",
+                                trash_path.display()
+                            ),
+                        });
                     }
-                    let _ = std::fs::remove_dir_all(&trash_path);
+                    let mut removed = false;
+                    for delay in [0, 150, 400] {
+                        if delay > 0 {
+                            std::thread::sleep(std::time::Duration::from_millis(delay));
+                        }
+                        if std::fs::remove_dir_all(&trash_path).is_ok() {
+                            removed = true;
+                            break;
+                        }
+                    }
+                    if !removed {
+                        tracing::warn!(
+                            trash = %trash_path.display(),
+                            "trash_cleanup_delayed_left_for_recovery"
+                        );
+                    }
                     committed_by_overwrite = true;
                 }
                 conflict_resolver::ConflictResolution::SkipIdentical(_) => {
@@ -525,5 +548,25 @@ fn terminal_status(corrupted: bool, partial: bool) -> &'static str {
         "partial"
     } else {
         "completed"
+    }
+}
+
+/// Sweeps and removes orphaned `.openunpack-trash-*.tmp` directories under a root path.
+pub(crate) fn clean_orphaned_trash_directories(root: &Path) {
+    if !root.is_dir() {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if path.is_dir()
+            && let Some(name) = path.file_name().and_then(|n| n.to_str())
+            && name.starts_with(".openunpack-trash-")
+            && name.ends_with(".tmp")
+        {
+            let _ = std::fs::remove_dir_all(&path);
+        }
     }
 }

@@ -237,6 +237,9 @@ async fn wait_for_jobs(conn: &DaemonConnection, job_ids: &[String]) {
     println!(" Waiting for {} job(s) to finish...", job_ids.len());
 
     let mut last_progress_str = String::new();
+    let mut reported_terminal = std::collections::HashSet::new();
+    let mut failed_count = 0usize;
+
     loop {
         tokio::time::sleep(Duration::from_millis(500)).await;
         let snap = match conn.get_snapshot().await {
@@ -250,10 +253,10 @@ async fn wait_for_jobs(conn: &DaemonConnection, job_ids: &[String]) {
 
         for id in job_ids {
             if let Some(job) = snap.jobs.iter().find(|j| j.id == *id) {
-                if job.status == "running"
-                    || job.status == "queued"
-                    || job.status == "waitingResource"
-                {
+                if matches!(
+                    job.status.as_str(),
+                    "running" | "queued" | "waitingResource" | "stopping"
+                ) {
                     all_done = false;
                     active_count += 1;
                     let pct = (job.progress * 100.0) as u32;
@@ -261,8 +264,18 @@ async fn wait_for_jobs(conn: &DaemonConnection, job_ids: &[String]) {
                         "[{}] {}: {}% ({}) [remaining: {}]",
                         job.id, job.source.display_name, pct, job.stage, active_count
                     );
-                } else if job.status == "failed" {
-                    println!("! Job [{}] FAILED: {}", job.id, job.message);
+                } else if matches!(
+                    job.status.as_str(),
+                    "failed" | "needsPassword" | "cancelled" | "interrupted"
+                ) && reported_terminal.insert(job.id.clone())
+                {
+                    failed_count += 1;
+                    eprintln!(
+                        "\r\x1B[K! Job [{}] {}: {}",
+                        job.id,
+                        job.status.to_uppercase(),
+                        job.message
+                    );
                 }
             }
         }
@@ -275,6 +288,14 @@ async fn wait_for_jobs(conn: &DaemonConnection, job_ids: &[String]) {
         }
 
         if all_done {
+            if failed_count > 0 {
+                eprintln!(
+                    "\r\x1B[K✗ {} of {} job(s) did not complete successfully.",
+                    failed_count,
+                    job_ids.len()
+                );
+                std::process::exit(1);
+            }
             println!("\r\x1B[K✓ All {} job(s) completed.", job_ids.len());
             break;
         }

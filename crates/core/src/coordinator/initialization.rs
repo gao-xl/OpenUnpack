@@ -178,6 +178,11 @@ impl Coordinator {
         });
         core.apply_outbox();
         core.init_folder_watcher();
+        if let Ok(s) = core.settings.lock()
+            && !s.output_root.trim().is_empty()
+        {
+            publication::clean_orphaned_trash_directories(Path::new(&s.output_root));
+        }
         Ok(core)
     }
     pub fn revision_info(&self) -> (String, u64) {

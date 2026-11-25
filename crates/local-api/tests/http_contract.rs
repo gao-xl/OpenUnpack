@@ -586,7 +586,7 @@ fn resolve_schema<'a>(mut schema: &'a Value, spec: &'a Value) -> &'a Value {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn command_catalog_and_openapi_have_all_46_unique_matching_command_names() {
+async fn command_catalog_and_openapi_have_all_47_unique_matching_command_names() {
     let api = Harness::start().await;
     let client = api.client(&[Scope::JobsRead]);
     let response = api
@@ -607,13 +607,13 @@ async fn command_catalog_and_openapi_have_all_46_unique_matching_command_names()
         .map(|name| name.as_str().expect("non-string catalog entry"))
         .collect();
     let implemented: BTreeSet<_> = ApiCommand::NAMES.iter().copied().collect();
-    assert_eq!(ApiCommand::NAMES.len(), 46);
+    assert_eq!(ApiCommand::NAMES.len(), 47);
     assert_eq!(
         implemented.len(),
-        46,
+        47,
         "duplicate command in implementation catalog"
     );
-    assert_eq!(catalog.len(), 46);
+    assert_eq!(catalog.len(), 47);
     assert_eq!(
         catalog_names.len(),
         catalog.len(),
@@ -626,7 +626,7 @@ async fn command_catalog_and_openapi_have_all_46_unique_matching_command_names()
     let variants = spec["components"]["schemas"]["ApiCommand"]["oneOf"]
         .as_array()
         .expect("typed command oneOf missing");
-    assert_eq!(variants.len(), 46);
+    assert_eq!(variants.len(), 47);
     let names: BTreeSet<_> = variants
         .iter()
         .map(|variant| {

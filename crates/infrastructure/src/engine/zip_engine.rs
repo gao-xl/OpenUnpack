@@ -35,10 +35,10 @@ pub fn inspect_zip(
             .by_index_raw(i)
             .map_err(|e| format!("ZipReadError: {e}"))?;
         // zip 9 returns a Result: legacy code-page names are not valid UTF-8, so
-        // fall back to the raw bytes instead of rejecting the whole archive.
+        // decode via OEM/ANSI transcoding adapter instead of lossy UTF-8 replacement.
         let name = match entry.name() {
             Ok(name) => name.to_string(),
-            Err(_) => String::from_utf8_lossy(entry.name_raw()).into_owned(),
+            Err(_) => super::oem_codepage::decode_oem_text(entry.name_raw()),
         };
         let is_dir = entry.is_dir();
         let size = entry.size();
@@ -47,6 +47,15 @@ pub fn inspect_zip(
         total_bytes = total_bytes.saturating_add(size);
         if max_total_bytes > 0 && total_bytes > max_total_bytes {
             return Err("ResourceLimit: Exceeds maxTotalBytes".into());
+        }
+
+        // Skip Unix symbolic links (S_IFLNK = 0o120000)
+        if entry
+            .unix_mode()
+            .is_some_and(|m| (m & 0o170000) == 0o120000)
+            || ((entry.external_attributes() >> 16) & 0o170000 == 0o120000)
+        {
+            continue;
         }
 
         // Clean relative path
@@ -81,54 +90,59 @@ pub fn probe_zip(
         Err(e) => return Err(format!("CorruptArchive: {e}")),
     };
 
-    // Find the first encrypted file entry
-    let mut encrypted_index = None;
+    // Collect encrypted file entries and sort by uncompressed size (preferring
+    // non-empty entries first) so we can verify full stream decompression + CRC32
+    // at EOF with minimal I/O while defeating the 1/256 ZipCrypto header collision.
+    let mut encrypted_entries: Vec<(usize, u64)> = Vec::new();
     for i in 0..archive.len() {
         match archive.by_index_raw(i) {
             Ok(entry) => {
                 if entry.encrypted() && !entry.is_dir() {
-                    encrypted_index = Some(i);
-                    break;
+                    encrypted_entries.push((i, entry.size()));
                 }
             }
             Err(e) => return Err(format!("ZipReadError: {e}")),
         }
     }
 
-    let Some(target_idx) = encrypted_index else {
+    if encrypted_entries.is_empty() {
         // No encrypted entry found; no password needed
         return Ok(super::ProbeOutcome::NoPasswordNeeded);
-    };
+    }
 
-    let mut probe_buf = [0u8; 64];
-    for (candidate_secret, candidate_id) in candidates {
+    encrypted_entries.sort_by_key(|&(_, size)| (size == 0, size));
+    let verify_indices: Vec<usize> = encrypted_entries
+        .iter()
+        .take(2)
+        .map(|&(idx, _)| idx)
+        .collect();
+
+    let mut probe_buf = vec![0u8; 64 * 1024];
+    'candidate_loop: for (candidate_secret, candidate_id) in candidates {
         if cancel.load(Ordering::Acquire) {
             return Err("Cancelled".into());
         }
 
-        // Attempt decryption of target file
-        match archive.by_index_decrypt(target_idx, candidate_secret.as_bytes()) {
-            Ok(mut reader) => {
-                // Try reading a few bytes to verify password authentication/CRC
-                match reader.read(&mut probe_buf) {
-                    Ok(read) => {
-                        // Any successful read (including 0 for an empty entry)
-                        // proves the stream decrypted; the count itself is not
-                        // needed beyond validating the buffer contract.
-                        debug_assert!(read <= probe_buf.len());
-                        return Ok(super::ProbeOutcome::Success(
-                            candidate_secret.clone(),
-                            candidate_id.clone(),
-                        ));
+        for &target_idx in &verify_indices {
+            match archive.by_index_decrypt(target_idx, candidate_secret.as_bytes()) {
+                Ok(mut reader) => loop {
+                    if cancel.load(Ordering::Acquire) {
+                        return Err("Cancelled".into());
                     }
-                    Err(_) => {
-                        // Password mismatch or CRC failure
-                        continue;
+                    match reader.read(&mut probe_buf) {
+                        Ok(0) => break,
+                        Ok(_) => continue,
+                        Err(_) => continue 'candidate_loop,
                     }
-                }
+                },
+                Err(_) => continue 'candidate_loop,
             }
-            Err(_) => continue,
         }
+
+        return Ok(super::ProbeOutcome::Success(
+            candidate_secret.clone(),
+            candidate_id.clone(),
+        ));
     }
 
     Ok(super::ProbeOutcome::WrongPassword)
@@ -181,7 +195,7 @@ where
         if let Ok(entry) = archive.by_index_raw(i)
             && !entry.is_dir()
         {
-            total_bytes += entry.size();
+            total_bytes = total_bytes.saturating_add(entry.size());
         }
     }
 
@@ -195,6 +209,7 @@ where
     } else {
         u64::MAX
     };
+    let mut verified_encrypted_password = false;
 
     for i in 0..count {
         if cancel.load(Ordering::Acquire) {
@@ -216,11 +231,24 @@ where
                 .map_err(|e| format!("ZipError: {e}"))?;
             let name = match raw_entry.name() {
                 Ok(name) => name.to_string(),
-                Err(_) => String::from_utf8_lossy(raw_entry.name_raw()).into_owned(),
+                Err(_) => super::oem_codepage::decode_oem_text(raw_entry.name_raw()),
             };
             is_dir = raw_entry.is_dir();
             size = raw_entry.size();
             is_encrypted = raw_entry.encrypted();
+
+            let is_symlink = raw_entry
+                .unix_mode()
+                .is_some_and(|m| (m & 0o170000) == 0o120000)
+                || ((raw_entry.external_attributes() >> 16) & 0o170000 == 0o120000);
+            if is_symlink {
+                continue;
+            }
+
+            // Early check exclusions using raw name
+            if matches_exclusion(&name, &request.exclusions) {
+                continue;
+            }
 
             match validate_relative_path(&name) {
                 Ok(p) => relative_path = p,
@@ -273,7 +301,10 @@ where
         let entry_reader = match entry_reader_res {
             Ok(r) => Some(r),
             Err(e) => {
-                if request.salvage_corrupted {
+                // Never treat a missing or rejected password on an encrypted entry
+                // as a salvageable file unless the password has already been proven
+                // valid on an earlier encrypted entry in this archive.
+                if request.salvage_corrupted && (!is_encrypted || verified_encrypted_password) {
                     entry_corrupted = true;
                     None
                 } else {
@@ -299,6 +330,9 @@ where
                 let read_bytes = match reader.read(&mut buf) {
                     Ok(n) => n,
                     Err(e) => {
+                        if is_encrypted && !verified_encrypted_password {
+                            return Err("PasswordMismatchOrCorrupt".into());
+                        }
                         if request.salvage_corrupted {
                             entry_corrupted = true;
                             break;
@@ -308,9 +342,13 @@ where
                     }
                 };
                 if read_bytes == 0 {
+                    if is_encrypted {
+                        verified_encrypted_password = true;
+                    }
                     break;
                 }
-                if completed_bytes + read_bytes as u64 > max_written {
+                let next_completed = completed_bytes.saturating_add(read_bytes as u64);
+                if next_completed > max_written {
                     return Err("ResourceLimit: Exceeds maxWrittenBytes".into());
                 }
 
@@ -318,8 +356,8 @@ where
                     .write_all(&buf[..read_bytes])
                     .map_err(|e| format!("IoError: {e}"))?;
                 hasher.update(&buf[..read_bytes]);
-                completed_bytes += read_bytes as u64;
-                actual_written += read_bytes as u64;
+                completed_bytes = next_completed;
+                actual_written = actual_written.saturating_add(read_bytes as u64);
 
                 if last_progress.elapsed() >= Duration::from_millis(50) {
                     let mut prog_ev = super::make_event(request, "progress");
@@ -336,7 +374,7 @@ where
 
         extracted_records.push(FileRecord {
             relative_path,
-            size: if entry_corrupted && actual_written > 0 {
+            size: if entry_corrupted {
                 actual_written
             } else {
                 size
@@ -349,10 +387,10 @@ where
         });
     }
 
-    if extracted_records.is_empty() {
-        return Err("CorruptArchive: 无有效文件可解压或全部文件损坏".into());
-    }
-
+    // When the archive has 0 entries (empty archive) or all entries were excluded/filtered,
+    // extraction completes with an empty file record list without misreporting CorruptArchive.
+    // If the archive actually had non-directory entries but every one failed/was corrupted and
+    // salvage was not requested, the loop has already returned Err earlier.
     Ok(extracted_records)
 }
 
@@ -391,10 +429,19 @@ pub fn extract_zip_selective(
                 .map_err(|e| format!("ZipError: {e}"))?;
             let name = match raw_entry.name() {
                 Ok(name) => name.to_string(),
-                Err(_) => String::from_utf8_lossy(raw_entry.name_raw()).into_owned(),
+                Err(_) => super::oem_codepage::decode_oem_text(raw_entry.name_raw()),
             };
             is_dir = raw_entry.is_dir();
             is_encrypted = raw_entry.encrypted();
+
+            // Skip Unix symbolic links (S_IFLNK = 0o120000)
+            if raw_entry
+                .unix_mode()
+                .is_some_and(|m| (m & 0o170000) == 0o120000)
+                || ((raw_entry.external_attributes() >> 16) & 0o170000 == 0o120000)
+            {
+                continue;
+            }
 
             match validate_relative_path(&name) {
                 Ok(p) => relative_path = p,
@@ -422,7 +469,7 @@ pub fn extract_zip_selective(
             relative_path.clone()
         };
 
-        let out_path = destination.join(&target_relative);
+        let mut out_path = destination.join(&target_relative);
 
         if is_dir {
             fs::create_dir_all(&out_path).map_err(|e| format!("MkdirError: {e}"))?;
@@ -431,6 +478,33 @@ pub fn extract_zip_selective(
 
         if let Some(parent) = out_path.parent() {
             fs::create_dir_all(parent).map_err(|e| format!("MkdirError: {e}"))?;
+        }
+
+        if flatten && out_path.exists() {
+            let parent = out_path.parent().unwrap_or(destination);
+            let stem = out_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("extracted");
+            let ext = out_path.extension().and_then(|s| s.to_str());
+            let mut found = false;
+            for suffix in 1u32..=10_000 {
+                let candidate_name = match ext {
+                    Some(e) if !e.is_empty() => format!("{stem} ({suffix}).{e}"),
+                    _ => format!("{stem} ({suffix})"),
+                };
+                let candidate_path = parent.join(candidate_name);
+                if !candidate_path.exists() {
+                    out_path = candidate_path;
+                    found = true;
+                    break;
+                }
+            }
+            if !found {
+                return Err(
+                    "DestinationCollisionExhausted: 重名冲突次数超过上限，已中止防止覆盖".into(),
+                );
+            }
         }
 
         let mut entry_reader = if is_encrypted {
@@ -448,7 +522,12 @@ pub fn extract_zip_selective(
         };
 
         let mut outfile = File::create(&out_path).map_err(|e| format!("IoError: {e}"))?;
-        std::io::copy(&mut entry_reader, &mut outfile).map_err(|e| format!("WriteError: {e}"))?;
+        if let Err(e) = std::io::copy(&mut entry_reader, &mut outfile).and_then(|_| outfile.flush())
+        {
+            drop(outfile);
+            let _ = fs::remove_file(&out_path);
+            return Err(format!("WriteError: {e}"));
+        }
         extracted_paths.push(out_path.to_string_lossy().into_owned());
     }
 

@@ -154,3 +154,81 @@ fn test_portable_vault_autokey_generation() {
         std::env::remove_var("OPENUNPACK_PORTABLE_VAULT");
     }
 }
+
+/// A key that is already on disk must never be replaced. The original writer
+/// used `truncate(true)`, so a second process (or a retry after a permission
+/// error) could silently rotate the key and strand every stored password.
+#[test]
+fn existing_key_file_is_never_truncated_or_rotated() {
+    let _environment = PortableEnvironment::acquire();
+    let dir = tempdir().unwrap();
+    let vault_path = dir.path().join("keep-key.vlt");
+    let key_file = dir.path().join(".vault.key");
+    let planted = [0x11u8; 32];
+    fs::write(&key_file, planted).unwrap();
+
+    unsafe {
+        std::env::set_var("OPENUNPACK_PORTABLE_VAULT", "1");
+        std::env::remove_var("OPENUNPACK_VAULT_KEY");
+    }
+
+    let vault = Vault::open(&vault_path).expect("vault must adopt the existing key");
+    vault
+        .upsert(PasswordInput {
+            id: None,
+            name: "Kept".into(),
+            secret: Some("KeptPass".into()),
+            groups: vec![],
+            notes: String::new(),
+            enabled: true,
+        })
+        .expect("upsert failed");
+    drop(vault);
+
+    assert_eq!(
+        fs::read(&key_file).unwrap(),
+        planted.to_vec(),
+        "existing key file must be reused byte-for-byte"
+    );
+
+    // The same key must still open what it encrypted.
+    let reopened = Vault::open(&vault_path).expect("reopen with the same key must succeed");
+    assert_eq!(reopened.views().unwrap().len(), 1);
+
+    unsafe {
+        std::env::remove_var("OPENUNPACK_PORTABLE_VAULT");
+    }
+}
+
+/// An empty key file cannot decrypt anything, so it must be reported instead of
+/// being silently replaced by a freshly generated key.
+#[test]
+fn empty_key_file_is_rejected_instead_of_regenerated() {
+    let _environment = PortableEnvironment::acquire();
+    let dir = tempdir().unwrap();
+    let vault_path = dir.path().join("empty-key.vlt");
+    fs::write(dir.path().join(".vault.key"), b"").unwrap();
+    fs::write(&vault_path, b"OPENVLT1corrupted").unwrap();
+
+    unsafe {
+        std::env::set_var("OPENUNPACK_PORTABLE_VAULT", "1");
+        std::env::remove_var("OPENUNPACK_VAULT_KEY");
+    }
+
+    let error = Vault::open(&vault_path)
+        .err()
+        .expect("an empty key file must fail closed");
+    assert!(
+        !error.is_empty(),
+        "the failure must be reported to the caller"
+    );
+    assert_eq!(
+        fs::read(dir.path().join(".vault.key")).unwrap().len(),
+        0,
+        "the rejected key file must be left untouched"
+    );
+
+    unsafe {
+        std::env::remove_var("OPENUNPACK_PORTABLE_VAULT");
+    }
+}

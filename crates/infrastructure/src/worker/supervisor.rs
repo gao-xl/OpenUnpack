@@ -83,7 +83,20 @@ impl LocalWorkerSupervisor {
                     match &completion.result {
                         Some(Ok(())) => break,
                         Some(Err(error)) => {
-                            return Err(ApplicationError::WorkerUnavailable(error.clone()));
+                            let error = error.clone();
+                            if !error.contains("Unconfirmed") {
+                                drop(completion);
+                                let mut guard = self.sessions.lock().map_err(|_| {
+                                    ApplicationError::WorkerUnavailable("会话锁已损坏".into())
+                                })?;
+                                if guard
+                                    .get(&handle.session_id)
+                                    .is_some_and(|current| Arc::ptr_eq(current, &session))
+                                {
+                                    guard.remove(&handle.session_id);
+                                }
+                            }
+                            return Err(ApplicationError::WorkerUnavailable(error));
                         }
                         None => {}
                     }
@@ -136,7 +149,10 @@ impl WorkerSupervisor for LocalWorkerSupervisor {
             guard.retain(|_, session| {
                 if let Ok(mut completion) = session.completion.try_lock() {
                     completion.join_finished();
-                    return !matches!(completion.result, Some(Ok(())));
+                    return matches!(
+                        completion.result.as_ref(),
+                        Some(Err(err)) if err.contains("Unconfirmed")
+                    ) || completion.result.is_none();
                 }
                 true
             });

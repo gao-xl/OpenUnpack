@@ -1,7 +1,8 @@
 use crate::paths::{DirectoryGuard, LockedEntry, OWNER_FILE, check_path, relative};
 use openunpack_protocol::{
-    ConflictStrategy, RenamePatternRule, ToolboxAction, ToolboxExecuteRequest,
-    ToolboxExecuteResult, ToolboxItemPlan, ToolboxKind, ToolboxOptions, ToolboxPreviewResult,
+    ArchiveExtensionFixItem, ConflictStrategy, RenamePatternRule, ToolboxAction,
+    ToolboxExecuteRequest, ToolboxExecuteResult, ToolboxItemPlan, ToolboxKind, ToolboxOptions,
+    ToolboxPreviewResult,
 };
 use regex::RegexBuilder;
 use sha2::{Digest, Sha256};
@@ -271,6 +272,7 @@ enum DetectedArchiveKind {
     Lz4,
     Wim,
     Tar,
+    Cab,
 }
 
 fn sniff_magic_kind(path: &Path) -> Option<DetectedArchiveKind> {
@@ -308,6 +310,9 @@ fn sniff_magic_kind(path: &Path) -> Option<DetectedArchiveKind> {
     }
     if bytes.starts_with(b"MSWIM\0\0\0") || bytes.starts_with(b"WLPWM\0\0\0") {
         return Some(DetectedArchiveKind::Wim);
+    }
+    if bytes.starts_with(b"MSCF") {
+        return Some(DetectedArchiveKind::Cab);
     }
     if bytes.len() >= 262 && &bytes[257..262] == b"ustar" {
         return Some(DetectedArchiveKind::Tar);
@@ -425,17 +430,35 @@ pub fn compute_normalized_name(path: &Path, file_name: &str) -> Option<String> {
                 }
             }
             DetectedArchiveKind::Tar => ".tar",
+            DetectedArchiveKind::Cab => ".cab",
         };
 
-        // Handle case where stem itself ended with `.tar` and desired_ext is `.tar.gz` etc.
-        let clean_stem =
-            if desired_ext.starts_with(".tar.") && stem.to_ascii_lowercase().ends_with(".tar") {
-                &stem[..stem.len() - 4]
-            } else {
-                stem
-            };
+        // If stem already ends with desired_ext (e.g. file is `movie.zip.mp4` or `archive.7z.bak`),
+        // strip the fake extension and keep the clean stem.
+        let stem_lower = stem.to_ascii_lowercase();
+        let candidate = if stem_lower.ends_with(desired_ext) {
+            stem.to_string()
+        } else {
+            // Also check if stem ended with another archive extension (e.g. `file.rar.mp4` but magic is zip)
+            // Longer/compound extensions must be checked first before single extensions
+            let other_archive_exts = [
+                ".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst", ".tar.lz4", ".zip", ".7z", ".rar",
+                ".tar", ".gz", ".bz2", ".xz", ".zst", ".lz4", ".wim", ".cab",
+            ];
+            let mut base_stem = stem;
+            for arch_ext in other_archive_exts {
+                if stem_lower.ends_with(arch_ext) && stem.len() > arch_ext.len() {
+                    base_stem = &stem[..stem.len() - arch_ext.len()];
+                    break;
+                }
+            }
+            if desired_ext.starts_with(".tar.") && base_stem.to_ascii_lowercase().ends_with(".tar")
+            {
+                base_stem = &base_stem[..base_stem.len() - 4];
+            }
+            format!("{base_stem}{desired_ext}")
+        };
 
-        let candidate = format!("{clean_stem}{desired_ext}");
         if candidate != file_name {
             return Some(candidate);
         }
@@ -443,8 +466,8 @@ pub fn compute_normalized_name(path: &Path, file_name: &str) -> Option<String> {
 
     // 3. Uppercase archive extension normalization even if empty or non-magic
     let archive_exts = [
-        ".zip", ".7z", ".rar", ".tar", ".gz", ".bz2", ".xz", ".zst", ".lz4", ".wim", ".lzh",
-        ".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst", ".tar.lz4",
+        ".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst", ".tar.lz4", ".zip", ".7z", ".rar", ".tar",
+        ".gz", ".bz2", ".xz", ".zst", ".lz4", ".wim", ".lzh", ".cab",
     ];
     if archive_exts.contains(&ext_lower.as_str()) && ext != ext_lower {
         return Some(format!("{stem}{ext_lower}"));
@@ -613,7 +636,6 @@ pub fn compute_preview_token(options: &ToolboxOptions, plans: &[ToolboxItemPlan]
 }
 
 /// Safely moves a file without replacing existing files, handling same-volume and cross-volume cases.
-#[cfg(test)]
 fn safe_move_file(src: &Path, dst: &Path, is_case_only: bool) -> Result<(), String> {
     let source =
         LockedEntry::open(src, true).map_err(|e| format!("无法固定源文件及其目录: {e}"))?;
@@ -1048,6 +1070,199 @@ pub fn execute_toolbox(request: &ToolboxExecuteRequest) -> Result<ToolboxExecute
     })
 }
 
+/// Directly fixes archive file extensions in place based on sniffing magic bytes.
+/// Renames physical files directly and handles conflicts safely.
+pub fn fix_archive_extensions(paths: &[String]) -> Result<Vec<ArchiveExtensionFixItem>, String> {
+    let started = Instant::now();
+    if paths.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut candidate_files: Vec<PathBuf> = Vec::new();
+    let mut visited_paths = HashSet::new();
+
+    for p_str in paths {
+        let p = PathBuf::from(p_str);
+        if !p.exists() {
+            continue;
+        }
+        if p.is_file() {
+            if is_reparse_or_symlink(&p) {
+                continue;
+            }
+            let norm_key = p.to_string_lossy().to_ascii_lowercase();
+            if visited_paths.insert(norm_key) {
+                candidate_files.push(p);
+            }
+        } else if p.is_dir() {
+            validate_toolbox_directory(&p)?;
+            for entry in WalkDir::new(&p)
+                .min_depth(1)
+                .max_depth(MAX_TOOLBOX_DEPTH)
+                .follow_links(false)
+            {
+                if let Ok(e) = entry
+                    && e.file_type().is_file()
+                {
+                    let ep = e.path();
+                    if is_reparse_or_symlink(ep) {
+                        continue;
+                    }
+                    if ep
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("")
+                        .eq_ignore_ascii_case(OWNER_FILE)
+                    {
+                        continue;
+                    }
+                    let norm_key = ep.to_string_lossy().to_ascii_lowercase();
+                    if visited_paths.insert(norm_key) {
+                        candidate_files.push(ep.to_path_buf());
+                    }
+                }
+            }
+        }
+    }
+
+    if candidate_files.len() > MAX_TOOLBOX_FILES {
+        return Err(format!(
+            "处理文件数量超出上限 ({MAX_TOOLBOX_FILES})，请分批处理。"
+        ));
+    }
+
+    candidate_files.sort();
+
+    let mut results = Vec::with_capacity(candidate_files.len());
+
+    for file_path in candidate_files {
+        check_toolbox_budget(started, results.len(), 0)?;
+        let orig_path_str = file_path.to_string_lossy().into_owned();
+
+        let file_name = match file_path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n,
+            None => {
+                results.push(ArchiveExtensionFixItem {
+                    original_path: orig_path_str,
+                    proposed_name: None,
+                    new_path: None,
+                    status: "error".to_string(),
+                    message: "文件名无效".to_string(),
+                });
+                continue;
+            }
+        };
+
+        let parent_dir = match file_path.parent() {
+            Some(p) => p,
+            None => {
+                results.push(ArchiveExtensionFixItem {
+                    original_path: orig_path_str,
+                    proposed_name: None,
+                    new_path: None,
+                    status: "error".to_string(),
+                    message: "无法获取文件所在目录".to_string(),
+                });
+                continue;
+            }
+        };
+
+        if let Err(e) = validate_toolbox_directory(parent_dir) {
+            results.push(ArchiveExtensionFixItem {
+                original_path: orig_path_str,
+                proposed_name: None,
+                new_path: None,
+                status: "error".to_string(),
+                message: format!("安全限制拒绝操作: {e}"),
+            });
+            continue;
+        }
+
+        let normalized_opt = compute_normalized_name(&file_path, file_name);
+        match normalized_opt {
+            Some(new_name) => {
+                let (stem, ext) = split_stem_and_compound_ext(&new_name);
+                let mut candidate_name = new_name.clone();
+                let mut candidate_path = parent_dir.join(&candidate_name);
+                let mut counter = 1u32;
+
+                while candidate_path.exists() {
+                    let is_case_only = file_path
+                        .to_string_lossy()
+                        .eq_ignore_ascii_case(&candidate_path.to_string_lossy());
+                    if is_case_only {
+                        break;
+                    }
+                    candidate_name = format!("{stem}_{counter}{ext}");
+                    candidate_path = parent_dir.join(&candidate_name);
+                    counter += 1;
+                    if counter > 1000 {
+                        break;
+                    }
+                }
+
+                if counter > 1000 && candidate_path.exists() {
+                    results.push(ArchiveExtensionFixItem {
+                        original_path: orig_path_str,
+                        proposed_name: Some(candidate_name),
+                        new_path: None,
+                        status: "error".to_string(),
+                        message: "同名冲突过多，已达重试上限".to_string(),
+                    });
+                    continue;
+                }
+
+                let is_case_only = file_path
+                    .to_string_lossy()
+                    .eq_ignore_ascii_case(&candidate_path.to_string_lossy());
+
+                match safe_move_file(&file_path, &candidate_path, is_case_only) {
+                    Ok(()) => {
+                        let final_path_str = candidate_path.to_string_lossy().into_owned();
+                        results.push(ArchiveExtensionFixItem {
+                            original_path: orig_path_str,
+                            proposed_name: Some(candidate_name.clone()),
+                            new_path: Some(final_path_str),
+                            status: "renamed".to_string(),
+                            message: format!("已成功修改后缀为 {}", candidate_name),
+                        });
+                    }
+                    Err(e) => {
+                        results.push(ArchiveExtensionFixItem {
+                            original_path: orig_path_str,
+                            proposed_name: Some(candidate_name),
+                            new_path: None,
+                            status: "error".to_string(),
+                            message: format!("修改后缀失败: {e}"),
+                        });
+                    }
+                }
+            }
+            None => {
+                if let Some(kind) = sniff_magic_kind(&file_path) {
+                    results.push(ArchiveExtensionFixItem {
+                        original_path: orig_path_str,
+                        proposed_name: Some(file_name.to_string()),
+                        new_path: Some(file_path.to_string_lossy().into_owned()),
+                        status: "already_correct".to_string(),
+                        message: format!("魔数检测有效（{kind:?}），后缀已正确无需修改"),
+                    });
+                } else {
+                    results.push(ArchiveExtensionFixItem {
+                        original_path: orig_path_str,
+                        proposed_name: None,
+                        new_path: None,
+                        status: "unrecognized".to_string(),
+                        message: "未检测到已知压缩包魔数特征，未作修改".to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    Ok(results)
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -1464,5 +1679,88 @@ mod tests {
             "Destination content must NOT be overwritten"
         );
         assert!(f1.exists(), "Source must still exist");
+    }
+
+    #[test]
+    fn test_fix_archive_extensions_direct() {
+        let dir = tempdir().unwrap();
+        let root = dir.path();
+
+        // 1. Fake .mp4 with ZIP magic -> should be directly renamed to .zip
+        let f1 = root.join("video.mp4");
+        fs::write(&f1, [0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00]).unwrap();
+
+        // 2. Double-extension disguised file: movie.7z.bak with 7z magic -> should be directly renamed to movie.7z
+        let f2 = root.join("movie.7z.bak");
+        fs::write(&f2, [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C, 0x00, 0x04]).unwrap();
+
+        // 3. Normal .rar that already has correct extension -> untouched
+        let f3 = root.join("document.rar");
+        fs::write(&f3, [0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00]).unwrap();
+
+        // 4. Plain text file -> unrecognized
+        let f4 = root.join("notes.txt");
+        fs::write(&f4, b"just some text").unwrap();
+
+        // 5. Disguised compound archive: archive.tar.gz.mp4 with ZIP magic -> should be cleaned to archive.zip
+        let f5 = root.join("archive.tar.gz.mp4");
+        fs::write(&f5, [0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00]).unwrap();
+
+        let paths = vec![
+            f1.to_string_lossy().into_owned(),
+            f2.to_string_lossy().into_owned(),
+            f3.to_string_lossy().into_owned(),
+            f4.to_string_lossy().into_owned(),
+            f5.to_string_lossy().into_owned(),
+        ];
+
+        let results = fix_archive_extensions(&paths).unwrap();
+        assert_eq!(results.len(), 5);
+
+        // video.mp4 -> video.zip
+        let r1 = results
+            .iter()
+            .find(|r| r.original_path == paths[0])
+            .unwrap();
+        assert_eq!(r1.status, "renamed");
+        assert_eq!(r1.proposed_name.as_deref(), Some("video.zip"));
+        assert!(root.join("video.zip").exists());
+        assert!(!root.join("video.mp4").exists());
+
+        // movie.7z.bak -> movie.7z
+        let r2 = results
+            .iter()
+            .find(|r| r.original_path == paths[1])
+            .unwrap();
+        assert_eq!(r2.status, "renamed");
+        assert_eq!(r2.proposed_name.as_deref(), Some("movie.7z"));
+        assert!(root.join("movie.7z").exists());
+        assert!(!root.join("movie.7z.bak").exists());
+
+        // document.rar -> already_correct
+        let r3 = results
+            .iter()
+            .find(|r| r.original_path == paths[2])
+            .unwrap();
+        assert_eq!(r3.status, "already_correct");
+        assert!(root.join("document.rar").exists());
+
+        // notes.txt -> unrecognized
+        let r4 = results
+            .iter()
+            .find(|r| r.original_path == paths[3])
+            .unwrap();
+        assert_eq!(r4.status, "unrecognized");
+        assert!(root.join("notes.txt").exists());
+
+        // archive.tar.gz.mp4 -> archive.zip
+        let r5 = results
+            .iter()
+            .find(|r| r.original_path == paths[4])
+            .unwrap();
+        assert_eq!(r5.status, "renamed");
+        assert_eq!(r5.proposed_name.as_deref(), Some("archive.zip"));
+        assert!(root.join("archive.zip").exists());
+        assert!(!root.join("archive.tar.gz.mp4").exists());
     }
 }

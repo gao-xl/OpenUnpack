@@ -160,15 +160,18 @@ pub(super) fn transfer_batches(mut request: WorkerRequest) -> Result<Vec<WorkerR
         }
         let next_bytes = bytes + record_bytes + usize::from(!batch.files.is_empty());
         if next_bytes > wire_limit {
-            assigned = assigned
-                .checked_add(batch.files.iter().map(|f| f.size).sum::<u64>())
+            let batch_sum = batch
+                .files
+                .iter()
+                .try_fold(0u64, |acc, f| acc.checked_add(f.size))
                 .ok_or("ResourceLimit")?;
+            assigned = assigned.checked_add(batch_sum).ok_or("ResourceLimit")?;
             batches.push(batch);
             batch = request.clone();
             batch.request_id = uid();
             batch.operation_id = Some(uid());
             if request.operation != "readback" {
-                batch.max_written_bytes = request.max_written_bytes - assigned;
+                batch.max_written_bytes = request.max_written_bytes.saturating_sub(assigned);
             }
             // A reduced numeric budget cannot enlarge the envelope.
             bytes = envelope;
@@ -196,6 +199,14 @@ pub(super) fn read_run(work: &Path) -> Result<SavedRun, String> {
 }
 pub(super) fn save_run(work: &Path, state: &SavedRun) -> Result<(), String> {
     paths::atomic_json(&work.join(RUN_FILE), state)
+}
+
+pub(super) async fn save_run_async(work: &Path, state: &SavedRun) -> Result<(), String> {
+    let work = work.to_path_buf();
+    let state = state.clone();
+    tokio::task::spawn_blocking(move || save_run(&work, &state))
+        .await
+        .map_err(|e| e.to_string())?
 }
 pub(super) fn upgrade_legacy_run(state: &mut SavedRun) -> Result<(), String> {
     // v1 durably sealed each successful node before releasing its inputs, but

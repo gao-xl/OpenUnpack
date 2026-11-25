@@ -10,8 +10,10 @@
 //! - "overwrite": replaces existing directory with incoming validated tree
 //! - Content Hash Awareness: if target exists and all files match SHA-256 hashes, auto-skips without re-extraction
 
+use super::integrity::is_os_noise_entry;
 use chrono::Local;
 use openunpack_protocol::CopyFile;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -86,7 +88,7 @@ pub fn resolve_publication_target(
             }
         }
         "keepLarger" => {
-            let incoming_bytes: u64 = files.iter().map(|f| f.size).sum();
+            let incoming_bytes: u64 = files.iter().fold(0u64, |acc, f| acc.saturating_add(f.size));
             let existing_bytes = calculate_existing_dir_size(&initial_path);
             if incoming_bytes > existing_bytes {
                 Ok(ConflictResolution::Overwrite(initial_path))
@@ -124,12 +126,19 @@ pub fn timestamp_target(parent: &Path, basename: &str) -> Result<PathBuf, String
     Err("生成时间戳版本路径冲突过多，请选择其他输出目录。".into())
 }
 
-/// Checks whether all candidate files already exist in `existing_root` with identical sizes and hashes.
+/// Checks whether all candidate files already exist in `existing_root` with identical sizes and hashes,
+/// and verifies that `existing_root` contains no extra unmanaged files.
 pub fn check_identical_content(existing_root: &Path, files: &[CopyFile]) -> bool {
     if !existing_root.is_dir() {
         return false;
     }
+
+    // Step 1: Forward check - every incoming entry must exist in existing_root with identical size & hash.
     for file in files {
+        let norm = file.relative_path.replace('/', "\\").to_ascii_lowercase();
+        if is_os_noise_entry(&norm) {
+            continue;
+        }
         if file.is_directory {
             // An empty directory carries no hashes, so skipping these entries
             // made a target that lacked them look "identical" and suppressed
@@ -159,6 +168,33 @@ pub fn check_identical_content(existing_root: &Path, files: &[CopyFile]) -> bool
             return false;
         }
     }
+
+    // Step 2: Reverse check - existing_root must not contain extra files/directories not present in files.
+    let manifest_keys: HashSet<String> = files
+        .iter()
+        .map(|f| f.relative_path.replace('/', "\\").to_ascii_lowercase())
+        .collect();
+
+    for entry in walkdir::WalkDir::new(existing_root)
+        .min_depth(1)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let Ok(rel) = entry.path().strip_prefix(existing_root) else {
+            return false;
+        };
+        let norm = rel
+            .to_string_lossy()
+            .replace('/', "\\")
+            .to_ascii_lowercase();
+        if is_os_noise_entry(&norm) {
+            continue;
+        }
+        if !manifest_keys.contains(&norm) {
+            return false;
+        }
+    }
+
     true
 }
 
@@ -228,6 +264,10 @@ mod tests {
         assert!(!check_identical_content(&root, &with_empty));
         std::fs::create_dir_all(root.join("empty")).unwrap();
         assert!(check_identical_content(&root, &with_empty));
+
+        // When target has extra unexpected file, check_identical_content must reject it
+        std::fs::write(root.join("keep/extra.txt"), b"extra").unwrap();
+        assert!(!check_identical_content(&root, &with_empty));
     }
 
     #[test]

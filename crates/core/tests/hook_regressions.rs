@@ -36,8 +36,8 @@ async fn test_on_complete_hook_empty_ignored() {
     let job = mock_job("test-job-empty", Some("out".into()));
 
     // None or empty script should return safely and not panic
-    trigger_on_complete_hook(&job, None);
-    trigger_on_complete_hook(&job, Some("   "));
+    trigger_on_complete_hook(&job, None, None);
+    trigger_on_complete_hook(&job, Some("   "), None);
 }
 
 #[tokio::test]
@@ -76,7 +76,7 @@ async fn test_on_complete_hook_execution() {
         Some(dir.path().to_string_lossy().into_owned()),
     );
 
-    trigger_on_complete_hook(&job, Some(script_path.to_str().unwrap()));
+    trigger_on_complete_hook(&job, Some(script_path.to_str().unwrap()), None);
 
     // Wait for the spawned async process to execute
     let mut success = false;

@@ -161,22 +161,27 @@ impl Coordinator {
             return Err("源压缩包不存在或不可读。".into());
         }
 
-        let allowed_volumes = match scanner::scan(&[path.to_string()], false, &[]) {
-            Ok(scan) => {
-                if let Some(group) = scan.sources.into_iter().find(|g| {
-                    g.path.eq_ignore_ascii_case(path)
-                        || g.volumes.iter().any(|v| v.eq_ignore_ascii_case(path))
-                }) {
-                    if group.missing_volume {
-                        return Err("MissingVolume".into());
+        let scan_path = path.to_string();
+        let allowed_volumes =
+            match tokio::task::spawn_blocking(move || scanner::scan(&[scan_path], false, &[]))
+                .await
+                .map_err(|e| e.to_string())?
+            {
+                Ok(scan) => {
+                    if let Some(group) = scan.sources.into_iter().find(|g| {
+                        g.path.eq_ignore_ascii_case(path)
+                            || g.volumes.iter().any(|v| v.eq_ignore_ascii_case(path))
+                    }) {
+                        if group.missing_volume {
+                            return Err("MissingVolume".into());
+                        }
+                        group.volumes
+                    } else {
+                        vec![path.to_string()]
                     }
-                    group.volumes
-                } else {
-                    vec![path.to_string()]
                 }
-            }
-            Err(_) => vec![path.to_string()],
-        };
+                Err(_) => vec![path.to_string()],
+            };
         if let Some(policy) = policy {
             for volume in &allowed_volumes {
                 policy.authorize_path(Path::new(volume), false)?;

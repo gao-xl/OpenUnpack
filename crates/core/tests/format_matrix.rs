@@ -92,13 +92,16 @@ impl Rig {
                 }
             })
             .unwrap_or_else(|| workspace.join("tools/7zip/7z.exe"));
-        let temp_dir = workspace.join("target/tmp");
-        fs::create_dir_all(&temp_dir).unwrap();
         let temporary = tempfile::Builder::new()
             .prefix("openunpack-formats-")
-            .tempdir_in(&temp_dir)
+            .tempdir()
             .unwrap();
-        let root = temporary.path().canonicalize().unwrap();
+        let private = temporary.path().join("private");
+        openunpack_core::paths::DirectoryGuard::open(temporary.path())
+            .unwrap()
+            .create_private_child(&private)
+            .unwrap();
+        let root = private.canonicalize().unwrap();
         let output = root.join("output");
         fs::create_dir(&output).unwrap();
         let core = Coordinator::open(root.join("data"), worker, engine).unwrap();
