@@ -21,6 +21,7 @@ try {
         Invoke-OpenUnpackTool cargo @('fetch', '--locked', '--target', 'x86_64-pc-windows-msvc')
     }
     & (Join-Path $PSScriptRoot 'check-contracts.ps1') -RunCargoTest
+    Invoke-OpenUnpackTool node @((Join-Path $PSScriptRoot 'check-code-standards.mjs'))
     & (Join-Path $PSScriptRoot 'test-release-validation.ps1')
     & (Join-Path $PSScriptRoot 'collect-release-materials.ps1') -Offline:$SkipInstall
     if (-not $SkipSecurityAudit) {
@@ -31,6 +32,8 @@ try {
     }
     Push-Location (Join-Path $taskRoot 'apps/desktop-ui')
     try {
+        Invoke-OpenUnpackTool npm @('run', 'format:check')
+        Invoke-OpenUnpackTool npm @('run', 'lint')
         Invoke-OpenUnpackTool npm @('test')
     } finally {
         Pop-Location

@@ -136,9 +136,9 @@ OpenUnpack 由三个核心进程边界构成：
 ### 5.3 代码规范与可读性约定
 - **格式与静态检查**：Rust 统一受根 `Cargo.toml` `[workspace.lints]` 与 `rustfmt.toml`（行宽 100）约束，通过 `cargo clippy --workspace --all-targets -- -D warnings`；前端 TypeScript / React / CSS 与 MCP 连接器遵循根 `.prettierrc`（行宽 100），通过 `npm --prefix apps/desktop-ui run format:check` 与 `eslint`。
 - **注释与文档语言**：公共模块 `//!` 文档头、公共函数文档注释及非显而易见的不变量解释统一使用**简体中文**（测试函数名与结构化日志字段保持英文标识符）。
-- **模块拆分边界**：避免单文件无限膨胀（建议生产源码单文件控制在 ~600 行以内）；独立单元测试与夹具应拆分为子文件，长参数签名优先收拢为语义清晰的上下文/请求结构体，禁止跨 crate 复制路径或安全校验逻辑。
+- **模块拆分边界**：避免单文件无限膨胀（Rust 生产源码单文件硬上限 `950` 行、前端单文件硬上限 `900` 行，目标 ≤ `600` 行）；独立单元测试与夹具应拆分为子文件，长参数签名优先收拢为语义清晰的上下文/请求结构体，禁止跨 crate 复制路径或安全校验逻辑，禁止在未获批准位置抑制 `clippy::too_many_arguments` 或 `clippy::result_large_err`。
 
-运行 `node scripts/check-architecture.mjs --self-test` 验证依赖和源码所有权；禁止重新创建镜像文件、另一套任务协调器或可写 SQLite v2 管线。详见 [现行架构](docs/architecture-current.md)。
+运行 `node scripts/check-architecture.mjs --self-test` 与 `node scripts/check-code-standards.mjs` 验证依赖、源码所有权、文件长度预算及静态规则门槛；禁止重新创建镜像文件、另一套任务协调器或可写 SQLite v2 管线。详见 [现行架构](docs/architecture-current.md)。
 
 ---
 
