@@ -179,9 +179,7 @@ export function JobAccelerationBadge({ job }: { job: JobView }) {
     Boolean(job.stageTimes?.['copying']);
   if (!isSsd) return null;
 
-  const tip = job.message?.includes('使用中转缓存')
-    ? job.message
-    : t('已启用固态加速中转');
+  const tip = job.message?.includes('使用中转缓存') ? job.message : t('已启用固态加速中转');
 
   return (
     <Tooltip title={tip}>

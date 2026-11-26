@@ -40,3 +40,6 @@ indexmap = { version = "=1.9.3", features = ["std"] }
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+
+[lints]
+workspace = true

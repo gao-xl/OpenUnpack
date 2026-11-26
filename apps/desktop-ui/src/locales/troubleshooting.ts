@@ -1,14 +1,8 @@
 export const troubleshootingMessages: Record<string, [string, string]> = {
   '排障与操作指引：': ['Troubleshooting & Guide:', 'トラブルシューティングとガイド：'],
   '数据库 / 存储异常': ['Database / Storage Error', 'データベース / ストレージ異常'],
-  '任务数据库繁忙锁死': [
-    'Task database busy / locked',
-    'タスクデータベースがビジー状態でロック',
-  ],
-  '任务数据库读写失败': [
-    'Task database I/O error',
-    'タスクデータベースの読み書きに失敗',
-  ],
+  任务数据库繁忙锁死: ['Task database busy / locked', 'タスクデータベースがビジー状態でロック'],
+  任务数据库读写失败: ['Task database I/O error', 'タスクデータベースの読み書きに失敗'],
   '数据库被并发锁占用，请稍候。': [
     'Database is locked by concurrent operations, please wait.',
     'データベースが並行ロックで占有されています。しばらくお待ちください。',
@@ -29,8 +23,8 @@ export const troubleshootingMessages: Record<string, [string, string]> = {
     'If lock persists, restart the client or check for zombie openunpack processes occupying the database.',
     '長時間ロックが解除されない場合は、クライアントを再起動するかゾンビ openunpack プロセスの有無を確認してください。',
   ],
-  '磁盘空间耗尽': ['Disk space exhausted', 'ディスク空き容量不足'],
-  '磁盘可用空间不足以完成解压': [
+  磁盘空间耗尽: ['Disk space exhausted', 'ディスク空き容量不足'],
+  磁盘可用空间不足以完成解压: [
     'Insufficient free disk space to complete extraction',
     '解凍を完了するのに十分な空き容量がありません',
   ],
@@ -46,9 +40,9 @@ export const troubleshootingMessages: Record<string, [string, string]> = {
     'If SSD cache is enabled, check whether the cache disk has adequate buffer space.',
     'SSDキャッシュが有効な場合、キャッシュ先ディスクに十分な空きがあるか確認してください。',
   ],
-  '调整目录或设置': ['Adjust Directory or Settings', 'ディレクトリまたは設定を変更'],
-  '文件被占用': ['File in use', 'ファイルが使用中'],
-  '目标文件或归档被其他进程独占占用': [
+  调整目录或设置: ['Adjust Directory or Settings', 'ディレクトリまたは設定を変更'],
+  文件被占用: ['File in use', 'ファイルが使用中'],
+  目标文件或归档被其他进程独占占用: [
     'Target file or archive is exclusively locked by another process',
     '対象ファイルまたはアーカイブが他のプロセスに排他使用されています',
   ],
@@ -68,9 +62,9 @@ export const troubleshootingMessages: Record<string, [string, string]> = {
     'Once unlocked, click "Retry" to continue extraction.',
     '占有が解除されたら「再試行」をクリックして解凍を続行してください。',
   ],
-  '解除占用后重试': ['Unlock and Retry', '占有解除後に再試行'],
-  '权限不足': ['Permission denied', '権限が不足しています'],
-  '无权写入目标路径或访问源文件': [
+  解除占用后重试: ['Unlock and Retry', '占有解除後に再試行'],
+  权限不足: ['Permission denied', '権限が不足しています'],
+  无权写入目标路径或访问源文件: [
     'No permission to write to target path or access source file',
     '出力先への書き込みまたは元ファイルへのアクセス権限がありません',
   ],
@@ -86,7 +80,7 @@ export const troubleshootingMessages: Record<string, [string, string]> = {
     'If the target is located in a protected system path (such as Program Files), it is recommended to change the output directory to the user Documents folder.',
     '出力先が保護されたシステムディレクトリ（Program Files等）の場合、ユーザー文書ディレクトリへの変更を推奨します。',
   ],
-  '更换输出目录': ['Change Output Directory', '出力先ディレクトリを変更'],
+  更换输出目录: ['Change Output Directory', '出力先ディレクトリを変更'],
   '任务数据库写入失败，已停止后续操作；请检查恢复记录。': [
     'Task database write failed, subsequent operations stopped; please check recovery records.',
     'タスクDB書き込みに失敗し後続操作を停止しました。復旧記録を確認してください。',
@@ -103,11 +97,8 @@ export const troubleshootingMessages: Record<string, [string, string]> = {
     'Click "Retry" to attempt writing to the database again.',
     '「再試行」をクリックしてデータベースへの書き込みを再試行してください。',
   ],
-  '密码缺失 / 需口令': [
-    'Password Missing / Required',
-    'パスワード未設定 / パスワードが必要',
-  ],
-  '需要解压密码或已保存口令未命中': [
+  '密码缺失 / 需口令': ['Password Missing / Required', 'パスワード未設定 / パスワードが必要'],
+  需要解压密码或已保存口令未命中: [
     'Archive password needed or saved passwords missed',
     '解凍パスワードが必要か、保存されたパスワードに一致しません',
   ],
@@ -131,7 +122,7 @@ export const troubleshootingMessages: Record<string, [string, string]> = {
     'Password Mismatch / Archive Corrupted',
     'パスワード不一致 / アーカイブ破損',
   ],
-  '密码不匹配或压缩包损坏': [
+  密码不匹配或压缩包损坏: [
     'Password mismatch or corrupted archive',
     'パスワード不一致またはアーカイブ破損',
   ],
@@ -147,15 +138,16 @@ export const troubleshootingMessages: Record<string, [string, string]> = {
     'If not password protected, file may be incomplete or corrupted; verify hash or redownload;',
     'パスワード保護されていない場合はダウンロード不完全の可能性があるため、ハッシュ確認または再ダウンロードをお試しください；',
   ],
-  '若该文件后缀曾被伪装（如 .mp4 实际为 .7z），可在「工具箱」中使用「压缩包后缀自动修复」检查魔数并修正扩展名；': [
-    'If extension was spoofed (e.g. .mp4 is really .7z), use Toolbox "Archive Extension Autofix" to correct it;',
-    '拡張子が偽装されている場合（.mp4が実際は.7zなど）、「ツールボックス」の「拡張子自動修復」で修正してください；',
-  ],
+  '若该文件后缀曾被伪装（如 .mp4 实际为 .7z），可在「工具箱」中使用「压缩包后缀自动修复」检查魔数并修正扩展名；':
+    [
+      'If extension was spoofed (e.g. .mp4 is really .7z), use Toolbox "Archive Extension Autofix" to correct it;',
+      '拡張子が偽装されている場合（.mp4が実際は.7zなど）、「ツールボックス」の「拡張子自動修復」で修正してください；',
+    ],
   '可在「设置」中开启「允许抢救已损坏归档」，然后重试解压以尽可能提取未损部分。': [
     'Enable "Salvage corrupted archives" in Settings and retry to recover undamaged files.',
     '「設定」で「破損アーカイブの救出を許可」を有効にして再試行すると、無事なファイルを可能な限り救出できます。',
   ],
-  '后缀自动修复': ['Extension Autofix', '拡張子自動修復'],
+  后缀自动修复: ['Extension Autofix', '拡張子自動修復'],
   '归档损坏 / 校验失败': [
     'Archive Corrupted / Checksum Failed',
     'アーカイブ破損 / チェックサム不一致',
@@ -172,19 +164,21 @@ export const troubleshootingMessages: Record<string, [string, string]> = {
     'Check source file size and try redownloading the archive;',
     '元ファイルのサイズを確認し、アーカイブの再ダウンロードをお試しください；',
   ],
-  '若该文件后缀曾被伪装篡改（例如将 .7z/.zip 伪装为 .mp4/.bin），请在「工具箱」中使用「压缩包后缀自动修复」检查并修正后缀；': [
-    'If file extension was spoofed (e.g. .7z/.zip as .mp4/.bin), use Toolbox extension autofix;',
-    '拡張子が偽装されている場合（.7z/.zipが.mp4/.bin等）、「ツールボックス」で拡張子を自動修復してください；',
-  ],
+  '若该文件后缀曾被伪装篡改（例如将 .7z/.zip 伪装为 .mp4/.bin），请在「工具箱」中使用「压缩包后缀自动修复」检查并修正后缀；':
+    [
+      'If file extension was spoofed (e.g. .7z/.zip as .mp4/.bin), use Toolbox extension autofix;',
+      '拡張子が偽装されている場合（.7z/.zipが.mp4/.bin等）、「ツールボックス」で拡張子を自動修復してください；',
+    ],
   '若属于多分卷压缩包，请确保所有分卷文件位于同一目录且编号完整；': [
     'For multi-volume archives, ensure all parts are in the same folder with continuous numbering;',
     '分割アーカイブの場合、すべてのパートが同じフォルダに連番で揃っていることを確認してください；',
   ],
-  '可在「设置」中开启「允许抢救已损坏归档（尽可能保留可读文件）」，然后点击「重试」尝试尽可能恢复部分内容。': [
-    'Enable "Salvage corrupted archives" in Settings and click "Retry" to recover partial contents.',
-    '「設定」で破損アーカイブの救出を有効にし、「再試行」をクリックして一部コンテンツの復旧を試みてください。',
-  ],
-  '分卷压缩包缺少关联卷': [
+  '可在「设置」中开启「允许抢救已损坏归档（尽可能保留可读文件）」，然后点击「重试」尝试尽可能恢复部分内容。':
+    [
+      'Enable "Salvage corrupted archives" in Settings and click "Retry" to recover partial contents.',
+      '「設定」で破損アーカイブの救出を有効にし、「再試行」をクリックして一部コンテンツの復旧を試みてください。',
+    ],
+  分卷压缩包缺少关联卷: [
     'Multi-volume archive missing parts',
     '分割アーカイブの関連パートが見つかりません',
   ],
@@ -205,7 +199,7 @@ export const troubleshootingMessages: Record<string, [string, string]> = {
     '不足している分割ファイルを揃えた後、「再試行」をクリックしてください。',
   ],
   '空间 / 配额受限': ['Space / Quota Limited', '空き容量 / クォータ制限'],
-  '磁盘空间不足或展开限制超出配额': [
+  磁盘空间不足或展开限制超出配额: [
     'Insufficient disk space or extraction exceeds quota',
     'ディスク容量不足または展開サイズが制限を超過',
   ],
@@ -225,9 +219,9 @@ export const troubleshootingMessages: Record<string, [string, string]> = {
     'If expansion ratio is large, increase max expanded size per task in Settings.',
     '展開後のサイズが非常に大きい場合、「設定」で1タスクあたりの展開後最大サイズを引き上げてください。',
   ],
-  '前往设置调整': ['Go to Settings', '設定画面へ移動'],
-  '同名冲突': ['Naming Conflict', '同名競合'],
-  '输出目录存在同名文件或目录': [
+  前往设置调整: ['Go to Settings', '設定画面へ移動'],
+  同名冲突: ['Naming Conflict', '同名競合'],
+  输出目录存在同名文件或目录: [
     'Same-named file or directory exists in output folder',
     '出力先フォルダに同名のファイルまたはディレクトリが存在します',
   ],
@@ -243,9 +237,9 @@ export const troubleshootingMessages: Record<string, [string, string]> = {
     'Or manually rename/move existing content in target directory and retry.',
     'または出力先にある既存ファイルを手動で変更・移動した後に再試行してください。',
   ],
-  '调整冲突策略': ['Adjust Conflict Policy', '競合ポリシーを変更'],
+  调整冲突策略: ['Adjust Conflict Policy', '競合ポリシーを変更'],
   '引擎 / 进程异常': ['Engine / Process Error', 'エンジン / プロセス異常'],
-  '后台解压引擎响应异常或进程被中断': [
+  后台解压引擎响应异常或进程被中断: [
     'Extraction engine error or worker process interrupted',
     'バックエンド解凍エンジンの応答異常またはプロセス中断',
   ],
@@ -265,8 +259,8 @@ export const troubleshootingMessages: Record<string, [string, string]> = {
     'Check engine availability in Settings and click "Retry".',
     '「設定」で解凍エンジンの状態を確認し、「再試行」をクリックしてください。',
   ],
-  '格式不支持': ['Format Unsupported', '非対応フォーマット'],
-  '当前解压引擎暂不支持该文件格式': [
+  格式不支持: ['Format Unsupported', '非対応フォーマット'],
+  当前解压引擎暂不支持该文件格式: [
     'Current extraction engine does not support this file format',
     '現在の解凍エンジンはこのファイル形式に対応していません',
   ],
@@ -282,9 +276,9 @@ export const troubleshootingMessages: Record<string, [string, string]> = {
     'If proprietary or custom container (e.g. specialized installer/image), open with dedicated tool.',
     '独自暗号化や専用インストーラー形式の場合は、対応する専用ツールをご利用ください。',
   ],
-  '工具箱检测': ['Check in Toolbox', 'ツールボックスで確認'],
-  '任务失败': ['Task Failed', 'タスク失敗'],
-  '解压任务未能顺利完成': [
+  工具箱检测: ['Check in Toolbox', 'ツールボックスで確認'],
+  任务失败: ['Task Failed', 'タスク失敗'],
+  解压任务未能顺利完成: [
     'Extraction task could not be completed',
     '解凍タスクを完了できませんでした',
   ],

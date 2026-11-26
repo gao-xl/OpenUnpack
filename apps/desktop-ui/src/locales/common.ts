@@ -60,10 +60,7 @@ export const commonMessages: Record<string, [string, string]> = {
   默认: ['Default', '既定'],
   不可用: ['Unavailable', '利用不可'],
   SSD加速: ['SSD Accelerated', 'SSD高速化'],
-  已启用固态加速中转: [
-    'SSD staging acceleration enabled',
-    'SSDキャッシュ高速化が有効です',
-  ],
+  已启用固态加速中转: ['SSD staging acceleration enabled', 'SSDキャッシュ高速化が有効です'],
   '任务总数: {count} 项': ['Tasks: {count}', 'タスク数: {count}'],
   '可恢复: {count}': ['Recoverable: {count}', '復旧可能: {count}'],
   等待处理: ['Queued', '処理待ち'],

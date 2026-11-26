@@ -301,9 +301,7 @@ it('native progress listener follows connection mode without leaking or going st
   desktop();
   const unlistenNative = vi.fn();
   const unlistenNativeAgain = vi.fn();
-  native.listen
-    .mockResolvedValueOnce(unlistenNative)
-    .mockResolvedValueOnce(unlistenNativeAgain);
+  native.listen.mockResolvedValueOnce(unlistenNative).mockResolvedValueOnce(unlistenNativeAgain);
   const { api } = await import('../src/api');
 
   // 原生模式：多次注册共享同一个原生监听器。

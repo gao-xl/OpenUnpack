@@ -10,3 +10,6 @@ openunpack-domain = { path = "../domain" }
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "2.0"
 zeroize = "1.9"
+
+[lints]
+workspace = true

@@ -65,37 +65,9 @@ pub fn validate_relative_path(name: &str) -> Result<String, String> {
     Ok(path_str.to_string())
 }
 
-/// 判断段基名是否为 Windows 保留设备名（忽略大小写）。
+/// 判断段基名是否为 Windows 保留设备名（委托统一实现）。
 fn is_reserved_windows_name(name: &str) -> bool {
-    let upper = name.to_ascii_uppercase();
-    matches!(
-        upper.as_str(),
-        "CON"
-            | "PRN"
-            | "AUX"
-            | "NUL"
-            | "CLOCK$"
-            | "CONIN$"
-            | "CONOUT$"
-            | "COM1"
-            | "COM2"
-            | "COM3"
-            | "COM4"
-            | "COM5"
-            | "COM6"
-            | "COM7"
-            | "COM8"
-            | "COM9"
-            | "LPT1"
-            | "LPT2"
-            | "LPT3"
-            | "LPT4"
-            | "LPT5"
-            | "LPT6"
-            | "LPT7"
-            | "LPT8"
-            | "LPT9"
-    )
+    crate::paths::is_reserved_windows_device_name(name)
 }
 
 /// 判断相对路径是否命中排除规则。委托 `openunpack-domain` 的唯一实现：

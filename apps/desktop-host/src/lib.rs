@@ -1,3 +1,8 @@
+//! OpenUnpack Desktop Host - Tauri 桌面宿主与本地运行入口。
+//!
+//! 负责桌面窗口与托盘生命周期、单实例命名管道唤醒、原生路径访问授权、
+//! Tauri IPC 命令暴露以及 `--headless` 守护进程引导。
+
 mod clipboard;
 mod headless;
 mod local_api;
@@ -8,6 +13,10 @@ pub use headless::run_headless;
 #[cfg(test)]
 use headless::{collect_flag_values, mask_token};
 use openunpack_core::coordinator::Coordinator;
+use openunpack_infrastructure::paths::path_starts_with_case_insensitive;
+pub use openunpack_infrastructure::paths::{
+    is_reserved_windows_device_name, strip_verbatim_prefix,
+};
 use openunpack_protocol::{
     AppSnapshot, ArchiveExtensionFixItem, ArchiveInspectionView, HistoryPageQuery, ImportPreview,
     ImportResult, JobHistoryPage, JobView, PasswordInput, PasswordView, ScanResult,
@@ -73,12 +82,12 @@ impl NativeAccess {
             || self
                 .readable_directories
                 .iter()
-                .any(|b| path_contains_or_equal(b, target))
+                .any(|b| path_starts_with_case_insensitive(target, b))
     }
     pub fn is_writable_dir(&self, target: &Path) -> bool {
         self.writable_directories
             .iter()
-            .any(|b| path_contains_or_equal(b, target))
+            .any(|b| path_starts_with_case_insensitive(target, b))
     }
     pub fn is_backup_read_allowed(&self, target: &Path) -> bool {
         self.backup_read_files.contains(target)
@@ -376,37 +385,6 @@ impl openunpack_application::VaultStore for CoordinatorVaultStore {
     }
 }
 
-fn path_contains_or_equal(base: &Path, target: &Path) -> bool {
-    if base.as_os_str().is_empty() {
-        return false;
-    }
-    let mut b_iter = base.components();
-    let mut t_iter = target.components();
-    loop {
-        match (b_iter.next(), t_iter.next()) {
-            (None, _) => return true,
-            (Some(b), Some(t)) => {
-                #[cfg(windows)]
-                {
-                    if b.as_os_str().to_string_lossy().to_lowercase()
-                        != t.as_os_str().to_string_lossy().to_lowercase()
-                    {
-                        return false;
-                    }
-                }
-                #[cfg(not(windows))]
-                {
-                    if b != t {
-                        return false;
-                    }
-                }
-                continue;
-            }
-            _ => return false,
-        }
-    }
-}
-
 #[cfg(windows)]
 const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
 #[cfg(windows)]
@@ -601,47 +579,6 @@ pub fn is_trusted_origin_url(url_str: &str) -> bool {
         return true;
     }
     false
-}
-
-pub fn strip_verbatim_prefix(path: &Path) -> PathBuf {
-    let s = path.to_string_lossy();
-    if let Some(stripped) = s.strip_prefix(r"\\?\UNC\") {
-        PathBuf::from(format!(r"\\{}", stripped))
-    } else if let Some(stripped) = s.strip_prefix(r"\\?\") {
-        PathBuf::from(stripped)
-    } else {
-        path.to_path_buf()
-    }
-}
-
-pub fn is_reserved_windows_device_name(name: &str) -> bool {
-    let stem = name.split('.').next().unwrap_or(name);
-    let upper = stem.trim().to_ascii_uppercase();
-    matches!(
-        upper.as_str(),
-        "CON"
-            | "PRN"
-            | "AUX"
-            | "NUL"
-            | "COM1"
-            | "COM2"
-            | "COM3"
-            | "COM4"
-            | "COM5"
-            | "COM6"
-            | "COM7"
-            | "COM8"
-            | "COM9"
-            | "LPT1"
-            | "LPT2"
-            | "LPT3"
-            | "LPT4"
-            | "LPT5"
-            | "LPT6"
-            | "LPT7"
-            | "LPT8"
-            | "LPT9"
-    )
 }
 
 pub fn sanitize_explorer_target(path: &Path) -> Result<PathBuf, String> {
@@ -3198,10 +3135,10 @@ mod tests {
         let outside = PathBuf::from("C:\\Users\\Public\\Other\\file.txt");
         let prefix_spoof = PathBuf::from("C:\\Users\\Public\\OpenUnpackSecret\\file.txt");
 
-        assert!(path_contains_or_equal(&base, &base));
-        assert!(path_contains_or_equal(&base, &child));
-        assert!(!path_contains_or_equal(&base, &outside));
-        assert!(!path_contains_or_equal(&base, &prefix_spoof));
+        assert!(path_starts_with_case_insensitive(&base, &base));
+        assert!(path_starts_with_case_insensitive(&child, &base));
+        assert!(!path_starts_with_case_insensitive(&outside, &base));
+        assert!(!path_starts_with_case_insensitive(&prefix_spoof, &base));
     }
 
     #[test]

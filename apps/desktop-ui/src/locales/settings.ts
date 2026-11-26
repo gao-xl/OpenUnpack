@@ -1,5 +1,5 @@
 export const settingsMessages: Record<string, [string, string]> = {
-  '搜索设置项': ['Search settings', '設定を検索'],
+  搜索设置项: ['Search settings', '設定を検索'],
   '搜索设置项，例如：密码、输出、删除源包、线程、缓存、乱码...': [
     'Search settings, e.g. password, output, delete source, threads, cache...',
     '設定を検索（例：パスワード、出力先、元ファイルの削除、スレッド数、キャッシュなど）',
@@ -20,7 +20,7 @@ export const settingsMessages: Record<string, [string, string]> = {
     'Applied "Space-saving & tidy" preset. Click save in top right to persist.',
     '「省スペース整理」プリセットを適用しました。右上の保存をクリックしてください。',
   ],
-  '匹配': ['Match', '一致'],
+  匹配: ['Match', '一致'],
   '排除规则数量不可超过 100 条': [
     'No more than 100 exclusion rules are allowed',
     '除外ルールは100件以内にしてください',

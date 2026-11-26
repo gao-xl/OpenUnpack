@@ -1795,6 +1795,105 @@ impl Drop for SleepBlockerGuard {
     }
 }
 
+/// 剥离 Windows 扩展长度前缀（`\\?\` 与 `\\?\UNC\`），用于统一展示与前缀比较。
+pub fn strip_verbatim_prefix(path: &Path) -> PathBuf {
+    let raw = path.to_string_lossy();
+    if let Some(stripped) = raw.strip_prefix(r"\\?\UNC\") {
+        PathBuf::from(format!(r"\\{stripped}"))
+    } else if let Some(stripped) = raw.strip_prefix(r"\\?\") {
+        PathBuf::from(stripped)
+    } else {
+        path.to_path_buf()
+    }
+}
+
+/// 判断文件名段（允许带扩展名，如 `con.txt`）是否为 Windows 保留设备名（忽略大小写）。
+pub fn is_reserved_windows_device_name(name: &str) -> bool {
+    let stem = name.split('.').next().unwrap_or(name);
+    let upper = stem.trim().to_ascii_uppercase();
+    matches!(
+        upper.as_str(),
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "CLOCK$"
+            | "CONIN$"
+            | "CONOUT$"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
+    )
+}
+
+fn component_eq_platform(left: Component<'_>, right: Component<'_>) -> bool {
+    #[cfg(windows)]
+    {
+        match (left, right) {
+            (Component::Prefix(a), Component::Prefix(b)) => {
+                a.as_os_str().to_string_lossy().to_lowercase()
+                    == b.as_os_str().to_string_lossy().to_lowercase()
+            }
+            (Component::RootDir, Component::RootDir) => true,
+            (Component::Normal(a), Component::Normal(b)) => {
+                a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+            }
+            (Component::CurDir, Component::CurDir) => true,
+            (Component::ParentDir, Component::ParentDir) => true,
+            _ => false,
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        left == right
+    }
+}
+
+/// 按组件边界判断 `path` 是否与 `prefix` 相同或位于其目录下（Windows 下忽略大小写）。
+pub fn path_starts_with_case_insensitive(path: &Path, prefix: &Path) -> bool {
+    if prefix.as_os_str().is_empty() {
+        return false;
+    }
+    let mut path_comps = path.components();
+    for pre_comp in prefix.components() {
+        let Some(path_comp) = path_comps.next() else {
+            return false;
+        };
+        if !component_eq_platform(path_comp, pre_comp) {
+            return false;
+        }
+    }
+    true
+}
+
+/// 按组件判断两条路径是否等价（Windows 下忽略大小写）。
+pub fn path_eq_case_insensitive(left: &Path, right: &Path) -> bool {
+    let mut left_comps = left.components();
+    let mut right_comps = right.components();
+    loop {
+        match (left_comps.next(), right_comps.next()) {
+            (None, None) => return true,
+            (Some(l), Some(r)) if component_eq_platform(l, r) => continue,
+            _ => return false,
+        }
+    }
+}
+
 #[cfg(test)]
 mod cache_container_tests {
     use super::{

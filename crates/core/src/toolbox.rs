@@ -1,4 +1,6 @@
-use crate::paths::{DirectoryGuard, LockedEntry, OWNER_FILE, check_path, relative};
+use crate::paths::{
+    DirectoryGuard, LockedEntry, OWNER_FILE, check_path, relative, strip_verbatim_prefix,
+};
 use openunpack_protocol::{
     ArchiveExtensionFixItem, ConflictStrategy, RenamePatternRule, ToolboxAction,
     ToolboxExecuteRequest, ToolboxExecuteResult, ToolboxItemPlan, ToolboxKind, ToolboxOptions,
@@ -110,17 +112,6 @@ fn cleanup_directories(root: &Path, started: Instant) -> Result<Vec<LockedEntry>
     }
     directories.sort_by_key(|entry| std::cmp::Reverse(entry.path().components().count()));
     Ok(directories)
-}
-
-fn strip_verbatim_prefix(path: &Path) -> PathBuf {
-    let s = path.to_string_lossy();
-    if let Some(stripped) = s.strip_prefix(r"\\?\UNC\") {
-        PathBuf::from(format!(r"\\{stripped}"))
-    } else if let Some(stripped) = s.strip_prefix(r"\\?\") {
-        PathBuf::from(stripped)
-    } else {
-        path.to_path_buf()
-    }
 }
 
 fn normalize_components(path: &Path) -> Vec<String> {

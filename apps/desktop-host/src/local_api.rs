@@ -1,6 +1,9 @@
 #![allow(clippy::result_large_err)]
 
 use super::*;
+use openunpack_infrastructure::paths::{
+    path_eq_case_insensitive, path_starts_with_case_insensitive,
+};
 use openunpack_local_api::store::ScopeInfo;
 use openunpack_local_api::{
     ApiBackend, ApiClient, ApiClientInput, ApiCommand, ApiError, ApiSettings, ApiStatus, ApiStore,
@@ -1393,70 +1396,6 @@ impl openunpack_core::coordinator::JobExecutionPolicy for ClientJobPolicy {
         .map(|_| ())
         .map_err(|e| e.message)
     }
-}
-
-fn path_starts_with_case_insensitive(path: &Path, prefix: &Path) -> bool {
-    let path_comps: Vec<_> = path.components().collect();
-    let prefix_comps: Vec<_> = prefix.components().collect();
-    if prefix_comps.len() > path_comps.len() {
-        return false;
-    }
-    for (p, pre) in path_comps.iter().zip(prefix_comps.iter()) {
-        use std::path::Component;
-        match (p, pre) {
-            (Component::Prefix(p_pre), Component::Prefix(pre_pre)) => {
-                if p_pre.as_os_str().to_string_lossy().to_ascii_uppercase()
-                    != pre_pre.as_os_str().to_string_lossy().to_ascii_uppercase()
-                {
-                    return false;
-                }
-            }
-            (Component::RootDir, Component::RootDir) => {}
-            (Component::Normal(p_str), Component::Normal(pre_str)) => {
-                if p_str.to_string_lossy().to_ascii_uppercase()
-                    != pre_str.to_string_lossy().to_ascii_uppercase()
-                {
-                    return false;
-                }
-            }
-            (Component::CurDir, Component::CurDir) => {}
-            (Component::ParentDir, Component::ParentDir) => {}
-            _ => return false,
-        }
-    }
-    true
-}
-
-fn path_eq_case_insensitive(left: &Path, right: &Path) -> bool {
-    let left_comps: Vec<_> = left.components().collect();
-    let right_comps: Vec<_> = right.components().collect();
-    if left_comps.len() != right_comps.len() {
-        return false;
-    }
-    for (l, r) in left_comps.iter().zip(right_comps.iter()) {
-        use std::path::Component;
-        match (l, r) {
-            (Component::Prefix(l_pre), Component::Prefix(r_pre)) => {
-                if l_pre.as_os_str().to_string_lossy().to_ascii_uppercase()
-                    != r_pre.as_os_str().to_string_lossy().to_ascii_uppercase()
-                {
-                    return false;
-                }
-            }
-            (Component::RootDir, Component::RootDir) => {}
-            (Component::Normal(l_str), Component::Normal(r_str)) => {
-                if l_str.to_string_lossy().to_ascii_uppercase()
-                    != r_str.to_string_lossy().to_ascii_uppercase()
-                {
-                    return false;
-                }
-            }
-            (Component::CurDir, Component::CurDir) => {}
-            (Component::ParentDir, Component::ParentDir) => {}
-            _ => return false,
-        }
-    }
-    true
 }
 
 fn check_client_path(

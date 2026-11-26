@@ -490,9 +490,7 @@ function AppShell() {
                       style={{
                         fontSize: 11,
                         fontWeight: 500,
-                        color: snapshot.engineAvailable
-                          ? 'var(--ou-success)'
-                          : 'var(--ou-danger)',
+                        color: snapshot.engineAvailable ? 'var(--ou-success)' : 'var(--ou-danger)',
                       }}
                     >
                       {snapshot.engineAvailable ? t('就绪') : t('不可用')}
