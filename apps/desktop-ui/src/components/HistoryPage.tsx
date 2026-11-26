@@ -12,9 +12,7 @@ import {
   Card,
   Alert,
   Segmented,
-  Checkbox,
   Empty,
-  Pagination,
 } from 'antd';
 import {
   ReloadOutlined,
@@ -35,44 +33,9 @@ import {
   StatusTag,
   ArchiveFormatBadge,
 } from './shared';
+import { previewPage } from '../utils/historyPreview';
+import HistoryCardGrid from './HistoryCardGrid';
 import { taskDeleteBlockedReason, useTaskDeletion } from './TaskDeleteDialog';
-import VirtualGrid from './VirtualGrid';
-
-function previewPage(snapshot: AppSnapshot, query: HistoryPageQuery): JobHistoryPage {
-  const history = snapshot.jobs
-    .filter(terminal)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
-    .slice(0, snapshot.settings.historyLimit);
-  const search = query.search.trim().toLowerCase();
-  const filtered = history.filter(
-    (job) =>
-      (query.status === 'all' || job.status === query.status) &&
-      (!search ||
-        job.source.displayName.toLowerCase().includes(search) ||
-        job.source.path.toLowerCase().includes(search)),
-  );
-  const offset = Math.min(
-    query.offset,
-    Math.floor(Math.max(0, filtered.length - 1) / query.limit) * query.limit,
-  );
-  return {
-    items: filtered.slice(offset, offset + query.limit),
-    offset,
-    limit: query.limit,
-    filteredTotal: filtered.length,
-    total: history.length,
-    completed: history.filter((job) => job.status === 'completed').length,
-    failed: history.filter((job) => job.status === 'failed').length,
-    recoverable: history.filter((job) =>
-      ['needsPassword', 'failed', 'cancelled', 'interrupted', 'publishPending'].includes(
-        job.status,
-      ),
-    ).length,
-    clearAllowed: false,
-    sessionId: snapshot.sessionId,
-    revision: snapshot.revision,
-  };
-}
 
 export default function HistoryPage({
   snapshot,
@@ -616,170 +579,26 @@ export default function HistoryPage({
             style={{ margin: '32px 0' }}
           />
         ) : (
-          <div>
-            <VirtualGrid
-              items={historyList}
-              itemKey={(job) => job.id}
-              minItemWidth={320}
-              rowHeight={180}
-              containerHeight={520}
-              renderItem={(job) => {
-                const isSelected = selectedIds.has(job.id);
-                return (
-                  <div
-                    className="telemetry-card"
-                    style={{
-                      padding: '12px 14px',
-                      border: isSelected ? '1.5px solid var(--ou-primary)' : undefined,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 8,
-                      height: '100%',
-                      boxSizing: 'border-box',
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        justifyContent: 'space-between',
-                        gap: 8,
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          gap: 8,
-                          minWidth: 0,
-                          flex: 1,
-                        }}
-                      >
-                        <Checkbox
-                          checked={isSelected}
-                          disabled={deletion.busy}
-                          aria-label={t('选择任务 ') + job.source.displayName}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            setSelected((prev) =>
-                              checked ? [...prev, job.id] : prev.filter((id) => id !== job.id),
-                            );
-                          }}
-                        />
-                        <ArchiveFormatBadge name={job.source.displayName} />
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <Button
-                            type="link"
-                            style={{
-                              padding: 0,
-                              fontWeight: 600,
-                              fontSize: 13,
-                              height: 'auto',
-                              textAlign: 'left',
-                              whiteSpace: 'normal',
-                              wordBreak: 'break-all',
-                            }}
-                            onClick={() => void loadDetails(job.id)}
-                          >
-                            {job.source.displayName}
-                          </Button>
-                          <div
-                            className="muted mono-text"
-                            style={{ fontSize: 11, wordBreak: 'break-all', marginTop: 2 }}
-                          >
-                            {displayPath(job.source.path)}
-                          </div>
-                        </div>
-                      </div>
-                      <StatusTag status={job.status} />
-                    </div>
-
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        fontSize: 11,
-                        color: 'var(--ou-text-muted)',
-                      }}
-                    >
-                      <span className="mono-text">{verificationLabel(job.verificationScope)}</span>
-                      <span className="tabular-nums">
-                        {job.finishedAt
-                          ? new Date(job.finishedAt).toLocaleTimeString()
-                          : job.createdAt
-                            ? new Date(job.createdAt).toLocaleTimeString()
-                            : ''}
-                      </span>
-                    </div>
-
-                    {job.outputPath && (
-                      <div
-                        className="mono-text muted"
-                        style={{ fontSize: 11, wordBreak: 'break-all' }}
-                      >
-                        <FolderOpenOutlined style={{ marginRight: 4 }} aria-hidden />
-                        {displayPath(job.outputPath)}
-                      </div>
-                    )}
-
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        gap: 6,
-                        borderTop: '1px solid var(--ou-border-color)',
-                        paddingTop: 6,
-                        marginTop: 'auto',
-                      }}
-                    >
-                      <Button size="small" type="link" onClick={() => void loadDetails(job.id)}>
-                        {t('详情')}
-                      </Button>
-                      {job.outputPath &&
-                        ['completed', 'cleanupPending', 'partial', 'salvaged'].includes(
-                          job.status,
-                        ) && (
-                          <Button
-                            size="small"
-                            type="link"
-                            disabled={!nativeEngine}
-                            onClick={() => void run(() => api.openPath(job.outputPath!))}
-                          >
-                            {t('打开')}
-                          </Button>
-                        )}
-                      <Button
-                        size="small"
-                        type="link"
-                        danger
-                        aria-label={t('删除记录 {p0}', { p0: job.source.displayName })}
-                        title={taskDeleteBlockedReason(job)}
-                        disabled={!connected || deletion.busy || !!taskDeleteBlockedReason(job)}
-                        loading={deletion.deletingIds.includes(job.id)}
-                        onClick={() => deletion.request([job])}
-                      >
-                        {deletion.deletingIds.includes(job.id) ? t('正在删除') : t('删除')}
-                      </Button>
-                    </div>
-                  </div>
-                );
-              }}
-            />
-            <Pagination
-              current={Math.floor(offset / pageSize) + 1}
-              pageSize={pageSize}
-              total={page?.filteredTotal ?? 0}
-              showSizeChanger
-              pageSizeOptions={[10, 20, 50, 100]}
-              onChange={(number, size) => {
-                setPageSize(size);
-                setOffset(size === pageSize ? (number - 1) * size : 0);
-                setSelected([]);
-              }}
-              style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}
-            />
-          </div>
+          <HistoryCardGrid
+            items={historyList}
+            selectedIds={selectedIds}
+            onSelectChange={setSelected}
+            connected={connected}
+            nativeEngine={nativeEngine}
+            deletionBusy={deletion.busy}
+            deletingIds={deletion.deletingIds}
+            onRequestDelete={(jobs) => deletion.request(jobs)}
+            onLoadDetails={loadDetails}
+            run={run}
+            offset={offset}
+            pageSize={pageSize}
+            filteredTotal={page?.filteredTotal ?? 0}
+            onPageChange={(number, size) => {
+              setPageSize(size);
+              setOffset(size === pageSize ? (number - 1) * size : 0);
+              setSelected([]);
+            }}
+          />
         )}
       </Card>
 
