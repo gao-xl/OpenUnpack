@@ -15,12 +15,11 @@ export default tseslint.config(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
-      // React Compiler heuristics flag pre-existing effect patterns. The refactors need their own
-      // behaviour-verification pass, so keep them visible as warnings instead of failing lint.
-      'react-hooks/set-state-in-effect': 'warn',
-      'react-hooks/immutability': 'warn',
-      'react-hooks/purity': 'warn',
-      'react-hooks/refs': 'warn',
+      // React Compiler heuristics enforced strictly across desktop-ui components and hooks.
+      'react-hooks/set-state-in-effect': 'error',
+      'react-hooks/immutability': 'error',
+      'react-hooks/purity': 'error',
+      'react-hooks/refs': 'error',
     },
   },
   {

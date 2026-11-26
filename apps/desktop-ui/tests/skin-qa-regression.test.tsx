@@ -182,7 +182,9 @@ describe('QA Cross-Skin Full Regression & A11y Suite', () => {
 
   describe('2. Accessibility, Reduced-Motion & High-Contrast Gate', () => {
     it('styles.css contains robust prefers-reduced-motion definitions', () => {
-      const css = readFileSync(resolve(__dirname, '../src/styles.css'), 'utf-8');
+      const css = ['tokens.css', 'layout.css', 'skins.css']
+        .map((f) => readFileSync(resolve(__dirname, '../src/styles', f), 'utf-8'))
+        .join('\n');
       expect(css).toContain('@media (prefers-reduced-motion: reduce)');
       expect(css).toContain('animation: none !important');
       expect(css).toContain('transition: none !important');
@@ -190,7 +192,9 @@ describe('QA Cross-Skin Full Regression & A11y Suite', () => {
     });
 
     it('styles.css contains forced-colors high contrast definitions for Windows HC mode', () => {
-      const css = readFileSync(resolve(__dirname, '../src/styles.css'), 'utf-8');
+      const css = ['tokens.css', 'layout.css', 'skins.css']
+        .map((f) => readFileSync(resolve(__dirname, '../src/styles', f), 'utf-8'))
+        .join('\n');
       expect(css).toContain('@media (forced-colors: active)');
       expect(css).toContain('ButtonBorder');
       expect(css).toContain('Highlight');

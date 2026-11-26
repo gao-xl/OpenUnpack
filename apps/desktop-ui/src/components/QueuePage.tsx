@@ -471,7 +471,7 @@ export default function QueuePage({
               }
             >
               <Space
-                direction="vertical"
+                orientation="vertical"
                 size={2}
                 style={{ width: '100%', cursor: 'pointer' }}
                 onClick={() => setDetail(job.id)}
@@ -1483,7 +1483,7 @@ export default function QueuePage({
             )}
             <div className="setting-row">
               <span>{t('智能去套娃')}</span>
-              <Space direction="vertical" align="end">
+              <Space orientation="vertical" align="end">
                 <Switch
                   checked={options.unwrapSingleRoot}
                   onChange={(unwrapSingleRoot) =>

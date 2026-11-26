@@ -52,7 +52,7 @@ export default function SettingsBackupModal({
       }}
       onOk={onSubmit}
     >
-      <Space direction="vertical" style={{ width: '100%' }}>
+      <Space orientation="vertical" style={{ width: '100%' }}>
         <div>
           <Text type="secondary">{t('文件路径：')}</Text>
           <Text code style={{ wordBreak: 'break-all' }}>

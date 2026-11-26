@@ -46,7 +46,7 @@ export default function QueuePasswordModal({
           ? t('密码将仅提交给当前服务任务；勾选保存后才会写入服务端密码库。')
           : t('该压缩文件受密码保护。请输入解压密码，输入后将立即重新调度此任务。')}
       </Typography.Paragraph>
-      <Space direction="vertical" style={{ width: '100%' }}>
+      <Space orientation="vertical" style={{ width: '100%' }}>
         <Input.Password
           autoFocus
           aria-label={t('即时解压密码')}

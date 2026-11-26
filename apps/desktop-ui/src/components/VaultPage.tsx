@@ -814,7 +814,7 @@ export default function VaultPage({ snapshot, run }: VaultPageProps) {
           </Button>,
         ]}
       >
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+        <Space orientation="vertical" style={{ width: '100%' }} size="middle">
           <Space wrap>
             <span>{t('格式：')}</span>
             <Select

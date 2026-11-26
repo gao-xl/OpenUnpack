@@ -511,7 +511,7 @@ function ArchiveBrowserContent({ job, close }: ArchiveBrowserProps) {
         />
       )}
       {connected && (
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space orientation="vertical" style={{ width: '100%' }}>
           {extractionPasswordError && (
             <Alert
               type="warning"
@@ -522,7 +522,7 @@ function ArchiveBrowserContent({ job, close }: ArchiveBrowserProps) {
                   : t('密码不匹配或归档已损坏')
               }
               description={
-                <Space direction="vertical" style={{ width: '100%' }}>
+                <Space orientation="vertical" style={{ width: '100%' }}>
                   <Typography.Text>
                     {t(
                       '输入密码后重试提取；若仍失败，请检查密码或归档完整性。密码仅用于本次提取，不会保存到密码库。',

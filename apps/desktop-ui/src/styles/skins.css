@@ -1,0 +1,542 @@
+/* ==========================================================================
+   各皮肤材质质感与立体微动效 (Task t2)
+   ========================================================================== */
+
+/* 1. 通用按钮触觉微动效 (Universal Button Tactile Micro-Interactions) */
+.ant-btn {
+  position: relative;
+  transition:
+    transform 0.12s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+  user-select: none;
+}
+.ant-btn:active {
+  transform: translateY(1px);
+}
+
+/* 2. 进度条流光与动态效果 (Progress Bar Streamer & Shimmer) */
+.ant-progress-inner {
+  position: relative;
+  overflow: hidden;
+}
+.ant-progress-bg {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.ant-progress-bg::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.28) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: ou-streamer 2.2s infinite linear;
+  pointer-events: none;
+}
+
+@keyframes ou-streamer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* 3. 呼吸微动效与状态徽标 (Breathing Feedback & Pulses) */
+.ou-breathe,
+.ou-status-breathe {
+  animation: ou-breathe 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes ou-breathe {
+  0%,
+  100% {
+    opacity: 0.9;
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 8px 3px rgba(37, 99, 235, 0.22);
+  }
+}
+
+/* ==========================================================================
+   Win11 Fluent: 云母半透与柔和高光圆角
+   ========================================================================== */
+[data-skin='win11'] .header-bar,
+.skin-win11 .header-bar {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: rgba(255, 255, 255, 0.8) !important;
+}
+
+[data-skin='win11'][data-theme='dark'] .header-bar,
+.skin-win11.theme-dark .header-bar,
+body[data-skin='win11'][data-theme='dark'] .header-bar {
+  background: rgba(28, 28, 28, 0.82) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-skin='win11'] .sidebar,
+.skin-win11 .sidebar {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: rgba(243, 243, 243, 0.85) !important;
+}
+
+[data-skin='win11'][data-theme='dark'] .sidebar,
+.skin-win11.theme-dark .sidebar,
+body[data-skin='win11'][data-theme='dark'] .sidebar {
+  background: rgba(24, 24, 24, 0.88) !important;
+}
+
+/* Win11 亚克力微光卡片 */
+[data-skin='win11'] .telemetry-card,
+[data-skin='win11'] .summary-card,
+[data-skin='win11'] .section-card,
+[data-skin='win11'] .batch-progress-card,
+[data-skin='win11'] .settings-panel,
+.skin-win11 .telemetry-card,
+.skin-win11 .summary-card,
+.skin-win11 .section-card,
+.skin-win11 .batch-progress-card,
+.skin-win11 .settings-panel {
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 0 0 1px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.7);
+  transition:
+    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+[data-skin='win11'][data-theme='dark'] .telemetry-card,
+[data-skin='win11'][data-theme='dark'] .summary-card,
+[data-skin='win11'][data-theme='dark'] .section-card,
+[data-skin='win11'][data-theme='dark'] .batch-progress-card,
+[data-skin='win11'][data-theme='dark'] .settings-panel,
+.skin-win11.theme-dark .telemetry-card,
+.skin-win11.theme-dark .summary-card,
+.skin-win11.theme-dark .section-card,
+.skin-win11.theme-dark .batch-progress-card,
+.skin-win11.theme-dark .settings-panel {
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+}
+
+[data-skin='win11'] .telemetry-card:hover,
+.skin-win11 .telemetry-card:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+}
+
+/* Win11 按钮流体质感 */
+[data-skin='win11'] .ant-btn-primary,
+.skin-win11 .ant-btn-primary {
+  box-shadow:
+    0 1px 2px rgba(0, 103, 192, 0.25),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.2);
+}
+[data-skin='win11'] .ant-btn:hover,
+.skin-win11 .ant-btn:hover {
+  transform: translateY(-0.5px);
+}
+[data-skin='win11'] .ant-btn:active,
+.skin-win11 .ant-btn:active {
+  transform: translateY(0.5px) scale(0.985);
+}
+
+/* ==========================================================================
+   Win98 Classic: 经典 3D 双斜面浮雕边框与像素复古质感
+   ========================================================================== */
+/* Win98 经典 3D 凸起边框 (Raised 3D Frame) */
+[data-skin='win98'] .telemetry-card,
+[data-skin='win98'] .summary-card,
+[data-skin='win98'] .section-card,
+[data-skin='win98'] .batch-progress-card,
+[data-skin='win98'] .settings-panel,
+.skin-win98 .telemetry-card,
+.skin-win98 .summary-card,
+.skin-win98 .section-card,
+.skin-win98 .batch-progress-card,
+.skin-win98 .settings-panel {
+  border-radius: 0 !important;
+  background: #c0c0c0 !important;
+  border: 1px solid #dfdfdf !important;
+  box-shadow:
+    inset 1px 1px 0px #ffffff,
+    inset -1px -1px 0px #808080,
+    inset 2px 2px 0px #dfdfdf,
+    inset -2px -2px 0px #000000 !important;
+  color: #000000 !important;
+}
+
+[data-skin='win98'][data-theme='dark'] .telemetry-card,
+[data-skin='win98'][data-theme='dark'] .summary-card,
+[data-skin='win98'][data-theme='dark'] .section-card,
+[data-skin='win98'][data-theme='dark'] .batch-progress-card,
+[data-skin='win98'][data-theme='dark'] .settings-panel,
+.skin-win98.theme-dark .telemetry-card,
+.skin-win98.theme-dark .summary-card,
+.skin-win98.theme-dark .section-card,
+.skin-win98.theme-dark .batch-progress-card,
+.skin-win98.theme-dark .settings-panel {
+  background: #242830 !important;
+  border: 1px solid #383c44 !important;
+  box-shadow:
+    inset 1px 1px 0px #505560,
+    inset -1px -1px 0px #101216,
+    inset 2px 2px 0px #383c44,
+    inset -2px -2px 0px #08090c !important;
+  color: #f0f2f5 !important;
+}
+
+/* Win98 凹陷 3D 边框 (Sunken 3D Frame) 用于列表、输入框与拖拽靶区 */
+[data-skin='win98'] .ant-table-wrapper,
+[data-skin='win98'] .dropzone-container,
+[data-skin='win98'] .ant-input,
+[data-skin='win98'] .ant-input-affix-wrapper,
+.skin-win98 .ant-table-wrapper,
+.skin-win98 .dropzone-container,
+.skin-win98 .ant-input,
+.skin-win98 .ant-input-affix-wrapper {
+  border-radius: 0 !important;
+  border: 1px solid #808080 !important;
+  background: #ffffff !important;
+  box-shadow:
+    inset 1px 1px 0px #808080,
+    inset -1px -1px 0px #ffffff,
+    inset 2px 2px 0px #000000,
+    inset -2px -2px 0px #dfdfdf !important;
+}
+
+[data-skin='win98'][data-theme='dark'] .ant-table-wrapper,
+[data-skin='win98'][data-theme='dark'] .dropzone-container,
+[data-skin='win98'][data-theme='dark'] .ant-input,
+[data-skin='win98'][data-theme='dark'] .ant-input-affix-wrapper,
+.skin-win98.theme-dark .ant-table-wrapper,
+.skin-win98.theme-dark .dropzone-container,
+.skin-win98.theme-dark .ant-input,
+.skin-win98.theme-dark .ant-input-affix-wrapper {
+  background: #0e1014 !important;
+  border: 1px solid #505560 !important;
+  box-shadow:
+    inset 1px 1px 0px #101216,
+    inset -1px -1px 0px #505560,
+    inset 2px 2px 0px #08090c,
+    inset -2px -2px 0px #383c44 !important;
+}
+
+/* Win98 3D 按键 (Raised / Sunken on Active) */
+[data-skin='win98'] .ant-btn,
+.skin-win98 .ant-btn {
+  border-radius: 0 !important;
+  border: 1px solid #000000 !important;
+  background: #c0c0c0 !important;
+  color: #000000 !important;
+  box-shadow:
+    inset 1px 1px 0px #ffffff,
+    inset -1px -1px 0px #808080,
+    inset 2px 2px 0px #dfdfdf,
+    inset -2px -2px 0px #000000 !important;
+  font-family: var(--ou-font-sans) !important;
+  text-shadow: none !important;
+}
+
+[data-skin='win98'] .ant-btn-primary,
+.skin-win98 .ant-btn-primary {
+  font-weight: 700 !important;
+}
+
+[data-skin='win98'] .ant-btn:active,
+.skin-win98 .ant-btn:active {
+  box-shadow:
+    inset 1px 1px 0px #000000,
+    inset -1px -1px 0px #ffffff,
+    inset 2px 2px 0px #808080,
+    inset -2px -2px 0px #dfdfdf !important;
+  transform: translate(1px, 1px) !important;
+}
+
+[data-skin='win98'][data-theme='dark'] .ant-btn,
+.skin-win98.theme-dark .ant-btn {
+  background: #242830 !important;
+  color: #f0f2f5 !important;
+  border: 1px solid #101216 !important;
+  box-shadow:
+    inset 1px 1px 0px #505560,
+    inset -1px -1px 0px #101216,
+    inset 2px 2px 0px #383c44,
+    inset -2px -2px 0px #08090c !important;
+}
+
+[data-skin='win98'][data-theme='dark'] .ant-btn:active,
+.skin-win98.theme-dark .ant-btn:active {
+  box-shadow:
+    inset 1px 1px 0px #101216,
+    inset -1px -1px 0px #505560,
+    inset 2px 2px 0px #08090c,
+    inset -2px -2px 0px #383c44 !important;
+  transform: translate(1px, 1px) !important;
+}
+
+/* Win98 经典海军蓝标题栏 */
+[data-skin='win98'] .brand,
+.skin-win98 .brand {
+  background: linear-gradient(90deg, #000080 0%, #1084d0 100%) !important;
+  color: #ffffff !important;
+  border-bottom: 2px solid #808080;
+}
+[data-skin='win98'] .brand-mark,
+.skin-win98 .brand-mark {
+  border-radius: 0 !important;
+  background: #c0c0c0 !important;
+  color: #000000 !important;
+  border: 1px solid #000000 !important;
+  box-shadow:
+    inset 1px 1px 0px #ffffff,
+    inset -1px -1px 0px #808080;
+}
+[data-skin='win98'] .brand-name,
+.skin-win98 .brand-name {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.5px;
+}
+
+/* Win98 经典分块式进度条 */
+[data-skin='win98'] .ant-progress-bg,
+.skin-win98 .ant-progress-bg {
+  border-radius: 0 !important;
+  background: repeating-linear-gradient(
+    90deg,
+    #000080,
+    #000080 8px,
+    transparent 8px,
+    transparent 10px
+  ) !important;
+}
+[data-skin='win98'] .ant-progress-bg::after,
+.skin-win98 .ant-progress-bg::after {
+  display: none !important;
+}
+[data-skin='win98'] .ant-progress-inner,
+.skin-win98 .ant-progress-inner {
+  border-radius: 0 !important;
+  box-shadow:
+    inset 1px 1px 0px #808080,
+    inset -1px -1px 0px #ffffff !important;
+  background: #ffffff !important;
+  border: 1px solid #808080 !important;
+}
+
+/* ==========================================================================
+   Cyberpunk Neon: 霓虹矩阵与科技切角
+   ========================================================================== */
+/* 科技矩阵网格背景 */
+[data-skin='cyberpunk'] .page-content,
+.skin-cyberpunk .page-content {
+  background-image:
+    linear-gradient(rgba(0, 240, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.04) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Cyberpunk 霓虹发光卡片与切角 */
+[data-skin='cyberpunk'] .telemetry-card,
+[data-skin='cyberpunk'] .summary-card,
+[data-skin='cyberpunk'] .section-card,
+[data-skin='cyberpunk'] .batch-progress-card,
+[data-skin='cyberpunk'] .settings-panel,
+.skin-cyberpunk .telemetry-card,
+.skin-cyberpunk .summary-card,
+.skin-cyberpunk .section-card,
+.skin-cyberpunk .batch-progress-card,
+.skin-cyberpunk .settings-panel {
+  border: 1px solid rgba(0, 240, 255, 0.35) !important;
+  box-shadow:
+    0 0 10px rgba(0, 240, 255, 0.12),
+    inset 0 0 8px rgba(0, 240, 255, 0.04);
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+[data-skin='cyberpunk'] .telemetry-card:hover,
+.skin-cyberpunk .telemetry-card:hover {
+  border-color: #00f0ff !important;
+  box-shadow:
+    0 0 16px rgba(0, 240, 255, 0.3),
+    inset 0 0 12px rgba(0, 240, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+/* Cyberpunk 按钮高能电光 */
+[data-skin='cyberpunk'] .ant-btn-primary,
+.skin-cyberpunk .ant-btn-primary {
+  border: 1px solid #00f0ff !important;
+  box-shadow:
+    0 0 10px rgba(0, 240, 255, 0.5),
+    inset 0 0 6px rgba(0, 240, 255, 0.25);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+[data-skin='cyberpunk'] .ant-btn-primary:hover,
+.skin-cyberpunk .ant-btn-primary:hover {
+  box-shadow:
+    0 0 18px rgba(0, 240, 255, 0.8),
+    inset 0 0 10px rgba(0, 240, 255, 0.4);
+  transform: translateY(-1px);
+}
+[data-skin='cyberpunk'] .ant-btn-primary:active,
+.skin-cyberpunk .ant-btn-primary:active {
+  box-shadow:
+    0 0 6px rgba(0, 240, 255, 0.9),
+    inset 0 0 12px rgba(0, 240, 255, 0.6);
+  transform: translate(1px, 1px);
+}
+
+/* Cyberpunk 高速赛博光束进度条 */
+[data-skin='cyberpunk'] .ant-progress-bg,
+.skin-cyberpunk .ant-progress-bg {
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.7) !important;
+  background: linear-gradient(90deg, #00f0ff, #fcee0a, #ff0055, #00f0ff) !important;
+  background-size: 300% 100% !important;
+  animation: ou-cyber-beam 2.8s linear infinite !important;
+}
+@keyframes ou-cyber-beam {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 300% 50%;
+  }
+}
+
+/* Cyberpunk 品牌霓虹光晕 */
+[data-skin='cyberpunk'] .brand-mark,
+.skin-cyberpunk .brand-mark {
+  background: #00f0ff !important;
+  color: #08090e !important;
+  box-shadow:
+    0 0 12px #00f0ff,
+    0 0 24px rgba(0, 240, 255, 0.4);
+}
+[data-skin='cyberpunk'] .brand-name,
+.skin-cyberpunk .brand-name {
+  color: #00f0ff !important;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+}
+
+/* ==========================================================================
+   Modern Minimal: 纯粹工程质感与发丝线
+   ========================================================================== */
+[data-skin='modern'] .telemetry-card,
+[data-skin='modern'] .summary-card,
+[data-skin='modern'] .section-card,
+[data-skin='modern'] .batch-progress-card,
+[data-skin='modern'] .settings-panel,
+.skin-modern .telemetry-card,
+.skin-modern .summary-card,
+.skin-modern .section-card,
+.skin-modern .batch-progress-card,
+.skin-modern .settings-panel {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: all 0.15s ease;
+}
+[data-skin='modern'][data-theme='dark'] .telemetry-card,
+[data-skin='modern'][data-theme='dark'] .summary-card,
+[data-skin='modern'][data-theme='dark'] .section-card,
+[data-skin='modern'][data-theme='dark'] .batch-progress-card,
+[data-skin='modern'][data-theme='dark'] .settings-panel,
+.skin-modern.theme-dark .telemetry-card,
+.skin-modern.theme-dark .summary-card,
+.skin-modern.theme-dark .section-card,
+.skin-modern.theme-dark .batch-progress-card,
+.skin-modern.theme-dark .settings-panel {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+[data-skin='modern'] .telemetry-card:hover,
+.skin-modern .telemetry-card:hover {
+  border-color: rgba(79, 70, 229, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+[data-skin='modern'] .ant-btn:active,
+.skin-modern .ant-btn:active {
+  transform: translateY(1px);
+}
+
+/* ==========================================================================
+   无障碍与动效偏好 (Accessibility & Reduced Motion)
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  html,
+  body {
+    scroll-behavior: auto !important;
+  }
+  .sidebar,
+  .sidebar .ant-menu-item,
+  .telemetry-card,
+  .dropzone-container,
+  .ou-pulse-dot,
+  .ou-breathe,
+  .ou-status-breathe,
+  .ant-btn,
+  .ant-progress-bg,
+  .ant-progress-bg::after {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+/* Win98 皮肤天然禁用动态微动效以保证硬核像素质感 */
+[data-skin='win98'] .ant-progress-bg,
+[data-skin='win98'] .ant-progress-bg::after,
+[data-skin='win98'] .ou-breathe,
+[data-skin='win98'] .ou-status-breathe,
+[data-skin='win98'] .ou-pulse-dot,
+.skin-win98 .ant-progress-bg,
+.skin-win98 .ant-progress-bg::after,
+.skin-win98 .ou-breathe,
+.skin-win98 .ou-status-breathe,
+.skin-win98 .ou-pulse-dot {
+  animation: none !important;
+}
+
+/* 高对比度模式适配 (Windows High Contrast / forced-colors) */
+@media (forced-colors: active) {
+  .telemetry-card,
+  .skin-card,
+  .dropzone-container,
+  .ant-btn,
+  .ant-table,
+  .ant-segmented,
+  .ant-input,
+  .ant-select-selector,
+  .ant-progress-bg {
+    border: 1px solid ButtonBorder !important;
+  }
+
+  *:focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px !important;
+  }
+}

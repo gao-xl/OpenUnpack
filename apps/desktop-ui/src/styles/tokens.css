@@ -1,0 +1,300 @@
+:root {
+  --ou-font-sans:
+    'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', -apple-system, BlinkMacSystemFont,
+    system-ui, sans-serif;
+  --ou-font-mono: 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+
+  /* 基础主色与强调色 */
+  --ou-primary: #2563eb;
+  --ou-primary-hover: #3b82f6;
+  --ou-primary-bg: #eff6ff;
+  --ou-primary-border: #bfdbfe;
+
+  /* 语义状态色：状态徽标、遥测数值、归档格式徽章统一引用 */
+  --ou-success: #16a34a;
+  --ou-success-bg: rgba(22, 163, 74, 0.1);
+  --ou-success-border: rgba(22, 163, 74, 0.25);
+  --ou-danger: #dc2626;
+  --ou-warning: #d97706;
+  --ou-warning-bg: rgba(217, 119, 6, 0.1);
+  --ou-warning-border: rgba(217, 119, 6, 0.25);
+  --ou-accent: #7c3aed;
+  --ou-accent-bg: rgba(124, 58, 237, 0.1);
+  --ou-accent-border: rgba(124, 58, 237, 0.25);
+  --ou-info: #1890ff;
+
+  /* 侧边栏与导航 */
+  --ou-sidebar-bg: #f8fafc;
+  --ou-sidebar-text: #475569;
+  --ou-sidebar-muted: #94a3b8;
+  --ou-sidebar-active-bg: rgba(37, 99, 235, 0.08);
+  --ou-sidebar-active-text: #1d4ed8;
+  --ou-sidebar-border: #e2e8f0;
+
+  /* 画布与表面底色 */
+  --ou-bg-canvas: #f8fafc;
+  --ou-bg-card: #ffffff;
+  --ou-bg-subtle: #f1f5f9;
+  --ou-bg-input: #f1f5f9;
+  --ou-bg-hover: rgba(37, 99, 235, 0.04);
+
+  /* 边框与线条 (极细 0.5px/1px) */
+  --ou-border-color: #e2e8f0;
+  --ou-border-secondary: #f1f5f9;
+  --ou-border-subtle: rgba(0, 0, 0, 0.06);
+
+  /* 文字层级 */
+  --ou-text-title: #0f172a;
+  --ou-text-color: #0f172a;
+  --ou-text-body: #334155;
+  --ou-text-secondary: #475569;
+  --ou-text-muted: #64748b;
+  --ou-text-faint: #94a3b8;
+  --ou-text-white: #ffffff;
+
+  /* 阴影与微光 */
+  --ou-shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+  --ou-shadow-card: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.03);
+  --ou-radius: 6px;
+  --ou-radius-sm: 4px;
+  --ou-radius-lg: 8px;
+}
+
+[data-theme='dark'],
+.theme-dark,
+body[data-theme='dark'] {
+  --ou-primary: #3b82f6;
+  --ou-primary-hover: #60a5fa;
+  --ou-primary-bg: #1e293b;
+  --ou-primary-border: #1d4ed8;
+
+  /* 深色下提亮语义色，保证 ≥4.5:1 对比度 */
+  --ou-success: #4ade80;
+  --ou-success-bg: rgba(74, 222, 128, 0.14);
+  --ou-success-border: rgba(74, 222, 128, 0.32);
+  --ou-danger: #f87171;
+  --ou-warning: #fbbf24;
+  --ou-warning-bg: rgba(251, 191, 36, 0.14);
+  --ou-warning-border: rgba(251, 191, 36, 0.32);
+  --ou-accent: #a78bfa;
+  --ou-accent-bg: rgba(167, 139, 250, 0.14);
+  --ou-accent-border: rgba(167, 139, 250, 0.32);
+  --ou-info: #60a5fa;
+
+  --ou-sidebar-bg: #090d16;
+  --ou-sidebar-text: #94a3b8;
+  --ou-sidebar-muted: #64748b;
+  --ou-sidebar-active-bg: rgba(59, 130, 246, 0.15);
+  --ou-sidebar-active-text: #ffffff;
+  --ou-sidebar-border: #172033;
+
+  --ou-bg-canvas: #0b0f19;
+  --ou-bg-card: #111827;
+  --ou-bg-subtle: #161f30;
+  --ou-bg-input: #161f30;
+  --ou-bg-hover: rgba(59, 130, 246, 0.08);
+
+  --ou-border-color: #1e293b;
+  --ou-border-secondary: #172033;
+  --ou-border-subtle: rgba(255, 255, 255, 0.06);
+
+  --ou-text-title: #f1f5f9;
+  --ou-text-color: #f1f5f9;
+  --ou-text-body: #cbd5e1;
+  --ou-text-secondary: #94a3b8;
+  --ou-text-muted: #94a3b8;
+  --ou-text-faint: #64748b;
+
+  --ou-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --ou-shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* ==========================================================================
+   皮肤系统 Token 变量映射 (Win11 / Win98 / Modern / Cyberpunk)
+   ========================================================================== */
+
+/* Win11 Fluent (浅色) */
+[data-skin='win11'],
+.skin-win11 {
+  --ou-font-sans:
+    'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', -apple-system, BlinkMacSystemFont,
+    system-ui, sans-serif;
+  --ou-radius: 6px;
+  --ou-radius-sm: 4px;
+  --ou-radius-lg: 8px;
+  --ou-primary: #0067c0;
+  --ou-primary-hover: #1882d9;
+  --ou-primary-bg: #eff6fc;
+  --ou-primary-border: #b3d6f2;
+  --ou-sidebar-bg: #f3f3f3;
+  --ou-bg-canvas: #f3f3f3;
+  --ou-bg-card: #ffffff;
+  --ou-border-color: #e5e5e5;
+}
+
+/* Win11 Fluent (深色) */
+[data-skin='win11'][data-theme='dark'],
+.skin-win11.theme-dark,
+body[data-skin='win11'][data-theme='dark'] {
+  --ou-primary: #4cc2ff;
+  --ou-primary-hover: #68cdff;
+  --ou-primary-bg: rgba(76, 194, 255, 0.12);
+  --ou-primary-border: rgba(76, 194, 255, 0.28);
+  --ou-sidebar-bg: #181818;
+  --ou-bg-canvas: #1c1c1c;
+  --ou-bg-card: #242424;
+  --ou-bg-subtle: #2d2d2d;
+  --ou-bg-input: #2d2d2d;
+  --ou-border-color: #333333;
+}
+
+/* Win98 Classic (浅色) */
+[data-skin='win98'],
+.skin-win98 {
+  --ou-font-sans: 'MS Sans Serif', 'Tahoma', 'Segoe UI', 'SimSun', sans-serif;
+  --ou-radius: 0px;
+  --ou-radius-sm: 0px;
+  --ou-radius-lg: 0px;
+  --ou-primary: #000080;
+  --ou-primary-hover: #1020a0;
+  --ou-primary-bg: #e0e0f0;
+  --ou-primary-border: #808080;
+  --ou-sidebar-bg: #c0c0c0;
+  --ou-sidebar-text: #000000;
+  --ou-sidebar-active-bg: #000080;
+  --ou-sidebar-active-text: #ffffff;
+  --ou-sidebar-border: #808080;
+  --ou-bg-canvas: #c0c0c0;
+  --ou-bg-card: #ffffff;
+  --ou-bg-subtle: #d4d0c8;
+  --ou-bg-input: #dfdfdf;
+  --ou-border-color: #808080;
+  --ou-border-secondary: #dfdfdf;
+  --ou-text-title: #000000;
+  --ou-text-color: #000000;
+  --ou-text-body: #000000;
+  --ou-text-secondary: #333333;
+  --ou-text-muted: #444444;
+}
+
+/* Win98 Classic (深色) */
+[data-skin='win98'][data-theme='dark'],
+.skin-win98.theme-dark,
+body[data-skin='win98'][data-theme='dark'] {
+  --ou-font-sans: 'MS Sans Serif', 'Tahoma', 'Segoe UI', 'SimSun', sans-serif;
+  --ou-radius: 0px;
+  --ou-radius-sm: 0px;
+  --ou-radius-lg: 0px;
+  --ou-primary: #3a75c4;
+  --ou-primary-hover: #4e8be0;
+  --ou-primary-bg: rgba(58, 117, 196, 0.15);
+  --ou-primary-border: #505560;
+  --ou-sidebar-bg: #181b20;
+  --ou-sidebar-text: #f0f2f5;
+  --ou-sidebar-active-bg: #3a75c4;
+  --ou-sidebar-active-text: #ffffff;
+  --ou-sidebar-border: #505560;
+  --ou-bg-canvas: #181b20;
+  --ou-bg-card: #0e1014;
+  --ou-bg-subtle: #242830;
+  --ou-bg-input: #242830;
+  --ou-border-color: #505560;
+  --ou-border-secondary: #383c44;
+  --ou-text-title: #f0f2f5;
+  --ou-text-color: #f0f2f5;
+  --ou-text-body: #d4d8de;
+  --ou-text-secondary: #b0b6be;
+  --ou-text-muted: #9aa0a6;
+}
+
+/* Modern Minimal (浅色) */
+[data-skin='modern'],
+.skin-modern {
+  --ou-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --ou-radius: 6px;
+  --ou-radius-sm: 4px;
+  --ou-radius-lg: 8px;
+  --ou-primary: #4f46e5;
+  --ou-primary-hover: #6366f1;
+  --ou-primary-bg: #eef2ff;
+  --ou-primary-border: #c7d2fe;
+  --ou-sidebar-bg: #f8fafc;
+  --ou-bg-canvas: #f8fafc;
+  --ou-bg-card: #ffffff;
+  --ou-bg-input: #f1f5f9;
+  --ou-border-color: #e2e8f0;
+  --ou-border-secondary: #f1f5f9;
+}
+
+/* Modern Minimal (深色) */
+[data-skin='modern'][data-theme='dark'],
+.skin-modern.theme-dark,
+body[data-skin='modern'][data-theme='dark'] {
+  --ou-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --ou-radius: 6px;
+  --ou-radius-sm: 4px;
+  --ou-radius-lg: 8px;
+  --ou-primary: #6366f1;
+  --ou-primary-hover: #818cf8;
+  --ou-primary-bg: rgba(99, 102, 241, 0.15);
+  --ou-sidebar-bg: #09090b;
+  --ou-bg-canvas: #09090b;
+  --ou-bg-card: #121215;
+  --ou-bg-subtle: #18181b;
+  --ou-bg-input: #18181b;
+  --ou-border-color: #27272a;
+  --ou-border-secondary: #1e1e22;
+}
+
+/* Cyberpunk (浅色) */
+[data-skin='cyberpunk'],
+.skin-cyberpunk {
+  --ou-font-sans: 'Rajdhani', 'Cascadia Code', 'JetBrains Mono', 'Segoe UI', monospace, sans-serif;
+  --ou-radius: 2px;
+  --ou-radius-sm: 0px;
+  --ou-radius-lg: 3px;
+  --ou-primary: #ff0055;
+  --ou-primary-hover: #ff2a75;
+  --ou-primary-bg: rgba(255, 0, 85, 0.08);
+  --ou-primary-border: #00c3d9;
+  --ou-sidebar-bg: #f0f2f7;
+  --ou-bg-canvas: #f0f2f7;
+  --ou-bg-card: #ffffff;
+  --ou-bg-input: #e8ecf4;
+  --ou-border-color: #00c3d9;
+  --ou-border-secondary: #e2e8f0;
+}
+
+/* Cyberpunk (深色) */
+[data-skin='cyberpunk'][data-theme='dark'],
+.skin-cyberpunk.theme-dark,
+body[data-skin='cyberpunk'][data-theme='dark'] {
+  --ou-font-sans: 'Rajdhani', 'Cascadia Code', 'JetBrains Mono', 'Segoe UI', monospace, sans-serif;
+  --ou-radius: 2px;
+  --ou-radius-sm: 0px;
+  --ou-radius-lg: 3px;
+  --ou-primary: #00f0ff;
+  --ou-primary-hover: #3df3ff;
+  --ou-primary-bg: rgba(0, 240, 255, 0.12);
+  --ou-primary-border: rgba(0, 240, 255, 0.35);
+  --ou-accent: #ff0055;
+  --ou-warning: #fcee0a;
+  --ou-success: #00ff66;
+  --ou-sidebar-bg: #08090e;
+  --ou-sidebar-text: #e6f4ff;
+  --ou-sidebar-muted: #596982;
+  --ou-sidebar-active-bg: rgba(0, 240, 255, 0.16);
+  --ou-sidebar-active-text: #00f0ff;
+  --ou-sidebar-border: #1c253b;
+  --ou-bg-canvas: #08090e;
+  --ou-bg-card: #0f121d;
+  --ou-bg-subtle: #171b2b;
+  --ou-bg-input: #171b2b;
+  --ou-border-color: #1c253b;
+  --ou-border-secondary: #121826;
+  --ou-text-title: #e6f4ff;
+  --ou-text-color: #e6f4ff;
+  --ou-text-body: #8da0bd;
+  --ou-text-secondary: #8da0bd;
+  --ou-text-muted: #596982;
+}

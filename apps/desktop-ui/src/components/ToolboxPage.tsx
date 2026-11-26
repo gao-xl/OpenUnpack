@@ -409,7 +409,7 @@ export default function ToolboxPage({ snapshot: _snapshot, run: _run, initialTab
       dataIndex: 'relativePath',
       key: 'relativePath',
       render: (rel: string) => (
-        <Space direction="vertical" size={2}>
+        <Space orientation="vertical" size={2}>
           <Text code ellipsis style={{ maxWidth: 300 }}>
             {displayPath(rel)}
           </Text>
@@ -421,7 +421,7 @@ export default function ToolboxPage({ snapshot: _snapshot, run: _run, initialTab
       dataIndex: 'proposedName',
       key: 'proposedName',
       render: (name: string, record: ToolboxItemPlan) => (
-        <Space direction="vertical" size={2}>
+        <Space orientation="vertical" size={2}>
           <Space>
             <Text strong style={{ color: record.hasConflict ? 'var(--ou-warning)' : undefined }}>
               {name}
@@ -470,7 +470,7 @@ export default function ToolboxPage({ snapshot: _snapshot, run: _run, initialTab
         const fileName = getBaseName(path);
         const dir = getDirName(path);
         return (
-          <Space direction="vertical" size={2}>
+          <Space orientation="vertical" size={2}>
             <Text strong>{fileName}</Text>
             <Text code ellipsis style={{ maxWidth: 360, fontSize: 12 }}>
               {displayPath(dir || path)}
@@ -741,7 +741,7 @@ export default function ToolboxPage({ snapshot: _snapshot, run: _run, initialTab
                 style={{ marginBottom: 16 }}
               >
                 <div style={{ maxHeight: 240, overflowY: 'auto' }}>
-                  <Space direction="vertical" style={{ width: '100%' }} size={6}>
+                  <Space orientation="vertical" style={{ width: '100%' }} size={6}>
                     {fixPaths.slice(0, 100).map((p) => (
                       <div
                         key={p}
@@ -864,7 +864,7 @@ export default function ToolboxPage({ snapshot: _snapshot, run: _run, initialTab
 
             {kind === 'batchRename' && (
               <Card type="inner" title={t('更名规则配置')} style={{ marginBottom: 16 }}>
-                <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                <Space orientation="vertical" style={{ width: '100%' }} size={12}>
                   <Space wrap style={{ width: '100%' }}>
                     <Form.Item
                       label={t('查找文本 / 正则')}

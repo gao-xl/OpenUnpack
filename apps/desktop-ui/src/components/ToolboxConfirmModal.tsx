@@ -42,7 +42,7 @@ export default function ToolboxConfirmModal({
       okButtonProps={{ danger: true }}
       cancelText={t('取消')}
     >
-      <Space direction="vertical" size={12} style={{ width: '100%', marginTop: 8 }}>
+      <Space orientation="vertical" size={12} style={{ width: '100%', marginTop: 8 }}>
         <Alert
           type="warning"
           showIcon

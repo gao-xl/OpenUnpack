@@ -5,7 +5,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 describe('Skin Styles & Micro-Interactions (styles.css verification)', () => {
-  const css = readFileSync(resolve(__dirname, '../src/styles.css'), 'utf-8').replace(/\s+/g, ' ');
+  const css = ['tokens.css', 'layout.css', 'skins.css']
+    .map((f) => readFileSync(resolve(__dirname, '../src/styles', f), 'utf-8'))
+    .join('\n')
+    .replace(/\s+/g, ' ');
 
   it('contains Win98 classic 3D double-bevel and sunken box-shadow styles', () => {
     expect(css).toContain("[data-skin='win98'] .telemetry-card");

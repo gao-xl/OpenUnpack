@@ -174,7 +174,7 @@ export default function ApiSettingsPanel({
   const portValid = port !== null && Number.isInteger(port) && port >= 1 && port <= 65535;
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+    <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
       <Alert
         type="info"
         showIcon
@@ -382,7 +382,7 @@ export default function ApiSettingsPanel({
               title: t('批准的位置'),
               key: 'roots',
               render: (_, client) => (
-                <Space direction="vertical" size={0}>
+                <Space orientation="vertical" size={0}>
                   {client.readRoots.map((path) => (
                     <Text key={`r-${path}`} style={{ wordBreak: 'break-all' }}>
                       {t('可读：')}
@@ -565,7 +565,7 @@ export default function ApiSettingsPanel({
         cancelButtonProps={{ style: { display: 'none' } }}
         destroyOnHidden
       >
-        <Space direction="vertical" style={{ width: '100%' }}>
+        <Space orientation="vertical" style={{ width: '100%' }}>
           <Alert
             type="warning"
             showIcon
