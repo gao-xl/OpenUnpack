@@ -8,6 +8,7 @@
 | 贡献与验证 | [贡献指南](../CONTRIBUTING.md) |
 | 安全边界 | [安全策略](../SECURITY.md) |
 | 生产链与源码归属 | [现行架构](architecture-current.md) |
+| 模块与文件总览 | [详细技术文档（文件与模块索引）](technical-documentation.md) |
 | 本机 API | [调用与授权指南](local-api.md) |
 | 产品需求 | [软件规格](software-spec.md)、[功能设计](functional-design.md) |
 | 验收准则 | [版本验收清单](acceptance-checklist.md)、[完整功能测试规范](plans/2026-10-19-full-functional-testing.md) |
