@@ -106,4 +106,33 @@ foreach ($mismatch in @('identity', 'roots', 'edge', 'malformed')) {
     if (-not $rejected) { throw "Mismatched complete graph passed: $mismatch" }
 }
 Write-Output 'PASS 6 complete/target Cargo graph cross-check cases.'
+$optionalGraph = New-TestCargoMetadata
+$optionalGraph.packages += @{ id = 'registry#chrono@0.4.45'; name = 'chrono'; version = '0.4.45' }
+$optionalGraph.resolve.nodes[0].deps = @(@{ pkg = 'registry#chrono@0.4.45' })
+$optionalGraph.resolve.nodes += @{ id = 'registry#chrono@0.4.45'; deps = @() }
+$optionalJson = $optionalGraph | ConvertTo-Json -Depth 12
+$cleanTree = "app v0.1.0`nbridge v0.1.0 (*)"
+$optionalExcluded = Get-OpenUnpackWindowsAuditExceptions -MetadataJson $optionalJson -AllMetadataJson $optionalJson -ActiveWindowsTreeText $cleanTree
+if (@($optionalExcluded.ignored_advisories | Where-Object id -eq 'RUSTSEC-2026-0543').Count -ne 1) {
+    throw 'Unactivated weak optional advisory was not excluded when absent from active Cargo tree.'
+}
+$activeTreeWithChrono = "app v0.1.0`nchrono v0.4.45"
+$optionalKept = Get-OpenUnpackWindowsAuditExceptions -MetadataJson $optionalJson -AllMetadataJson $optionalJson -ActiveWindowsTreeText $activeTreeWithChrono
+if (@($optionalKept.ignored_advisories | Where-Object id -eq 'RUSTSEC-2026-0543').Count -ne 0) {
+    throw 'Active chrono dependency was wrongly excluded.'
+}
+$wrongVersionGraph = New-TestCargoMetadata
+$wrongVersionGraph.packages += @{ id = 'registry#chrono@0.4.46'; name = 'chrono'; version = '0.4.46' }
+$wrongVersionGraph.resolve.nodes += @{ id = 'registry#chrono@0.4.46'; deps = @() }
+$wrongVersionKept = Get-OpenUnpackWindowsAuditExceptions -MetadataJson ($wrongVersionGraph | ConvertTo-Json -Depth 12) -ActiveWindowsTreeText $cleanTree
+if (@($wrongVersionKept.ignored_advisories | Where-Object id -eq 'RUSTSEC-2026-0543').Count -ne 0) {
+    throw 'Unreviewed chrono version was wrongly excluded.'
+}
+foreach ($badTree in @('not-a-package-line', 'bridge v0.1.0')) {
+    $rejected = $false
+    try { $null = Get-OpenUnpackWindowsAuditExceptions -MetadataJson $optionalJson -ActiveWindowsTreeText $badTree }
+    catch { $rejected = $true }
+    if (-not $rejected) { throw "Invalid active Cargo tree was accepted: $badTree" }
+}
+Write-Output 'PASS 5 unactivated optional Cargo tree cross-check cases.'
 & (Join-Path $PSScriptRoot 'test-runtime-policy.ps1')

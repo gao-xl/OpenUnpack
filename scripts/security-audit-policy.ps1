@@ -57,7 +57,11 @@ function Get-OpenUnpackCargoAuditGraph {
 }
 
 function Get-OpenUnpackWindowsAuditExceptions {
-    param([Parameter(Mandatory)][string]$MetadataJson, [string]$AllMetadataJson = $MetadataJson)
+    param(
+        [Parameter(Mandatory)][string]$MetadataJson,
+        [string]$AllMetadataJson = $MetadataJson,
+        [string]$ActiveWindowsTreeText = ''
+    )
     $windows = Get-OpenUnpackCargoAuditGraph -MetadataJson $MetadataJson
     $all = Get-OpenUnpackCargoAuditGraph -MetadataJson $AllMetadataJson
     # Cargo can omit non-target packages entirely from filtered metadata. Establish
@@ -92,6 +96,34 @@ function Get-OpenUnpackWindowsAuditExceptions {
             @($affected | Where-Object { $_.version -cne $known.version -or $windows.reachable.Contains($_.id) }).Count -eq 0) {
             $ignored += @{ id = $known.id; package = $known.package; version = $known.version;
                 reason = 'all reviewed package instances unreachable in x86_64-pc-windows-msvc workspace graph' }
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ActiveWindowsTreeText)) {
+        $activePackageNames = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+        foreach ($rawLine in ($ActiveWindowsTreeText -split "`r?`n")) {
+            $line = $rawLine.Trim()
+            if ([string]::IsNullOrEmpty($line)) { continue }
+            $match = [regex]::Match($line, '^([A-Za-z0-9_-]+)\s+v(\d+\.\d+\.\d+(?:[-+][^\s]+)?)(?:\s|\*|$)')
+            if (-not $match.Success) {
+                throw "Cargo active tree returned an unrecognized package line: $line"
+            }
+            $null = $activePackageNames.Add($match.Groups[1].Value)
+        }
+        $expectedRootPackage = ($all.packages[$all.roots[0]]).name
+        if ($activePackageNames.Count -eq 0 -or -not $activePackageNames.Contains($expectedRootPackage)) {
+            throw 'Cargo active tree is incomplete; unactivated optional dependency exclusion cannot be established.'
+        }
+        $reviewedUnactivatedOptional = @(
+            @{ id = 'RUSTSEC-2026-0543'; package = 'chrono'; version = '0.4.45' }
+        )
+        foreach ($known in $reviewedUnactivatedOptional) {
+            $affected = @($all.packages.Values | Where-Object { $_.name -ceq $known.package })
+            if ($affected.Count -gt 0 -and
+                -not $activePackageNames.Contains($known.package) -and
+                @($affected | Where-Object { $_.version -cne $known.version }).Count -eq 0) {
+                $ignored += @{ id = $known.id; package = $known.package; version = $known.version;
+                    reason = 'reviewed unactivated weak optional dependency absent from active x86_64-pc-windows-msvc cargo tree' }
+            }
         }
     }
     return @{ target = 'x86_64-pc-windows-msvc'; ignored_advisories = $ignored;

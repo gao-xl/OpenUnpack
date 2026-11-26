@@ -121,10 +121,16 @@ try {
     $taskAllMetadataRaw = @(& cargo @taskAllMetadataArgs 2> (Join-Path $taskLogs 'cargo-all-metadata.stderr.log'))
     if ($LASTEXITCODE -ne 0) { throw 'Could not establish the complete Cargo package inventory.' }
     $taskAllMetadataJson = $taskAllMetadataRaw -join "`n"
-    $taskAuditGraph = Get-OpenUnpackWindowsAuditExceptions -MetadataJson $taskMetadataJson -AllMetadataJson $taskAllMetadataJson
+    $taskTreeArgs = @('tree', '--locked', '--target', 'x86_64-pc-windows-msvc', '-e', 'normal,build,dev', '--prefix', 'none')
+    if ($Offline) { $taskTreeArgs += '--offline' }
+    $taskTreeRaw = @(& cargo @taskTreeArgs 2> (Join-Path $taskLogs 'cargo-windows-tree.stderr.log'))
+    if ($LASTEXITCODE -ne 0) { throw 'Could not establish the active Windows Cargo dependency tree.' }
+    $taskTreeText = $taskTreeRaw -join "`n"
+    $taskAuditGraph = Get-OpenUnpackWindowsAuditExceptions -MetadataJson $taskMetadataJson -AllMetadataJson $taskAllMetadataJson -ActiveWindowsTreeText $taskTreeText
     $taskIgnoredAdvisories = @($taskAuditGraph.ignored_advisories)
     Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskLogs 'cargo-windows-metadata.json') -Content $taskMetadataJson
     Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskLogs 'cargo-all-metadata.json') -Content $taskAllMetadataJson
+    Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskLogs 'cargo-windows-tree.txt') -Content ($taskTreeText + "`n")
     Write-OpenUnpackUtf8NoBom -Path (Join-Path $taskLogs 'cargo-windows-audit-scope.json') -Content (($taskAuditGraph | ConvertTo-Json -Depth 8) + "`n")
     foreach ($taskKnown in $taskIgnoredAdvisories) {
         $auditArgs.Add('--ignore'); $auditArgs.Add($taskKnown.id)

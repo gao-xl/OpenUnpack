@@ -57,6 +57,8 @@ jobs:
           node scripts/audit-git.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ./scripts/prepare-desktop.ps1
+      - name: Prepare official 7-Zip native engine
+        run: ./scripts/setup-engine.ps1
       - name: Verify security audit policies with malformed and outdated inputs
         run: ./scripts/test-security-audit-policy.ps1
       - name: Lint frontend
@@ -119,7 +121,6 @@ jobs:
           ./scripts/collect-release-materials.ps1
       - name: Run automated security audits (cargo-audit & dependencies)
         # Advisory exclusions require proof of absence in the current Windows dependency graph.
-        # and .NET Roslyn Security Analyzers (CA21xx/CA30xx/CA53xx), outputting artifacts/verification/security-audit.json.
         run: ./scripts/audit-security.ps1 -InstallCargoAudit -DenyWarnings
       - name: Rust format and strict static checks
         run: |
