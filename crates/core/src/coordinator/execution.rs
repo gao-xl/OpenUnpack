@@ -28,6 +28,37 @@ struct PreparedRun {
     lease: Option<paths::DirectoryGuard>,
 }
 
+/// 准备或重建工作区时所需的上下文参数。
+struct PrepareWorkspaceArgs<'a> {
+    settings: &'a Settings,
+    source: &'a SourceGroup,
+    witnesses: &'a [SourceWitness],
+    cancel: Arc<AtomicBool>,
+    allow_partial: bool,
+    selected: Option<&'a HashSet<String>>,
+}
+
+/// 缓存输入分卷到中转工作区时所需的参数。
+struct CacheInputArgs<'a> {
+    settings: &'a Settings,
+    route: &'a ExtractionRoute,
+    parent: &'a Path,
+    work: &'a Path,
+    source: &'a SourceGroup,
+    witnesses: &'a [SourceWitness],
+    cancel: Arc<AtomicBool>,
+}
+
+/// 节点树执行循环所需的上下文参数。
+struct RunNodesArgs<'a> {
+    settings: &'a Settings,
+    route: &'a ExtractionRoute,
+    parent: &'a Path,
+    work: &'a Path,
+    cancel: Arc<AtomicBool>,
+    allow_partial: bool,
+}
+
 /// Everything one node of the derivation tree may touch.
 ///
 /// Grouping it keeps the helpers below at a readable arity and makes the
@@ -115,41 +146,43 @@ impl Coordinator {
             return self.run_inplace_job(job, &source, cancel).await;
         }
         let witnesses = source_witnesses(&source)?;
-        let mut prepared = self
-            .prepare_workspace(
-                job,
-                &s,
-                &source,
-                &witnesses,
-                cancel.clone(),
-                allow_partial,
-                selected,
-            )
-            .await?;
+        let prepare_args = PrepareWorkspaceArgs {
+            settings: &s,
+            source: &source,
+            witnesses: &witnesses,
+            cancel: cancel.clone(),
+            allow_partial,
+            selected,
+        };
+        let mut prepared = self.prepare_workspace(job, &prepare_args).await?;
 
         self.run_nodes(
             job,
-            &s,
-            &prepared.route,
-            &prepared.parent,
-            &prepared.work,
             &mut prepared.state,
-            cancel.clone(),
-            allow_partial,
+            RunNodesArgs {
+                settings: &s,
+                route: &prepared.route,
+                parent: &prepared.parent,
+                work: &prepared.work,
+                cancel: cancel.clone(),
+                allow_partial,
+            },
         )
         .await?;
 
         self.finalize_run(
             job,
-            &s,
-            &prepared.source,
-            &prepared.witnesses,
-            &prepared.route,
-            &prepared.work,
             &mut prepared.state,
             prepared.lease,
-            cancel,
-            allow_partial,
+            execution_reconcile::FinalizeRunArgs {
+                settings: &s,
+                source: &prepared.source,
+                witnesses: &prepared.witnesses,
+                route: &prepared.route,
+                work: &prepared.work,
+                cancel,
+                allow_partial,
+            },
         )
         .await
     }
@@ -194,19 +227,17 @@ impl Coordinator {
 
     /// Reuses a saved run when it is byte-identical, otherwise creates a
     /// fresh workspace (copying volumes to the cache when routing asks for it).
-    #[allow(clippy::too_many_arguments)]
     async fn prepare_workspace(
         self: &Arc<Self>,
         job: &mut JobView,
-        s: &Settings,
-        source: &SourceGroup,
-        witnesses: &[SourceWitness],
-        cancel: Arc<AtomicBool>,
-        allow_partial: bool,
-        selected: Option<&HashSet<String>>,
+        args: &PrepareWorkspaceArgs<'_>,
     ) -> Result<PreparedRun, String> {
-        let source = source.clone();
-        let witnesses = witnesses.to_vec();
+        let s = args.settings;
+        let cancel = args.cancel.clone();
+        let allow_partial = args.allow_partial;
+        let selected = args.selected;
+        let source = args.source.clone();
+        let witnesses = args.witnesses.to_vec();
         let mut route = self.decide_route(s, &source)?;
         let mut parent = self.workspace_parent(s, &source, &route)?;
         // A run owns one immutable extraction configuration. Output/verification changes
@@ -296,19 +327,8 @@ impl Coordinator {
             self.put(job)?;
             (work, saved)
         } else {
-            self.create_fresh_workspace(
-                job,
-                s,
-                &source,
-                &witnesses,
-                &route,
-                &parent,
-                &mut workspace_lease,
-                cancel.clone(),
-                allow_partial,
-                selected,
-            )
-            .await?
+            self.create_fresh_workspace(job, args, &route, &parent, &mut workspace_lease)
+                .await?
         };
 
         Ok(PreparedRun {
@@ -324,20 +344,20 @@ impl Coordinator {
 
     /// Builds a brand new workspace generation: retires the previous one,
     /// optionally stages the volumes in the SSD cache, and persists the plan.
-    #[allow(clippy::too_many_arguments)]
     async fn create_fresh_workspace(
         self: &Arc<Self>,
         job: &mut JobView,
-        s: &Settings,
-        source: &SourceGroup,
-        witnesses: &[SourceWitness],
+        args: &PrepareWorkspaceArgs<'_>,
         route: &ExtractionRoute,
         parent: &Path,
         workspace_lease: &mut Option<paths::DirectoryGuard>,
-        cancel: Arc<AtomicBool>,
-        allow_partial: bool,
-        selected: Option<&HashSet<String>>,
     ) -> Result<(PathBuf, SavedRun), String> {
+        let s = args.settings;
+        let source = args.source;
+        let witnesses = args.witnesses;
+        let cancel = args.cancel.clone();
+        let allow_partial = args.allow_partial;
+        let selected = args.selected;
         if allow_partial || selected.is_some() {
             return Err("无可用缓存目录，请重试整个任务。".into());
         }
@@ -375,8 +395,19 @@ impl Coordinator {
         self.put(job)?;
 
         let (group, fingerprint, input_files) = if should_cache_input {
-            self.cache_input(job, s, route, parent, &work, source, witnesses, cancel)
-                .await?
+            self.cache_input(
+                job,
+                CacheInputArgs {
+                    settings: s,
+                    route,
+                    parent,
+                    work: &work,
+                    source,
+                    witnesses,
+                    cancel,
+                },
+            )
+            .await?
         } else {
             (source.clone(), None, vec![])
         };
@@ -413,18 +444,20 @@ impl Coordinator {
 
     /// Copies the archive volumes into the workspace cache and fingerprints the
     /// ordered content (never the filenames).
-    #[allow(clippy::too_many_arguments)]
     async fn cache_input(
         self: &Arc<Self>,
         job: &mut JobView,
-        s: &Settings,
-        route: &ExtractionRoute,
-        parent: &Path,
-        work: &Path,
-        source: &SourceGroup,
-        witnesses: &[SourceWitness],
-        cancel: Arc<AtomicBool>,
+        args: CacheInputArgs<'_>,
     ) -> Result<(SourceGroup, Option<String>, Vec<CopyFile>), String> {
+        let CacheInputArgs {
+            settings: s,
+            route,
+            parent,
+            work,
+            source,
+            witnesses,
+            cancel,
+        } = args;
         let mut group = source.clone();
         let mut input_files = vec![];
         self.stage(job, "caching", "正在将分卷文件复制到缓存。")?;
@@ -505,18 +538,20 @@ impl Coordinator {
     }
 
     /// Processes every pending node until the derivation tree is drained.
-    #[allow(clippy::too_many_arguments)]
     async fn run_nodes(
         self: &Arc<Self>,
         job: &mut JobView,
-        s: &Settings,
-        route: &ExtractionRoute,
-        parent: &Path,
-        work: &Path,
         state: &mut SavedRun,
-        cancel: Arc<AtomicBool>,
-        allow_partial: bool,
+        args: RunNodesArgs<'_>,
     ) -> Result<(), String> {
+        let RunNodesArgs {
+            settings: s,
+            route,
+            parent,
+            work,
+            cancel,
+            allow_partial,
+        } = args;
         // Freeze the finite saved-password snapshot for this generation. Password edits
         // during decoding do not mutate its candidates or recorded revisions.
         let snapshot = unique_candidates(

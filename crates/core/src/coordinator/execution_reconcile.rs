@@ -1,23 +1,36 @@
 //! Post-extraction reconciliation, publication, cleanup and retirement pipeline.
 use super::*;
 
+/// 完成任务发布与清理收尾时所需的参数。
+pub(super) struct FinalizeRunArgs<'a> {
+    pub(super) settings: &'a Settings,
+    pub(super) source: &'a SourceGroup,
+    pub(super) witnesses: &'a [SourceWitness],
+    pub(super) route: &'a ExtractionRoute,
+    pub(super) work: &'a Path,
+    pub(super) cancel: Arc<AtomicBool>,
+    pub(super) allow_partial: bool,
+}
+
 impl Coordinator {
     /// Publishes the verified output, optionally retires the source archive,
     /// and releases the workspace.
-    #[allow(clippy::too_many_arguments)]
     pub(super) async fn finalize_run(
         self: &Arc<Self>,
         job: &mut JobView,
-        s: &Settings,
-        source: &SourceGroup,
-        witnesses: &[SourceWitness],
-        route: &ExtractionRoute,
-        work: &Path,
         state: &mut SavedRun,
         mut workspace_lease: Option<paths::DirectoryGuard>,
-        cancel: Arc<AtomicBool>,
-        allow_partial: bool,
+        args: FinalizeRunArgs<'_>,
     ) -> Result<(), String> {
+        let FinalizeRunArgs {
+            settings: s,
+            source,
+            witnesses,
+            route,
+            work,
+            cancel,
+            allow_partial,
+        } = args;
         let tree_closed = is_derivation_tree_closed(state);
         if tree_closed {
             // Bottom-up retirement: clean up inner archives in reverse depth order
@@ -52,11 +65,13 @@ impl Coordinator {
         let Some(staged) = self.publications.prepare(
             &self.repository,
             job,
-            state,
-            source,
-            work,
-            route,
-            tree_closed,
+            publication::PreparePublicationArgs {
+                state,
+                source,
+                work,
+                route,
+                tree_closed,
+            },
         )?
         else {
             job.status = "skipped".into();

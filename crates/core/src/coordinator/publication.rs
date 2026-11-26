@@ -67,20 +67,27 @@ pub(super) struct RecoveryPublication {
     final_path: PathBuf,
 }
 
+/// 准备发布暂存区所需的输入参数。
+pub(super) struct PreparePublicationArgs<'a> {
+    pub(super) state: &'a SavedRun,
+    pub(super) source: &'a SourceGroup,
+    pub(super) work: &'a Path,
+    pub(super) route: &'a ExtractionRoute,
+    pub(super) tree_closed: bool,
+}
+
 impl PublicationService {
-    // The parameters are distinct borrows of caller-owned state; grouping them
-    // into a struct would only move the same list to the call site.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn prepare(
         &self,
         repository: &Repository,
         job: &mut JobView,
-        state: &SavedRun,
-        source: &SourceGroup,
-        work: &Path,
-        route: &ExtractionRoute,
-        tree_closed: bool,
+        args: PreparePublicationArgs<'_>,
     ) -> Result<Option<StagedPublication>, String> {
+        let state = args.state;
+        let source = args.source;
+        let work = args.work;
+        let route = args.route;
+        let tree_closed = args.tree_closed;
         let settings = &job.options;
         let partial = !state.failed.is_empty();
         let mut files = state.final_files.clone();

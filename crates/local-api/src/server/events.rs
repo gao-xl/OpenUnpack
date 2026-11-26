@@ -216,7 +216,6 @@ pub(super) async fn ws_handler(
 fn notification(method: &str, event: &str, data: Value) -> Value {
     json!({"jsonrpc":"2.0","method":method,"params":data,"event":event,"data":data})
 }
-#[allow(clippy::result_large_err)]
 fn input_command(value: &Value) -> Result<ApiCommand, ApiError> {
     let job = value
         .get("jobId")

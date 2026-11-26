@@ -263,16 +263,26 @@ pub fn update_candidate_stability(
     probe_ok: bool,
     required_ticks: usize,
 ) -> bool {
-    crate::intake_guard::update_stability_with_backoff(
-        &mut record.stable_ticks,
-        &mut record.last_size,
-        &mut record.last_mtime,
-        &mut record.consecutive_probe_failures,
-        current_size,
-        current_mtime,
-        probe_ok,
-        required_ticks,
-    )
+    let mut counters = crate::intake_guard::StabilityCounters {
+        stable_ticks: record.stable_ticks,
+        last_size: record.last_size,
+        last_mtime: record.last_mtime,
+        consecutive_probe_failures: record.consecutive_probe_failures,
+    };
+    let ready = crate::intake_guard::update_stability_with_backoff(
+        &mut counters,
+        crate::intake_guard::StabilitySample {
+            current_size,
+            current_mtime,
+            probe_ok,
+            required_ticks,
+        },
+    );
+    record.stable_ticks = counters.stable_ticks;
+    record.last_size = counters.last_size;
+    record.last_mtime = counters.last_mtime;
+    record.consecutive_probe_failures = counters.consecutive_probe_failures;
+    ready
 }
 
 /// Maximum remembered archive fingerprints kept in memory by the folder watcher.

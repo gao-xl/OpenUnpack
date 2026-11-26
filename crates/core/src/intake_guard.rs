@@ -192,52 +192,61 @@ pub fn check_disk_space_sufficient(
     Ok(())
 }
 
-/// G-05: Stability state calculation with antivirus/EDR transient lock tolerance.
-/// If file size and mtime are completely unchanged, but probe temporarily failed (e.g. Defender scanning),
-/// we hold the ticks without immediately resetting to 0, resetting only if size/mtime change.
-// Four independent in/out counters describe the probe state machine; bundling
-// them would hide which fields the caller must persist between ticks.
-#[allow(clippy::too_many_arguments)]
+/// 文件监听稳定性计数器状态（由调用方跨轮次持久化）。
+#[derive(Debug, Clone, Copy)]
+pub struct StabilityCounters {
+    pub stable_ticks: usize,
+    pub last_size: u64,
+    pub last_mtime: SystemTime,
+    pub consecutive_probe_failures: usize,
+}
+
+/// 单次文件探测观测样本。
+#[derive(Debug, Clone, Copy)]
+pub struct StabilitySample {
+    pub current_size: u64,
+    pub current_mtime: SystemTime,
+    pub probe_ok: bool,
+    pub required_ticks: usize,
+}
+
+/// G-05: 带防抖宽限的文件稳定性判定。若大小与修改时间未变但临时读取探测失败
+/// （例如 Defender 正在扫描），保留当前计数而不立即归零。
 pub fn update_stability_with_backoff(
-    stable_ticks: &mut usize,
-    last_size: &mut u64,
-    last_mtime: &mut SystemTime,
-    consecutive_probe_failures: &mut usize,
-    current_size: u64,
-    current_mtime: SystemTime,
-    probe_ok: bool,
-    required_ticks: usize,
+    counters: &mut StabilityCounters,
+    sample: StabilitySample,
 ) -> bool {
-    if current_size == 0 {
-        *stable_ticks = 0;
-        *consecutive_probe_failures = 0;
+    if sample.current_size == 0 {
+        counters.stable_ticks = 0;
+        counters.consecutive_probe_failures = 0;
         return false;
     }
 
-    let metadata_unchanged =
-        current_size == *last_size && current_mtime == *last_mtime && *last_size > 0;
+    let metadata_unchanged = sample.current_size == counters.last_size
+        && sample.current_mtime == counters.last_mtime
+        && counters.last_size > 0;
 
     if metadata_unchanged {
-        if probe_ok {
-            *stable_ticks += 1;
-            *consecutive_probe_failures = 0;
+        if sample.probe_ok {
+            counters.stable_ticks += 1;
+            counters.consecutive_probe_failures = 0;
         } else {
             // Single transient read lock (e.g. Defender scanning file in 1 tick)
-            *consecutive_probe_failures += 1;
-            if *consecutive_probe_failures >= 3 {
+            counters.consecutive_probe_failures += 1;
+            if counters.consecutive_probe_failures >= 3 {
                 // If it fails for 3 consecutive ticks, reset
-                *stable_ticks = 0;
+                counters.stable_ticks = 0;
             }
         }
     } else {
         // File actively changing size or mtime -> download in progress
-        *last_size = current_size;
-        *last_mtime = current_mtime;
-        *stable_ticks = 0;
-        *consecutive_probe_failures = 0;
+        counters.last_size = sample.current_size;
+        counters.last_mtime = sample.current_mtime;
+        counters.stable_ticks = 0;
+        counters.consecutive_probe_failures = 0;
     }
 
-    *stable_ticks >= required_ticks
+    counters.stable_ticks >= sample.required_ticks
 }
 
 /// G-06: Evaluates if an incomplete multi-volume group has exceeded maximum waiting TTL.
@@ -337,90 +346,62 @@ mod tests {
     #[test]
     fn test_update_stability_with_backoff_transient_av_locks() {
         let t0 = SystemTime::UNIX_EPOCH;
-        let mut stable_ticks = 0;
-        let mut last_size = 0;
-        let mut last_mtime = t0;
-        let mut probe_failures = 0;
+        let mut counters = StabilityCounters {
+            stable_ticks: 0,
+            last_size: 0,
+            last_mtime: t0,
+            consecutive_probe_failures: 0,
+        };
+        let tick = |size: u64, probe_ok: bool| StabilitySample {
+            current_size: size,
+            current_mtime: t0,
+            probe_ok,
+            required_ticks: 3,
+        };
 
         // 1. First tick with 100 bytes -> tick 0
         assert!(!update_stability_with_backoff(
-            &mut stable_ticks,
-            &mut last_size,
-            &mut last_mtime,
-            &mut probe_failures,
-            100,
-            t0,
-            true,
-            3
+            &mut counters,
+            tick(100, true)
         ));
-        assert_eq!(stable_ticks, 0);
+        assert_eq!(counters.stable_ticks, 0);
 
         // 2. Second tick unchanged -> tick 1
         assert!(!update_stability_with_backoff(
-            &mut stable_ticks,
-            &mut last_size,
-            &mut last_mtime,
-            &mut probe_failures,
-            100,
-            t0,
-            true,
-            3
+            &mut counters,
+            tick(100, true)
         ));
-        assert_eq!(stable_ticks, 1);
+        assert_eq!(counters.stable_ticks, 1);
 
         // 3. Third tick: Transient AV scan (probe_ok = false, but size/mtime unchanged)
         // With backoff: ticks are NOT cleared to 0 immediately!
         assert!(!update_stability_with_backoff(
-            &mut stable_ticks,
-            &mut last_size,
-            &mut last_mtime,
-            &mut probe_failures,
-            100,
-            t0,
-            false,
-            3
+            &mut counters,
+            tick(100, false)
         ));
-        assert_eq!(stable_ticks, 1);
-        assert_eq!(probe_failures, 1);
+        assert_eq!(counters.stable_ticks, 1);
+        assert_eq!(counters.consecutive_probe_failures, 1);
 
         // 4. Fourth tick: AV finishes, probe_ok = true -> tick 2
         assert!(!update_stability_with_backoff(
-            &mut stable_ticks,
-            &mut last_size,
-            &mut last_mtime,
-            &mut probe_failures,
-            100,
-            t0,
-            true,
-            3
+            &mut counters,
+            tick(100, true)
         ));
-        assert_eq!(stable_ticks, 2);
-        assert_eq!(probe_failures, 0);
+        assert_eq!(counters.stable_ticks, 2);
+        assert_eq!(counters.consecutive_probe_failures, 0);
 
         // 5. Fifth tick: probe_ok = true -> reaches 3 ticks -> READY!
         assert!(update_stability_with_backoff(
-            &mut stable_ticks,
-            &mut last_size,
-            &mut last_mtime,
-            &mut probe_failures,
-            100,
-            t0,
-            true,
-            3
+            &mut counters,
+            tick(100, true)
         ));
-        assert_eq!(stable_ticks, 3);
+        assert_eq!(counters.stable_ticks, 3);
 
         // 6. If size changes -> immediately reset to 0
         assert!(!update_stability_with_backoff(
-            &mut stable_ticks,
-            &mut last_size,
-            &mut last_mtime,
-            &mut probe_failures,
-            200,
-            t0,
-            true,
-            3
+            &mut counters,
+            tick(200, true)
         ));
-        assert_eq!(stable_ticks, 0);
+        assert_eq!(counters.stable_ticks, 0);
     }
 }

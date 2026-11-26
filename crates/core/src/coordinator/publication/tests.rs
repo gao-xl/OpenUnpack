@@ -1,6 +1,6 @@
 //! Native filesystem/SQLite boundary tests; no Worker or GUI is simulated here.
 use super::super::{NodeWork, SavedRun, SealedNode, now};
-use super::{PublicationService, SealedPublication};
+use super::{PreparePublicationArgs, PublicationService, SealedPublication};
 use crate::{paths, repository::Repository, route::ExtractionRoute, types::*};
 use std::{
     collections::{BTreeMap, HashSet, VecDeque},
@@ -139,19 +139,22 @@ impl Fixture {
     async fn seal(&mut self) -> SealedPublication {
         let source = self.job.source.clone();
         let target_dir = PathBuf::from(&self.job.options.output_root);
+        let route = ExtractionRoute::Direct {
+            target_dir,
+            reason: "fixture".into(),
+        };
         let staged = self
             .service
             .prepare(
                 &self.repository,
                 &mut self.job,
-                &self.run,
-                &source,
-                &self.work,
-                &ExtractionRoute::Direct {
-                    target_dir,
-                    reason: "fixture".into(),
+                PreparePublicationArgs {
+                    state: &self.run,
+                    source: &source,
+                    work: &self.work,
+                    route: &route,
+                    tree_closed: true,
                 },
-                true,
             )
             .unwrap()
             .unwrap();
@@ -281,11 +284,13 @@ async fn cancellation_after_sealing_cannot_reclassify_an_atomic_commit() {
         .prepare(
             &fixture.repository,
             &mut fixture.job,
-            &fixture.run,
-            &source,
-            &fixture.work,
-            &route,
-            true,
+            PreparePublicationArgs {
+                state: &fixture.run,
+                source: &source,
+                work: &fixture.work,
+                route: &route,
+                tree_closed: true,
+            },
         )
         .unwrap()
         .unwrap();

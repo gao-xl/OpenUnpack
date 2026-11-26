@@ -74,9 +74,9 @@ pub struct ApiError {
     #[schema(ignore)]
     pub status: u16,
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub error_type: Option<String>,
+    pub error_type: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub title: Option<String>,
+    pub title: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub invalid_fields: Option<Vec<crate::FieldError>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -123,8 +123,8 @@ impl ApiError {
             status,
             code: code.into(),
             message: message.into(),
-            error_type: Some(error_type.into()),
-            title: Some(title.into()),
+            error_type: Some(error_type),
+            title: Some(title),
             invalid_fields: None,
             retry_after_secs: None,
         }
@@ -138,8 +138,8 @@ impl ApiError {
             status: 400,
             code: "invalid_request".into(),
             message: summary,
-            error_type: Some("https://openunpack.local/errors/validation-failed".into()),
-            title: Some("Validation Failed".into()),
+            error_type: Some("https://openunpack.local/errors/validation-failed"),
+            title: Some("Validation Failed"),
             invalid_fields: Some(errors),
             retry_after_secs: None,
         }
@@ -149,8 +149,8 @@ impl ApiError {
             status: 429,
             code: "busy".into(),
             message: message.into(),
-            error_type: Some("https://openunpack.local/errors/rate-limit-exceeded".into()),
-            title: Some("Too Many Requests".into()),
+            error_type: Some("https://openunpack.local/errors/rate-limit-exceeded"),
+            title: Some("Too Many Requests"),
             invalid_fields: None,
             retry_after_secs: Some(retry_after),
         }
@@ -1039,7 +1039,6 @@ fn json_error(error: JsonRejection) -> ApiError {
 /// Single authorization gate shared by the HTTP dispatcher and the WebSocket
 /// control channel. Keeping it in one place prevents a transport from silently
 /// skipping scope checks.
-#[allow(clippy::result_large_err)]
 fn authorize_command(command: &ApiCommand, client: &ApiClient) -> Result<(), ApiError> {
     if command
         .scopes()

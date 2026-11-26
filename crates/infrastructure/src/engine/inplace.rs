@@ -573,7 +573,15 @@ pub fn execute(
             progress
                 .committed
                 .store(journal.committed_len, Ordering::Relaxed);
-            run(job, journal, paths, request, progress, stop)
+            let run_ctx = InplaceRunArgs {
+                job,
+                journal,
+                paths,
+                request,
+                progress,
+                stop,
+            };
+            run(run_ctx)
         }
         State::Fresh(job, out) => {
             if request.verify_first {
@@ -600,20 +608,37 @@ pub fn execute(
             progress
                 .committed
                 .store(journal.committed_len, Ordering::Relaxed);
-            run(job, journal, paths, request, progress, stop)
+            let run_ctx = InplaceRunArgs {
+                job,
+                journal,
+                paths,
+                request,
+                progress,
+                stop,
+            };
+            run(run_ctx)
         }
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn run(
+struct InplaceRunArgs<'a> {
     job: Job,
     journal: hatchzip_core::journal::Journal,
     paths: Paths,
-    request: &Request,
-    progress: &Arc<Progress>,
-    stop: &Arc<AtomicBool>,
-) -> Result<Executed, InplaceError> {
+    request: &'a Request,
+    progress: &'a Arc<Progress>,
+    stop: &'a Arc<AtomicBool>,
+}
+
+fn run(args: InplaceRunArgs<'_>) -> Result<Executed, InplaceError> {
+    let InplaceRunArgs {
+        job,
+        journal,
+        paths,
+        request,
+        progress,
+        stop,
+    } = args;
     let bytes = progress.clone();
     let committed = progress.clone();
     let run = Run {
